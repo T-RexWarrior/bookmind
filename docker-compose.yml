@@ -1,0 +1,50 @@
+# BookMind / 学迹 — standard deployment (ARCHITECTURE §13, M7)
+#
+# Two paths share the same domain contract (EVALUATION §2):
+#   - standard: PostgreSQL + backend + frontend (this file)
+#   - fallback: SQLite + in-memory VectorStore + backend-hosted frontend (start.sh / start.ps1)
+#
+# The built frontend (frontend/dist/) is committed, so the image needs no Node.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bookmind
+      POSTGRES_USER: bookmind
+      POSTGRES_PASSWORD: bookmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookmind"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Standard path uses PostgreSQL; the repository adapts (ARCHITECTURE §1).
+      # Leave USTC_LLM_API_KEY unset for offline deterministic fallback.
+      BOOKMIND_DATABASE_URL: postgresql://bookmind:bookmind@db:5432/bookmind
+      BOOKMIND_DATA_DIR: /app/data
+      BOOKMIND_HOST: "0.0.0.0"
+      BOOKMIND_PORT: "18765"
+      BOOKMIND_ENV: production
+      USTC_LLM_API_KEY: ${USTC_LLM_API_KEY:-}
+      BOOKMIND_CHAT_MODEL: ${BOOKMIND_CHAT_MODEL:-deepseek-v4-pro}
+      BOOKMIND_EMBEDDING_MODEL: ${BOOKMIND_EMBEDDING_MODEL:-qwen3-embedding}
+      BOOKMIND_RERANK_MODEL: ${BOOKMIND_RERANK_MODEL:-qwen3-reranker}
+    ports:
+      - "18765:18765"
+    volumes:
+      - bmdata:/app/data
+
+volumes:
+  pgdata:
+  bmdata:

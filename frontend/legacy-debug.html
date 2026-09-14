@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>学迹 / BookMind — 教材长期学习智能体</title>
+  <style>
+    :root {
+      --bg: #0f1115; --panel: #171a21; --panel-2: #1f232c; --border: #2a2f3a;
+      --text: #e6e8eb; --muted: #8b93a3; --accent: #6ea8fe; --accent-2: #7ee2a8;
+      --warn: #f0b46a; --danger: #ef8b8b; --ok: #7ee2a8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+           background: var(--bg); color: var(--text); line-height: 1.5; }
+    header { background: var(--panel); border-bottom: 1px solid var(--border); padding: 12px 20px;
+             display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+    header .status { margin-left: auto; font-size: 12px; color: var(--muted); }
+    header .status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                          background: var(--ok); margin-right: 4px; }
+    nav { display: flex; gap: 4px; }
+    nav button { background: none; border: 1px solid transparent; color: var(--muted); padding: 6px 12px;
+                 border-radius: 6px; cursor: pointer; font-size: 13px; }
+    nav button.active { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+    nav button:hover { color: var(--text); }
+    main { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .grid { display: grid; gap: 16px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--accent); }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .col { flex: 1; min-width: 280px; }
+    input, textarea, select { background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+              padding: 8px 10px; border-radius: 6px; font-size: 13px; width: 100%; }
+    textarea { resize: vertical; min-height: 60px; font-family: inherit; }
+    button.primary { background: var(--accent); color: #0f1115; border: none; padding: 8px 16px;
+                     border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
+    button.primary:hover { opacity: 0.9; }
+    button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge.verified { background: rgba(126,226,168,.15); color: var(--ok); }
+    .badge.pending { background: rgba(110,168,254,.15); color: var(--accent); }
+    .badge.weak { background: rgba(240,180,106,.15); color: var(--warn); }
+    .badge.due { background: rgba(239,139,139,.15); color: var(--danger); }
+    .badge.L0 { color: var(--muted); } .badge.L1 { color: var(--accent); }
+    .badge.L2 { color: var(--accent-2); } .badge.L3, .badge.L4 { color: var(--ok); }
+    .badge.status { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+    pre { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+          padding: 10px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .trace { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .trace .rule { color: var(--accent); }
+    .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .pill { background: var(--panel-2); border: 1px solid var(--border); padding: 4px 10px;
+            border-radius: 14px; font-size: 12px; }
+    .hidden { display: none; }
+    .answer { background: var(--panel-2); border-left: 3px solid var(--accent); padding: 10px 12px;
+              border-radius: 0 6px 6px 0; margin-top: 8px; font-size: 13px; }
+    .citation { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .citation a { color: var(--accent); }
+    details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+    details[open] summary { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>学迹 / BookMind <span>教材长期学习认知追踪</span></h1>
+    <nav id="nav">
+      <button data-view="home" class="active">项目首页</button>
+      <button data-view="reader">Reader + Agent</button>
+      <button data-view="state">Learning State</button>
+      <button data-view="recovery">Recovery</button>
+      <button data-view="misconception">误区诊断</button>
+    </nav>
+    <div class="status"><span class="dot"></span><span id="health">connecting…</span></div>
+  </header>
+
+  <main>
+    <!-- HOME -->
+    <section id="view-home" class="grid">
+      <div class="card col">
+        <h2>项目设置</h2>
+        <div class="row" style="margin-bottom:10px">
+          <div class="col"><label class="muted">User ID</label><input id="user_id" value="ada" /></div>
+          <div class="col"><label class="muted">Project ID</label><input id="project_id" value="p1" /></div>
+          <div class="col"><label class="muted">项目名</label><input id="project_name" value="Java OOP" /></div>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+          <div class="col"><label class="muted">学习目标</label><input id="project_goal" value="掌握 Java 核心概念" /></div>
+        </div>
+        <div class="actions">
+          <button class="primary" onclick="setup()">初始化项目 + seed demo</button>
+          <span class="pill" id="seed_status">未初始化</span>
+        </div>
+        <p class="muted" style="margin-top:12px">核心闭环：<code>Book Graph × Learner State × Evidence → Next Best Action</code>。
+        点击初始化后会创建用户、项目并载入离线 Java demo 语料（51 概念 / 33 chunk），全程离线运行。</p>
+      </div>
+      <div class="card col">
+        <h2>概念图谱概览</h2>
+        <div id="concept_summary" class="muted">初始化后显示。</div>
+        <div id="chapter_list" style="margin-top:10px"></div>
+      </div>
+    </section>
+
+    <!-- READER + AGENT -->
+    <section id="view-reader" class="grid hidden">
+      <div class="card col">
+        <h2>教材问答（Hybrid RAG + 引用）</h2>
+        <textarea id="question" placeholder="例如：== 和 equals 的区别是什么？">== 和 equals 的区别是什么？</textarea>
+        <div class="actions"><button class="primary" onclick="ask()">提问</button></div>
+        <div id="answer_area"></div>
+      </div>
+      <div class="card col">
+        <h2>Next Best Action（12 条优先规则）</h2>
+        <div class="row" style="margin-bottom:10px">
+          <div class="col"><label class="muted">Activity Mode</label>
+            <select id="activity_mode"><option>READING</option><option>REVIEW</option><option>ASSESSMENT</option></select></div>
+          <div class="col"><label class="muted">Intervention Policy</label>
+            <select id="intervention_policy"><option>PROACTIVE</option><option>QUIET</option></select></div>
+          <div class="col"><label class="muted">UI Preset</label>
+            <select id="ui_preset"><option>Deep Learning</option><option>Quiet Reading</option><option>Review</option><option>Assessment</option></select></div>
+        </div>
+        <div class="actions"><button class="primary" onclick="nextAction()">计算下一步</button></div>
+        <div id="next_action_area"></div>
+      </div>
+      <div class="card col">
+        <h2>提交作答（Evidence Gate）</h2>
+        <div class="row" style="margin-bottom:8px">
+          <div class="col"><label class="muted">Task ID</label><input id="task_id" value="verify_l1" /></div>
+          <div class="col"><label class="muted">Target Concept</label><input id="target_concept" value="c_reference" /></div>
+          <div class="col"><label class="muted">Level</label><select id="evidence_level"><option>L1</option><option>L2</option><option>L3</option><option>L4</option></select></div>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <div class="col"><label class="muted">Result</label><select id="answer_result"><option>PASS</option><option>PARTIAL</option><option>FAIL</option></select></div>
+          <div class="col"><label class="muted">Hints Issued</label><input id="hints_issued" value="0" type="number" /></div>
+          <div class="col"><label class="muted">Submission ID</label><input id="submission_id" value="s1" /></div>
+        </div>
+        <div class="actions"><button class="primary" onclick="submitAnswer()">提交（写 Evidence + 状态）</button></div>
+        <div id="submit_area"></div>
+      </div>
+    </section>
+
+    <!-- LEARNING STATE -->
+    <section id="view-state" class="grid hidden">
+      <div class="card col">
+        <h2>Learning State（已验证 / 待验证 / 薄弱 / 到期）</h2>
+        <div class="actions" style="margin-bottom:10px"><button class="primary" onclick="loadState()">刷新</button></div>
+        <div id="state_summary" class="muted"></div>
+        <table id="state_table"><thead><tr>
+          <th>Concept</th><th>Exposure</th><th>Current</th><th>Highest</th><th>Group</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- RECOVERY -->
+    <section id="view-recovery" class="grid hidden">
+      <div class="card col">
+        <h2>长期恢复（LEARNING_MODEL §12）</h2>
+        <div class="row" style="margin-bottom:10px">
+          <div class="col"><label class="muted">上次活跃时间（ISO，留空自动推断）</label>
+            <input id="last_active" placeholder="2026-07-01T00:00:00+00:00" /></div>
+        </div>
+        <div class="actions" style="margin-bottom:12px"><button class="primary" onclick="loadRecovery()">生成恢复建议</button></div>
+        <div id="recovery_area"></div>
+      </div>
+    </section>
+
+    <!-- MISCONCEPTION -->
+    <section id="view-misconception" class="grid hidden">
+      <div class="card col">
+        <h2>误区诊断闭环</h2>
+        <div class="actions" style="margin-bottom:10px"><button class="primary" onclick="loadMisconceptions()">查看误区</button></div>
+        <div id="misconception_area"></div>
+      </div>
+      <div class="card col">
+        <h2>探针分类</h2>
+        <div class="row" style="margin-bottom:8px">
+          <div class="col"><label class="muted">Bug ID</label>
+            <select id="probe_bug"><option>bug_ref_vs_object</option><option>bug_eq_vs_equals</option><option>bug_equals_no_hashcode</option></select></div>
+        </div>
+        <textarea id="probe_answer" placeholder="学习者回答">a.getValue() returns the original value because b is a separate copy.</textarea>
+        <div class="actions"><button class="primary" onclick="classifyProbe()">分类</button></div>
+        <div id="classify_area"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API = "";
+    let PID = "p1", LID = "ada";
+
+    async function post(path, body) {
+      const r = await fetch(API + path, {method: "POST", headers: {"Content-Type": "application/json"},
+                                         body: JSON.stringify(body)});
+      if (!r.ok) { const t = await r.text(); throw new Error(`${r.status}: ${t}`); }
+      return r.json();
+    }
+    async function get(path) {
+      const r = await fetch(API + path);
+      if (!r.ok) { const t = await r.text(); throw new Error(`${r.status}: ${t}`); }
+      return r.json();
+    }
+
+    async function checkHealth() {
+      try { const h = await get("/health"); document.getElementById("health").textContent = `ok v${h.version}`; }
+      catch (e) { document.getElementById("health").textContent = "offline"; }
+    }
+
+    async function setup() {
+      LID = document.getElementById("user_id").value;
+      PID = document.getElementById("project_id").value;
+      await post("/users", {user_id: LID, display_name: LID});
+      await post("/projects", {project_id: PID, learner_id: LID,
+                               name: document.getElementById("project_name").value,
+                               goal: document.getElementById("project_goal").value});
+      const seed = await post(`/projects/${PID}/seed-demo`, {});
+      document.getElementById("seed_status").textContent = `✓ ${seed.concepts} 概念 / ${seed.chunks} chunk 已载入`;
+      await loadConcepts();
+    }
+
+    async function loadConcepts() {
+      const concepts = await get(`/projects/${PID}/concepts`);
+      const byChapter = {};
+      concepts.forEach(c => { (byChapter[c.chapter] ||= []).push(c); });
+      document.getElementById("concept_summary").innerHTML =
+        `<b>${concepts.length}</b> 个概念，<b>${Object.keys(byChapter).length}</b> 个章节`;
+      let html = "";
+      for (const [ch, cs] of Object.entries(byChapter)) {
+        html += `<details><summary>${ch} (${cs.length})</summary><table><tbody>`;
+        cs.forEach(c => html += `<tr><td>${c.name}</td><td class="muted">${c.source}</td><td>imp=${c.importance}</td></tr>`);
+        html += `</tbody></table></details>`;
+      }
+      document.getElementById("chapter_list").innerHTML = html;
+    }
+
+    async function ask() {
+      const q = document.getElementById("question").value;
+      const area = document.getElementById("answer_area");
+      area.innerHTML = '<div class="muted">检索中…</div>';
+      try {
+        const ans = await post(`/projects/${PID}/ask`, {learner_id: LID, question: q, top_k: 5, context_budget: 4});
+        let html = `<div class="answer">${ans.answer_text}</div>`;
+        html += `<div class="citation">grounded=${ans.grounded} · chunks=${ans.chunk_ids.join(",") || "无"}</div>`;
+        if (ans.citations && ans.citations.length) {
+          html += `<div class="citation">引用：${ans.citations.map(c => `p.${c.physical_page||"?"} · ${c.chunk_id}`).join("； ")}</div>`;
+        }
+        area.innerHTML = html;
+      } catch (e) { area.innerHTML = `<div class="answer">⚠ ${e.message}</div>`; }
+    }
+
+    async function nextAction() {
+      const body = {
+        activity_mode: document.getElementById("activity_mode").value,
+        intervention_policy: document.getElementById("intervention_policy").value,
+        ui_preset: document.getElementById("ui_preset").value,
+      };
+      const area = document.getElementById("next_action_area");
+      try {
+        const tr = await post(`/projects/${PID}/next-action`, body);
+        area.innerHTML = `<div class="answer"><b>${tr.selected_action}</b>${tr.selected_concept_id ? " → " + tr.selected_concept_id : ""}</div>
+          <div class="trace">命中规则 <span class="rule">#${tr.selected_rule}</span>：${tr.reason}<br>检查规则：[${tr.checked_rules.join(", ")}]</div>`;
+      } catch (e) { area.innerHTML = `<div class="answer">⚠ ${e.message}</div>`; }
+    }
+
+    async function submitAnswer() {
+      const body = {
+        task_id: document.getElementById("task_id").value, task_version: 1,
+        target_concept_ids: [document.getElementById("target_concept").value],
+        evidence_for_levels: [document.getElementById("evidence_level").value],
+        rubric: ["verify"], result: document.getElementById("answer_result").value,
+        hints_issued: parseInt(document.getElementById("hints_issued").value) || 0,
+        submission_id: document.getElementById("submission_id").value, answer_text: "learner answer",
+      };
+      const area = document.getElementById("submit_area");
+      try {
+        const res = await post(`/projects/${PID}/submit-answer`, body);
+        area.innerHTML = `<div class="answer">written=${res.written} verified=${res.verified_levels.join(",")} needs_review=${res.needs_review}</div>
+          <div class="trace">${res.reason}<br>mastery 转移: ${res.mastery_transitions.length} · 误区转移: ${res.misconception_transitions.length}</div>`;
+      } catch (e) { area.innerHTML = `<div class="answer">⚠ ${e.message}</div>`; }
+    }
+
+    async function loadState() {
+      const views = await get(`/projects/${PID}/learning-state`);
+      const groups = {};
+      views.forEach(v => { groups[v.group] = (groups[v.group] || 0) + 1; });
+      document.getElementById("state_summary").innerHTML =
+        `<b>${views.length}</b> 概念 — 分组：${Object.entries(groups).map(([k,v])=>`${k}=${v}`).join("，")}`;
+      const tbody = document.querySelector("#state_table tbody");
+      tbody.innerHTML = views.map(v => `<tr>
+        <td>${v.concept_name}</td>
+        <td><span class="badge status">${v.exposure}</span></td>
+        <td><span class="badge ${v.current_verified_level}">${v.current_verified_level}</span></td>
+        <td><span class="badge ${v.highest_ever_level}">${v.highest_ever_level}</span></td>
+        <td><span class="badge ${v.group}">${v.group}</span></td>
+        ${v.levels.map(l => `<td><span class="badge status" title="R=${l.retrievability}">${l.effective_status.slice(0,4)}</span></td>`).join("")}
+      </tr>`).join("");
+    }
+
+    async function loadRecovery() {
+      const la = document.getElementById("last_active").value;
+      const qs = la ? `?last_active_at=${encodeURIComponent(la)}` : "";
+      const plan = await get(`/projects/${PID}/recovery${qs}`);
+      let html = `<div class="answer">离线 <b>${plan.days_away.toFixed(0)}</b> 天 · 推荐：<b>${plan.recommendation}</b></div>
+        <div class="trace">${plan.rationale}</div>`;
+      if (plan.candidates.length) {
+        html += `<table style="margin-top:10px"><thead><tr><th>Concept</th><th>原因</th><th>R</th><th>goal</th></tr></thead><tbody>`;
+        plan.candidates.forEach(c => html += `<tr><td>${c.concept_name}</td><td><span class="badge due">${c.reason}</span></td><td>${c.retrievability}</td><td>${c.goal_relevance}</td></tr>`);
+        html += `</tbody></table>`;
+      }
+      html += `<div class="actions" style="margin-top:10px">
+        <button class="primary" onclick="recoveryChoose('recovery_check')">进行 3 分钟恢复检查</button>
+        <button class="primary" onclick="recoveryChoose('continue')">直接继续</button></div>`;
+      document.getElementById("recovery_area").innerHTML = html;
+    }
+
+    async function recoveryChoose(choice) {
+      const res = await post(`/projects/${PID}/recovery/choose`, {choice});
+      document.getElementById("recovery_area").innerHTML += `<div class="answer">选择 ${choice} → ${res.recommended_action}${res.target_concept_id ? " → " + res.target_concept_id : ""}</div>`;
+    }
+
+    async function loadMisconceptions() {
+      const mis = await get(`/projects/${PID}/misconceptions`);
+      const area = document.getElementById("misconception_area");
+      if (!mis.length) { area.innerHTML = '<div class="muted">暂无误区记录。提交 FAIL 作答或探针后会生成。</div>'; return; }
+      area.innerHTML = `<table><thead><tr><th>Bug</th><th>Status</th><th>Score</th><th>Confidence</th><th>Pass Count</th></tr></thead><tbody>` +
+        mis.map(m => `<tr><td>${m.bug_id}</td><td><span class="badge status">${m.status}</span></td><td>${m.evidence_score}</td><td>${m.confidence_band}</td><td>${m.changed_task_pass_count}</td></tr>`).join("") +
+        `</tbody></table>`;
+    }
+
+    async function classifyProbe() {
+      const bug = document.getElementById("probe_bug").value;
+      const ans = document.getElementById("probe_answer").value;
+      const res = await post(`/projects/${PID}/classify-probe`, {bug_id: bug, answer_text: ans});
+      document.getElementById("classify_area").innerHTML =
+        `<div class="answer">最匹配假设：<b>${res.best_hypothesis}</b>（${res.method}）</div>
+         <div class="trace">scores: ${JSON.stringify(res.scores)}</div>`;
+    }
+
+    // nav
+    document.getElementById("nav").addEventListener("click", e => {
+      if (e.target.tagName !== "BUTTON") return;
+      document.querySelectorAll("#nav button").forEach(b => b.classList.remove("active"));
+      e.target.classList.add("active");
+      document.querySelectorAll("main > section").forEach(s => s.classList.add("hidden"));
+      document.getElementById("view-" + e.target.dataset.view).classList.remove("hidden");
+      const v = e.target.dataset.view;
+      if (v === "state") loadState();
+      if (v === "misconception") loadMisconceptions();
+    });
+
+    checkHealth();
+  </script>
+</body>
+</html>

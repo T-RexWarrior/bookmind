@@ -1,0 +1,11 @@
+# Build artifacts / local deps we never want in the image.
+frontend/node_modules/
+frontend/*.tsbuildinfo
+**/__pycache__/
+.venv/
+venv/
+data/
+.git/
+.claude/
+*.pyc
+.env

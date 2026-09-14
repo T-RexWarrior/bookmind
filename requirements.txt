@@ -1,0 +1,26 @@
+# BookMind / 学迹 — Python dependencies
+# Pinned for reproducible offline + standard deployment.
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart>=0.0.9
+pydantic==2.13.5
+pydantic-settings>=2.0
+httpx==0.28.1
+pytest==9.1.1
+pypdf>=5.0,<7
+# Built-in local Chinese/English OCR fallback for scanned/image-only PDFs.
+rapidocr>=3.9,<4
+onnxruntime>=1.22,<2
+pypdfium2>=4.30,<5
+langgraph>=1.2,<2
+
+# Persistence: SQLAlchemy 2.x. SQLite uses the stdlib driver; PostgreSQL uses
+# psycopg3. Schema creation and additive compatibility upgrades are handled by
+# the repository during startup in this single-process product.
+sqlalchemy>=2.0
+# P1-13: enable the PostgreSQL driver so docker-compose's postgresql:// URL
+# actually works (the old commented line left "No module named 'psycopg2'").
+# psycopg3 is the current driver; SQLAlchemy's postgresql+psycopg:// scheme
+# uses it. Vector retrieval currently uses BookMind's local VectorStore.
+psycopg[binary]>=3.2
