@@ -1,0 +1,94 @@
+flowchart TD
+    START([进入 BookMind]) --> BOOT[前端 Bootstrap<br/>匿名会话 Cookie / 身份]
+    BOOT --> PROJ{学习空间 projects}
+    PROJ -->|新建/打开| UPLOAD
+
+    %% ============ 1. 上传资料 + 后台摄取 ============
+    subgraph INGEST[资料摄取 Ingestion - 后台工作线程]
+        UPLOAD[上传 PDF<br/>POST /sources multipart] --> VALIDATE[校验 + sha256 去重]
+        VALIDATE --> SAVE[保存源文件 + 建 PENDING Job]
+        SAVE --> ENQUEUE[入队后台 Worker<br/>立即返回 job_id]
+        ENQUEUE --> PARSING[解析 Parsing<br/>解析器链 MinerU→PyPDF→RapidOCR→PlainPDF]
+        PARSING --> CHUNK[分块 Chunking + 建索引<br/>混合检索 BM25 + 向量]
+        CHUNK --> GRAPH[构建知识图谱 Graph<br/>Book Mapper 抽取章节/知识点/位置]
+        GRAPH --> DONE[Job SUCCEEDED]
+        PARSING -->|扫描件/加密无文字| FAIL[RETRYABLE_FAILED 提示]
+    end
+    UPLOAD -.轮询/SSE 进度.-> JOBPOLL[GET /jobs/status 或 SSE events]
+
+    DONE --> MODE{选择使用模式}
+
+    %% ============ 2. 阅读模式 ============
+    MODE -->|阅读 Reader| READ[打开原 PDF 阅读器<br/>按目录/大纲跳转]
+    DONE -.-> KG[知识图谱面板<br/>GET knowledge-graph<br/>章节·知识点·前置关系]
+
+    %% ============ 3. 对话/问答（LangGraph 回合） ============
+    MODE -->|对话侧栏| ASK[用户输入消息]
+    ASK --> INTENT{分类意图 classify_intent<br/>LangGraph start}
+    INTENT -->|SWITCH_MODE| SWITCH[切换模式<br/>安静阅读/深度学习/复习/评估]
+    INTENT -->|SHOW_PROGRESS| PROG[汇总学习状态文字]
+    INTENT -->|START_LEARNING| SL[从最早知识点开始讲解]
+    INTENT -->|ASK_BOOK / REQUEST_EXPLANATION| QA
+    INTENT -->|REQUEST_TASK| REQTASK
+    INTENT -->|SUBMIT_ANSWER| SUBMIT
+    INTENT -->|GENERAL_CHAT| CHAT[普通对话记录]
+
+    %% ---- 问教材：检索增强 ----------
+    QA[教材问答 BookQAService] --> RET[混合检索相关片段<br/>作用域: 全部/当前资料/当前页]
+    RET --> CTX[ContextBuilder 组装上下文]
+    CTX --> TUTOR{TutorAgent 生成回答}
+    TUTOR -->|检索到依据 grounded| CIT[回答 + 引用位置验证 CitationValidator<br/>CITATION_ATTACHED → 原文页码]
+    TUTOR -->|无足够依据| FALLBACK[FallbackUsed<br/>诚实拒绝 不伪造资料]
+    CIT --> QSIG>记录 QUESTION 疑问证据<br/>question_signal·不改变掌握程度]
+    QSIG --> QDONE([回到 MODE])
+
+    %% ---- 出题：Next Best Action ----------
+    REQTASK[出题 RequestTask] --> NBA{Next Best Action<br/>12 条规则决策引擎}
+    NBA -->|已选中/问过知识点优先| PCON[确定目标知识点]
+    NBA --> ACT{决策动作}
+    ACT -->|VERIFY / REVIEW| GENQ[生成测验题 quiz<br/>LLM 按知识点+原文上下文]
+    ACT -->|DIAGNOSE| GENP[生成诊断探针 probe<br/>区分竞争假设]
+    ACT -->|REMEDIATE| GENCT[生成纠正题 changed_task<br/>近迁移/远迁移]
+    GENQ --> VALID[Task Validator 校验合规门]
+    GENP --> VALID
+    GENCT --> VALID
+    VALID -->|通过| PERSIST[持久化 TrustedTask + 出题目卡片]
+    VALID -->|不通过| FB[返回 fallback 文本]
+    PERSIST --> HINT[服务端提示: 分层提示 + hints 计数]
+    PERSIST --> SKIP[跳过 skip]
+
+    %% ---- 作答判定：学习引擎 ----------
+    SUBMIT[提交作答<br/>仅 task_id + answer_text + 幂等键] --> SCOPE[校验作用域/幂等]
+    SCOPE --> JUDGE{Diagnostician 判定<br/>PASS / PARTIAL / FAIL / 需澄清}
+    JUDGE -->|NEEDS_REVIEW/信息不足| CLAR[要求澄清·不增状态]
+    JUDGE -->|正常判定| ENGINE
+
+    subgraph ENGINE[学习引擎 LearningEngine - 唯一状态写入口]
+        EV[追加不可变证据 Evidence<br/>去重 event_key]
+        EV --> GATE{证据门 Evidence Gate}
+        GATE -->|过门/独立通过| MASTER[掌握度升级 L1-L4<br/>遗忘曲线·复习调度]
+        GATE -->|独立失败| UNSTABLE[标记不稳定 待纠正]
+        GATE -->|部分/带提示| PARTIAL[保持·延后1天复验]
+        MASTER --> MISCON[误区状态机<br/>SUSPECTED→LIKELY→CONFIRMED→REMEDIATING→VERIFYING→RESOLVED]
+        UNSTABLE --> MISCON
+        MISCON --> MUTEX[竞争假设互斥约束]
+        MUTEX --> TRANS[记录状态转移 + 返回原文位置<br/>source_scope 第N页]
+    end
+    ENGINE --> SAVEKB[(后端维护<br/>章节/知识点树 + 知识点位置<br/>掌握程度 L1-L4+遗忘+误区状态)]
+    SAVEKB --> RESULT[返回判定结果 + 掌握/误区状态变化 + Next Action]
+
+    %% ============ 4. 复习/巩固 ============
+    MODE -->|复习复习 Consolidation| CONSOL[巩固队列<br/>candidates 优先级: 薄弱>到期>问过未验>未验证>已验证]
+    CONSOL --> RANGE{选定范围}
+    RANGE -->|指定知识点/章节源| SCOPE2[限定 source_id 过滤]
+    CONSOL --> VIEWSTATE[查看学习状态视图<br/>已掌握/待验证/薄弱/待复习<br/>检索性·复习到期·证据链]
+
+    %% 评估模式特殊约束
+    SWITCH -->|评估模式 ASSESSMENT| ASSESS[评估模式: 关闭教材检索引用<br/>只出题记录独立作答 不泄露答案]
+
+    RANGE --> REQTASK
+    SCOPE2 --> REQTASK
+
+    DONE1([流程结束])
+    QDONE --> DONE1
+    RESULT --> DONE1

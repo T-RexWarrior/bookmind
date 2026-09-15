@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from bookmind.agents.tutor import TutorAgent, _parse_answer
+from bookmind.agents.tutor import TutorAgent, _parse_answer, _safe_excerpt
 from bookmind.domain.enums import Level
 from bookmind.domain.source_ref import SourceRef
 from bookmind.llm.router import ModelRouter, RouterConfig
@@ -125,6 +125,11 @@ def test_answer_falls_back_when_model_down():
     assert ans.fallback is True
     assert ans.grounded is True  # the fallback quote is from the real chunk
     assert ans.citations[0]["chunk_id"] == "c1"
+
+
+def test_model_fallback_never_exposes_parser_code_debris():
+    assert _safe_excerpt("class Fib { int prev() { return 1; } }") == ""
+    assert _safe_excerpt("A variable names a storage location used while a program runs.").startswith("A variable")
 
 
 def test_answer_never_drops_citation_but_keeps_claim():

@@ -316,6 +316,11 @@ def learning_summary(
         groups[v.group] = groups.get(v.group, 0) + 1
         question_evidence = [e for e in v.evidence if e.evidence_type == "QUESTION"]
         question_count = len(question_evidence)
+        attempts = [
+            e for e in v.evidence
+            if e.evidence_type in {"VERIFY", "PROBE", "CHANGED_TASK", "CORRECTION"}
+        ]
+        latest_attempt = attempts[0] if attempts else None
         if question_count:
             questioned_count += 1
         concept_rows.append({
@@ -325,6 +330,10 @@ def learning_summary(
             "group": v.group,
             "question_count": question_count,
             "last_question_at": question_evidence[0].occurred_at if question_evidence else None,
+            "attempt_count": len(attempts),
+            # ``LearnerStateView`` is already a browser projection, so its
+            # evidence result is a string rather than an enum.
+            "latest_attempt_result": latest_attempt.result if latest_attempt and latest_attempt.result else None,
         })
     return {
         "total_concepts": len(views),

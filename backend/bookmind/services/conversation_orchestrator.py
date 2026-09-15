@@ -57,7 +57,8 @@ from ..storage.protocols import Repository
 
 Intent = Literal[
     "ASK_BOOK", "START_LEARNING", "REQUEST_EXPLANATION", "REQUEST_TASK",
-    "SUBMIT_ANSWER", "SWITCH_MODE", "SHOW_PROGRESS", "GENERAL_CHAT",
+    "SUBMIT_ANSWER", "REQUEST_HINT", "SKIP_TASK", "UNSURE_OR_GIVE_UP",
+    "SWITCH_MODE", "SHOW_PROGRESS", "GENERAL_CHAT",
 ]
 
 _DETERMINISTIC_INTENT_KEYWORDS: dict[str, tuple[str, ...]] = {
@@ -82,6 +83,12 @@ _HELP_CUES = (
 
 _QUESTION_CUES = ("?", "？", "怎么", "怎样", "如何", "能否", "可以告诉", "请解释")
 
+_INTENT_VALUES = {
+    "ASK_BOOK", "START_LEARNING", "REQUEST_EXPLANATION", "REQUEST_TASK",
+    "SUBMIT_ANSWER", "REQUEST_HINT", "SKIP_TASK", "UNSURE_OR_GIVE_UP",
+    "SWITCH_MODE", "SHOW_PROGRESS", "GENERAL_CHAT",
+}
+
 
 def _public_turn_error() -> str:
     return "这次没有处理成功。你的消息已经保留，可以稍后重试或换一种说法。"
@@ -104,6 +111,15 @@ def classify_intent(text: str, *, has_pending_task: bool = False) -> Intent:
     for intent, kws in _DETERMINISTIC_INTENT_KEYWORDS.items():
         if any(k in t for k in kws):
             return intent  # type: ignore[return-value]
+    # This is only the no-model fallback.  The live path below handles natural
+    # language such as “先给点方向” or “这题先放着” with more context.
+    compact = "".join(t.split()).lower()
+    if has_pending_task and compact in {"跳过", "跳过这题", "换题", "下一题"}:
+        return "SKIP_TASK"
+    if has_pending_task and compact in {"我不知道", "不知道", "不会", "不清楚", "没思路", "想不出来"}:
+        return "UNSURE_OR_GIVE_UP"
+    if has_pending_task and any(c in t for c in ("提示", "给点方向", "给个思路", "引导一下")):
+        return "REQUEST_HINT"
     # P1-14: an explicit help/explanation cue takes priority over treating the
     # message as a task answer, even when a task is pending.
     if any(c in t for c in _HELP_CUES):
@@ -116,6 +132,52 @@ def classify_intent(text: str, *, has_pending_task: bool = False) -> Intent:
         return "SUBMIT_ANSWER"
     # Default: treat as a textbook question.
     return "ASK_BOOK"
+
+
+def interpret_intent(
+    router: ModelRouter, text: str, *, has_pending_task: bool, task_prompt: str = "",
+) -> Intent:
+    """Use the model to understand a learner's wording, never to change state.
+
+    The returned value is still passed through the graph/state-machine below.
+    Any transport, schema or confidence problem falls back to the deterministic
+    classifier, so offline mode keeps every task action usable.
+    """
+    fallback = classify_intent(text, has_pending_task=has_pending_task)
+    if not getattr(router.cfg, "live", False):
+        return fallback
+    prompt = task_prompt[:900] if task_prompt else "（当前没有待完成题目）"
+    system = (
+        "你是学习产品的意图识别器。只输出 JSON："
+        '{"intent":"...","confidence":0-1}。'
+        "intent 只能是 ASK_BOOK、START_LEARNING、REQUEST_EXPLANATION、REQUEST_TASK、"
+        "SUBMIT_ANSWER、REQUEST_HINT、SKIP_TASK、UNSURE_OR_GIVE_UP、SWITCH_MODE、"
+        "SHOW_PROGRESS、GENERAL_CHAT。不要回答教材内容。"
+        "有待完成题时：明确要求提示→REQUEST_HINT；明确跳过/换题→SKIP_TASK；"
+        "明确要讲解→REQUEST_EXPLANATION；仅表示不会、没思路、我不知道→UNSURE_OR_GIVE_UP；"
+        "给出解答或推理→SUBMIT_ANSWER。"
+    )
+    res = router.complete(
+        "action_interpretation",
+        [{"role": "system", "content": system}, {
+            "role": "user",
+            "content": f"当前是否有待完成题：{has_pending_task}\n题目：{prompt}\n用户输入：{text[:600]}",
+        }],
+        output_schema={"type": "object", "required": ["intent", "confidence"]},
+        temperature=0.0,
+        max_tokens=240,
+    )
+    parsed = res.parsed_json if res.ok else None
+    if not isinstance(parsed, dict):
+        return fallback
+    intent = str(parsed.get("intent") or "")
+    try:
+        confidence = float(parsed.get("confidence", 0))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    if intent in _INTENT_VALUES and confidence >= 0.72:
+        return intent  # type: ignore[return-value]
+    return fallback
 
 
 # --- run event helpers ----------------------------------------------------
@@ -291,6 +353,9 @@ class ConversationOrchestrator:
             "REQUEST_EXPLANATION": "explain",
             "REQUEST_TASK": "generate_task",
             "SUBMIT_ANSWER": "diagnose_answer",
+            "REQUEST_HINT": "task_hint",
+            "SKIP_TASK": "skip_task",
+            "UNSURE_OR_GIVE_UP": "task_options",
             "SWITCH_MODE": "switch_mode",
             "SHOW_PROGRESS": "show_progress",
             "GENERAL_CHAT": "general_chat",
@@ -316,7 +381,12 @@ class ConversationOrchestrator:
         pending = self.repo.pending_task_for_conversation(
             state["conversation"].conversation_id,
         )
-        intent = classify_intent(state["user_text"], has_pending_task=pending is not None)
+        intent = interpret_intent(
+            self.router,
+            state["user_text"],
+            has_pending_task=pending is not None,
+            task_prompt=str((pending or {}).get("prompt_text") or ""),
+        )
         events = [*state["events"], _evt(
             state["run_id"], state["seq"], EventType.ACTION_SELECTED,
             {"intent": intent, "workflow": "langgraph"},
@@ -377,6 +447,32 @@ class ConversationOrchestrator:
                     user_text=state["user_text"], run_id=state["run_id"],
                     seq=seq, events=events,
                 )
+            elif forced_intent == "REQUEST_HINT":
+                pending = self.repo.pending_task_for_conversation(conversation.conversation_id)
+                if pending is None:
+                    blocks = [ContentBlock(type="text", text="当前没有待完成的题目。你可以先开始一道练习题。")]
+                else:
+                    hint = self.task_service.request_hint(pending["task_id"])
+                    blocks = [
+                        ContentBlock(type="status", text=hint["hint_notice"]),
+                        ContentBlock(type="text", text=hint["hint_text"]),
+                    ]
+            elif forced_intent == "SKIP_TASK":
+                pending = self.repo.pending_task_for_conversation(conversation.conversation_id)
+                if pending is None:
+                    blocks = [ContentBlock(type="text", text="当前没有待完成的题目。")]
+                else:
+                    self.task_service.skip_task(pending["task_id"])
+                    blocks = [ContentBlock(type="text", text="已跳过这道题，不会把它记为错误。现在可以开始下一题。")]
+            elif forced_intent == "UNSURE_OR_GIVE_UP":
+                pending = self.repo.pending_task_for_conversation(conversation.conversation_id)
+                if pending is None:
+                    blocks = [ContentBlock(type="text", text="当前没有待完成的题目。")]
+                else:
+                    blocks = [ContentBlock(type="task", data={
+                        "kind": "task_options", "task_id": pending["task_id"],
+                        "prompt_text": pending.get("prompt_text", ""),
+                    })]
             elif forced_intent == "REQUEST_EXPLANATION":
                 blocks, seq = self._ask_book(
                     project_id=state["project_id"], learner_id=state["learner_id"],
@@ -509,6 +605,23 @@ class ConversationOrchestrator:
                     ),
                 },
             ))
+        elif ans.grounded:
+            # Preserve the user's question in the conversation, but never turn
+            # a weak chapter-level retrieval hit into a false learning-state
+            # record.  The explicit UI note makes this conservative choice
+            # visible instead of silently dropping the signal.
+            blocks.append(ContentBlock(
+                type="question_signal",
+                data={
+                    "signal_id": f"question_unclassified_{run_id}",
+                    "concepts": [],
+                    "unclassified": True,
+                    "message": (
+                        "已保留这次提问，但暂时无法可靠对应到具体知识点，"
+                        "因此不会写入学习状态。"
+                    ),
+                },
+            ))
 
         # Citations as structured blocks + citation_attached events.
         for i, c in enumerate(ans.citations):
@@ -571,52 +684,100 @@ class ConversationOrchestrator:
 
         chunk_order = {chunk.chunk_id: index for index, chunk in enumerate(retrieved)}
         question_folded = question.casefold()
-        matches: list[tuple[int, int, object, list[str], str]] = []
+
+        def question_match_score(name: str) -> int:
+            """Return a deliberately strict lexical score for a concept name.
+
+            A retrieved chunk is only evidence that a concept is *available as
+            a candidate*; it is not evidence that the learner asked about that
+            concept.  For Chinese section labels, derive meaningful 3+ character
+            fragments as aliases (for example ``复杂度`` from ``复杂度度量``).
+            One-character labels such as ``串`` are never enough on their own.
+            """
+            folded = name.casefold().strip()
+            if not folded:
+                return 0
+            terms: set[str] = set()
+            if len(folded) >= 3:
+                terms.add(folded)
+            for part in re.findall(r"[\u4e00-\u9fff]{3,}|[a-z][a-z0-9_+#.-]{2,}", folded):
+                terms.add(part)
+                if re.fullmatch(r"[\u4e00-\u9fff]+", part):
+                    terms.update(part[i:i + width] for width in range(3, min(6, len(part)) + 1)
+                                 for i in range(len(part) - width + 1))
+            return max((len(term) for term in terms if term in question_folded), default=0)
+
+        # (direct-match-first, source rank, direct score, concept, supporting, book)
+        matches: list[tuple[int, int, int, object, list[str], str]] = []
         for book_id in sorted({chunk.book_id for chunk in retrieved}):
             book_chunks = [chunk for chunk in retrieved if chunk.book_id == book_id]
             retrieved_ids = {chunk.chunk_id for chunk in book_chunks}
-            retrieved_text = "\n".join(chunk.content for chunk in book_chunks).casefold()
             for concept in self.repo.concepts_for_book(book_id):
                 anchored = [
                     ref.chunk_id for ref in concept.source_refs
                     if ref.chunk_id and ref.chunk_id in retrieved_ids
                 ]
                 name = concept.name.strip()
-                folded_name = name.casefold()
-                tokens = [
-                    token for token in re.findall(r"[\w\u4e00-\u9fff]+", folded_name)
-                    if len(token) >= 2 and token not in {"and", "for", "the", "with", "versus", "vs"}
-                ]
-                named_in_question = bool(
-                    name and (
-                        folded_name in question_folded
-                        or any(token in question_folded for token in tokens)
-                        or ("==" in name and "==" in question)
-                    )
-                )
-                named_in_context = bool(
-                    name and (
-                        folded_name in retrieved_text
-                        or any(token in retrieved_text for token in tokens)
-                    )
-                )
-                if not anchored and not named_in_question and not named_in_context:
+                direct_score = question_match_score(name)
+                if not anchored and not direct_score:
                     continue
                 supporting = anchored or [book_chunks[0].chunk_id]
-                rank = 0 if named_in_question else 1 if anchored else 2
+                rank = 0 if direct_score else 1
                 first_chunk = min(chunk_order.get(chunk_id, 99) for chunk_id in supporting)
-                matches.append((rank, first_chunk, concept, supporting, book_id))
+                matches.append((rank, first_chunk, direct_score, concept, supporting, book_id))
+
+        # A direct mention is sufficient and avoids an unnecessary model call.
+        # Otherwise, allow a live model to select *one* source-anchored concept
+        # from an explicitly closed candidate list.  A failure or low confidence
+        # records nothing — conversation history still preserves the question.
+        direct = [item for item in matches if item[2] >= 3]
+        chosen: list[tuple[int, int, int, object, list[str], str]] = []
+        if direct:
+            chosen = [sorted(direct, key=lambda item: (
+                -item[2], item[1], -item[3].importance, item[3].name,
+            ))[0]]
+        elif matches and getattr(self.router.cfg, "live", False):
+            candidates = sorted(matches, key=lambda item: (
+                item[1], -item[3].importance, item[3].name,
+            ))[:10]
+            candidate_text = "\n".join(
+                f"- id={item[3].concept_id}; 名称={item[3].name}; 说明={item[3].description[:180]}"
+                for item in candidates
+            )
+            try:
+                result = self.router.complete(
+                    "question_concept_classification",
+                    [{
+                        "role": "system",
+                        "content": (
+                            "你负责把学习者的问题保守地归到一个知识点。只能从候选中选择一个；"
+                            "若问题只是该章节附近但没有明确语义关联，必须返回 null。"
+                            "输出严格 JSON：{\"concept_id\":\"候选 id 或 null\",\"confidence\":0到1}。"
+                        ),
+                    }, {
+                        "role": "user",
+                        "content": f"学习者问题：{question[:700]}\n候选知识点：\n{candidate_text}",
+                    }],
+                    output_schema={"type": "object"},
+                    temperature=0.0,
+                    max_tokens=180,
+                )
+                parsed = result.parsed_json if result.ok else None
+                concept_id = str((parsed or {}).get("concept_id") or "")
+                confidence = float((parsed or {}).get("confidence") or 0)
+                if confidence >= 0.78:
+                    chosen = [item for item in candidates if item[3].concept_id == concept_id][:1]
+            except (TypeError, ValueError, AttributeError):
+                # Classification is auxiliary; no mapping is safer than a
+                # guessed mapping and should never affect answering the user.
+                chosen = []
 
         recorded: list[dict] = []
         seen: set[str] = set()
-        for _, _, concept, supporting, book_id in sorted(
-            matches, key=lambda item: (item[0], item[1], -item[2].importance, item[2].name),
-        ):
+        for _, _, _, concept, supporting, book_id in chosen:
             if concept.concept_id in seen:
                 continue
             seen.add(concept.concept_id)
-            if len(recorded) >= 3:
-                break
             digest = hashlib.sha256(
                 f"{run_id}|{concept.concept_id}|QUESTION".encode("utf-8"),
             ).hexdigest()[:24]

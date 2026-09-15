@@ -12,6 +12,7 @@ import type {
   TaskCardData,
   Transition,
 } from "../../types/blocks";
+import { MathText } from "../MathText";
 
 export function QuestionSignalCard({
   data,
@@ -22,7 +23,13 @@ export function QuestionSignalCard({
   onStart: (conceptId: string) => void;
   busy: boolean;
 }) {
-  if (!data.concepts?.length) return null;
+  if (!data.concepts?.length) {
+    return data.unclassified ? (
+      <div className="question-signal-card">
+        <div><span className="chip">未强行归类</span><p>{data.message}</p></div>
+      </div>
+    ) : null;
+  }
   return (
     <div className="question-signal-card">
       <div>
@@ -90,12 +97,13 @@ export function TaskCard({
         <span className="chip pending">{label}</span>
         {stageBadge}
       </div>
-      <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>{data.prompt_text}</div>
-      {(data.focus || data.generation_reason || data.source_scope?.length) && (
+      <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}><MathText text={data.prompt_text} /></div>
+      {(data.focus || data.generation_reason || data.generation_notice || data.source_scope?.length) && (
         <div className="task-provenance">
           {data.focus && <div><span>考查内容</span><strong>{data.focus}</strong></div>}
           {data.source_scope?.length ? <div><span>资料依据</span><strong>{data.source_scope.map((item) => `${item.title} · ${item.locator}`).join("；")}</strong></div> : null}
           {data.generation_reason && <div><span>为什么现在问</span><strong>{data.generation_reason}</strong></div>}
+          {data.generation_notice && <div><span>{data.generation_mode === "llm" ? "出题方式" : "生成状态"}</span><strong>{data.generation_notice}</strong></div>}
         </div>
       )}
       {interactive ? (
@@ -125,15 +133,17 @@ export function JudgmentCard({
   onBackToSource,
   onFinish,
   onSupplement,
+  onSkip,
   busy,
 }: {
   data: JudgmentCardData;
-  onNext: () => void;
+  onNext: (taskId: string) => void;
   onExplain: (taskId: string) => void;
   onPractice: (taskId: string) => void;
   onBackToSource: (sourceId: string, page: number) => void;
   onFinish: () => void;
   onSupplement: () => void;
+  onSkip: (taskId: string) => void;
   busy: boolean;
 }) {
   const j: JudgmentPayload = data.judgment || {};
@@ -168,16 +178,45 @@ export function JudgmentCard({
       ) : null}
       <div className="judgment-actions">
         {data.needs_review ? (
-          <button className="btn primary" disabled={busy} onClick={onSupplement}>补充答案</button>
+          <>
+            <button className="btn primary" disabled={busy} onClick={onSupplement}>提交补充答案</button>
+            <button className="btn" disabled={busy} onClick={() => onExplain(data.task_id)}>查看讲解并结束本题</button>
+            <button className="btn ghost" disabled={busy} onClick={() => onSkip(data.task_id)}>跳过本题</button>
+          </>
         ) : (
           <>
-            <button className="btn primary" disabled={busy} onClick={onNext}>下一题</button>
+            <button className="btn primary" disabled={busy} onClick={() => onNext(data.task_id)}>下一题</button>
             <button className="btn" disabled={busy} onClick={() => onExplain(data.task_id)}>查看讲解</button>
             {(result === "PARTIAL" || result === "FAIL") ? <button className="btn" disabled={busy} onClick={() => onPractice(data.task_id)}>针对练习</button> : null}
             {source ? <button className="btn ghost" disabled={busy} onClick={() => onBackToSource(source.source_id, source.page || 1)}>回原文</button> : null}
             <button className="btn ghost" disabled={busy} onClick={onFinish}>结束本次巩固</button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+export function TaskOptionsCard({
+  taskId, onHint, onExplain, onSkip, onSupplement, hideHint, busy,
+}: {
+  taskId: string;
+  onHint: (taskId: string) => void;
+  onExplain: (taskId: string) => void;
+  onSkip: (taskId: string) => void;
+  onSupplement: () => void;
+  hideHint?: boolean;
+  busy: boolean;
+}) {
+  return (
+    <div className="r-radius" style={{ maxWidth: 720, margin: "12px auto", background: "var(--panel)", border: "1px solid var(--border)", padding: "16px 20px" }}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>这题暂时没有思路很正常。</div>
+      <div className="c-muted" style={{ fontSize: 13, marginBottom: 12 }}>请选择下一步；在你明确选择前，题目和学习状态都不会被改动。</div>
+      <div className="judgment-actions">
+        {hideHint ? null : <button className="btn primary" disabled={busy} onClick={() => onHint(taskId)}>给我提示</button>}
+        <button className="btn" disabled={busy} onClick={() => onExplain(taskId)}>查看讲解并结束本题</button>
+        <button className="btn" disabled={busy} onClick={onSupplement}>提交答案</button>
+        <button className="btn ghost" disabled={busy} onClick={() => onSkip(taskId)}>跳过本题</button>
       </div>
     </div>
   );

@@ -112,7 +112,10 @@ class TaskService:
             preferred = self._exact_concept(project_id, concept_id) if concept_id else None
             if concept_id and preferred is None:
                 raise AppError("CONCEPT_NOT_IN_SCOPE", "这个知识点不在当前学习空间中", status_code=404)
-            if preferred is None and selection != "RECOMMENDED":
+            # The primary “开始推荐练习” button must use the same ordered queue
+            # rendered in the left panel.  Previously RECOMMENDED skipped this
+            # branch and fell back to the decision engine's first graph node.
+            if preferred is None:
                 candidate = next(iter(self.consolidation_candidates(
                     project_id, mode="PRACTICE", filter=selection,
                 )["candidates"]), None)
@@ -175,11 +178,12 @@ class TaskService:
         if selected_filter not in {"RECOMMENDED", "QUESTIONED", "WEAK", "DUE", "UNVERIFIED", "ALL"}:
             raise AppError("INVALID_FILTER", "不支持的候选筛选条件", status_code=422)
 
-        concepts = {
-            concept.concept_id: concept
-            for concept in self._practice_concepts(project_id)
+        ordered_concepts = [
+            concept for concept in self._practice_concepts(project_id)
             if not source_id or concept.book_id == source_id
-        }
+        ]
+        concepts = {concept.concept_id: concept for concept in ordered_concepts}
+        sequence = {concept.concept_id: index for index, concept in enumerate(ordered_concepts)}
         rows: list[dict] = []
         counts = {"questioned": 0, "weak": 0, "due": 0, "unverified": 0}
         for view in project_state_views(self.repo, project_id, policy=ReviewPolicy()):
@@ -201,14 +205,17 @@ class TaskService:
                 priority, reason_code, reason_label = 0, "WEAK", "测验中还不稳"
             elif view.group == "due":
                 priority, reason_code, reason_label = 1, "DUE", "已经到期，建议复验"
+            elif view.current_verified_level in {"L1", "L2", "L3"}:
+                next_level = f"L{int(view.current_verified_level[1:]) + 1}"
+                priority, reason_code, reason_label = 2, "VERIFIED", f"已通过 {view.current_verified_level}，继续确认 {next_level}"
             elif question_count and view.current_verified_level == "L0":
-                priority, reason_code, reason_label = 2, "QUESTIONED", "你问过，但还未验证"
+                priority, reason_code, reason_label = 3, "QUESTIONED", "你问过，但还未验证"
             elif view.current_verified_level == "L0":
-                priority, reason_code, reason_label = 3, "UNVERIFIED", "已进入学习范围，尚未验证"
+                priority, reason_code, reason_label = 4, "UNVERIFIED", "已进入学习范围，尚未验证"
             elif question_count:
-                priority, reason_code, reason_label = 4, "QUESTIONED", "你曾问过，可再次确认"
+                priority, reason_code, reason_label = 5, "QUESTIONED", "你曾问过，可再次确认"
             else:
-                priority, reason_code, reason_label = 5, "VERIFIED", "已验证，可抽查"
+                priority, reason_code, reason_label = 6, "VERIFIED", "已验证，可抽查"
 
             include_for_filter = {
                 "QUESTIONED": question_count > 0,
@@ -238,8 +245,11 @@ class TaskService:
                 "question_count": question_count,
                 "last_question_at": questions[0].occurred_at if questions else None,
                 "priority": priority,
+                "sequence": sequence.get(concept.concept_id, len(sequence)),
             })
-        rows.sort(key=lambda item: (item["priority"], -(item["question_count"] or 0), item["name"]))
+        rows.sort(key=lambda item: (item["priority"], -(item["question_count"] or 0), item["sequence"]))
+        for item in rows:
+            item.pop("sequence", None)
         return {
             "mode": mode,
             "filter": selected_filter,
@@ -337,8 +347,65 @@ class TaskService:
         t = self.repo.get_trusted_task(task_id)
         if t is None:
             raise AppError("TASK_NOT_FOUND", "任务不存在", status_code=404)
+        if t["status"] != "PENDING":
+            raise AppError("TASK_NOT_PENDING", "该任务已经结束", status_code=409)
         self.repo.update_task_status(task_id, "SKIPPED")
         return {"task_id": task_id, "status": "SKIPPED"}
+
+    def explain_task(self, task_id: str) -> dict:
+        """Build a task-specific explanation from the trusted task context.
+
+        This deliberately does *not* call the general textbook Q&A flow.  A
+        completed question already has a trusted prompt, answer and rubric;
+        rerunning broad retrieval for it can select a table of contents or an
+        unrelated page, producing an excerpt instead of an explanation.
+
+        Revealing an explanation while a task is pending ends that attempt as
+        ``EXPLAINED``.  The learner receives the answer but no answer Evidence
+        is written, so the next task remains a clean, independent attempt.
+        """
+        task = self.repo.get_trusted_task(task_id)
+        if task is None:
+            raise AppError("TASK_NOT_FOUND", "任务不存在", status_code=404)
+        was_pending = task["status"] == "PENDING"
+        if was_pending:
+            self.repo.update_task_status(task_id, "EXPLAINED")
+
+        prompt = _bounded_text(str(task.get("prompt_text") or ""), 1800)
+        expected = _bounded_text(str(task.get("expected_answer") or ""), 1800)
+        rubric = [_bounded_text(str(item), 320) for item in (task.get("rubric") or [])]
+        fallback = _local_task_explanation(prompt, expected, rubric)
+        explanation = fallback
+
+        if getattr(self.router.cfg, "live", False):
+            system = (
+                "你是严谨、耐心的中文学习教练。根据给出的题目、标准答案和判分要点，"
+                "写一份能帮助学生真正学会的讲解。总长度不超过 650 个中文字符，必须在篇幅内完整结束；"
+                "先给结论，再按推理步骤展开，并指出一个常见误区；"
+                "不要引用或编造教材原文、页码和来源，不要谈论模型或评分系统。"
+                "可以使用 Markdown 的标题、列表、加粗和代码块；只输出讲解正文。"
+            )
+            user = (
+                f"题目：\n{prompt}\n\n"
+                f"标准答案：\n{expected}\n\n"
+                "判分要点：\n" + "\n".join(f"- {item}" for item in rubric)
+            )
+            result = self.router.complete(
+                "task_explanation",
+                [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                temperature=0.25,
+                max_tokens=700,
+            )
+            candidate = (result.content or "").strip() if result.ok else ""
+            if len(candidate) >= 40:
+                explanation = candidate
+
+        return {
+            "task_id": task_id,
+            "text": explanation,
+            "revealed_while_pending": was_pending,
+            "source_scope": self.source_scope_for_task(task_id),
+        }
 
     # --- answer submission ------------------------------------------------
 
@@ -403,7 +470,11 @@ class TaskService:
         )
 
         judgment = self.diagnostician.judge(
-            task=trusted, answer_text=answer_text, rubric=trusted.rubric,
+            task=trusted,
+            answer_text=answer_text,
+            rubric=trusted.rubric,
+            prompt_text=str(t.get("prompt_text") or ""),
+            expected_answer=str(t.get("expected_answer") or ""),
         )
         judgment = self._attach_probe_signals(trusted, judgment, answer_text)
 
@@ -483,8 +554,7 @@ class TaskService:
             if concept is None:
                 return None
             return generate_quiz(
-                concept=concept,
-                level=Level.L2,
+                concept=concept, level=self._next_quiz_level(project_id, concept.concept_id),
                 target_concept_ids=[concept.concept_id],
                 router=self.router,
                 source_context=self._source_context_for_concept(project_id, concept),
@@ -540,11 +610,42 @@ class TaskService:
         if concept is None:
             return None
         return generate_quiz(
-            concept=concept, level=Level.L2,
+            concept=concept, level=self._next_quiz_level(project_id, concept.concept_id),
             target_concept_ids=[concept.concept_id],
             router=self.router,
             source_context=self._source_context_for_concept(project_id, concept),
         )
+
+    def _next_quiz_level(self, project_id: str, concept_id: str) -> Level:
+        """Return the first mastery level not yet continuously verified.
+
+        A fresh concept used to receive an L2 question.  Even a perfect answer
+        then left the visible level at L0 because L1 was still missing.  Task
+        levels must follow the same L1→L4 ladder that the Evidence Gate uses.
+        """
+        current = self.repo.get_state(project_id, concept_id).current_verified_level
+        ladder = [Level.L1, Level.L2, Level.L3, Level.L4]
+        try:
+            index = ladder.index(current) + 1
+        except ValueError:
+            index = 0
+        return ladder[min(index, len(ladder) - 1)]
+
+    def next_practice_concept_after(self, project_id: str, concept_id: str) -> str:
+        """Choose the next unmastered sibling after a fully verified concept."""
+        concepts = self._practice_concepts(project_id)
+        current = next((i for i, concept in enumerate(concepts) if concept.concept_id == concept_id), -1)
+        if current < 0:
+            return ""
+        current_book = concepts[current].book_id
+        # Prefer the next section of the same source, preserving the mapper's
+        # source order.  Do not wrap to the first chapter after completing L4.
+        for concept in concepts[current + 1:]:
+            if concept.book_id != current_book:
+                continue
+            if self.repo.get_state(project_id, concept.concept_id).current_verified_level != Level.L4:
+                return concept.concept_id
+        return ""
 
     def _source_context_for_concept(self, project_id: str, concept) -> str:
         """Pick compact source passages anchored to a concept for quiz writing."""
@@ -845,8 +946,14 @@ class TaskService:
                 ),
             })
         action = decision.get("selected_action") or "VERIFY"
+        target_level = trusted.evidence_for_levels[0] if trusted.evidence_for_levels else Level.L1
         reason_map = {
-            "VERIFY": "这个知识点已经进入学习范围，但还缺少一次独立作答证据。",
+            "VERIFY": {
+                Level.L1: "这是该知识点的第一次独立验证；答对后会建立 L1 基础掌握记录。",
+                Level.L2: "你已通过 L1；这题用于确认能否解释并应用该知识点（L2）。",
+                Level.L3: "你已通过 L2；这题要求在新情境中迁移使用该知识点（L3）。",
+                Level.L4: "你已通过 L3；这题用于检验能否独立综合运用并巩固到 L4。",
+            }.get(target_level, "这题用于确认当前知识点的独立掌握情况。"),
             "REVIEW": "这个知识点需要复习，当前问题用于检查是否仍能独立回忆。",
             "DIAGNOSE": "之前的回答可能存在理解偏差，这个问题用于区分具体原因。",
             "REMEDIATE": "这个问题用于针对已发现的理解偏差进行纠正。",
@@ -865,6 +972,8 @@ class TaskService:
             "generation_reason": reason_map.get(
                 action, "根据当前学习进度生成，用于确认你是否真正理解了这部分资料。",
             ),
+            "generation_mode": draft.generation_mode,
+            "generation_notice": draft.generation_notice,
         }
 
     def _answer_result(
@@ -874,10 +983,13 @@ class TaskService:
         judgment_view = _judgment_view(judgment)
         clarification = ""
         if res.needs_review:
+            timeout_notice = ""
+            if "timeout" in (judgment.reason or "").casefold():
+                timeout_notice = "判分模型服务响应超时；本地规则也无法可靠覆盖这份答案。"
             judgment_view = {
                 "judgment_status": JudgmentStatus.NEEDS_REVIEW.value,
                 "result": None,
-                "reason": "这段回答还不足以判断你是否理解了题目。",
+                "reason": timeout_notice or "这段回答还不足以判断你是否理解了题目。",
                 "criterion_results": [],
             }
             clarification = "请说明你的判断和理由；如果不确定，可以说“我不知道”或先跳过这道题。"
@@ -936,12 +1048,42 @@ def _is_practice_worthy(concept) -> bool:
 
 def _clarification_for(answer_text: str) -> str:
     """Return guidance when an input cannot reasonably be treated as an answer."""
-    compact = "".join(ch for ch in (answer_text or "").strip() if ch.isalnum())
-    if len(compact) < 2:
+    raw = (answer_text or "").strip()
+    if not raw:
         return "我还没收到可以判断的答案。请写下你的结论和理由；如果不想回答，可以选择跳过。"
+    # Do not reject concise but valid answers before the Diagnostician sees
+    # them: `O(1)`, `是`, a symbol, or a multiple-choice option may be the
+    # complete answer to a well-formed task.
+    compact = "".join(ch for ch in raw if ch.isalnum())
     if compact.lower() in {"不知道", "不清楚", "不会", "idk", "test", "测试"}:
         return "没关系。你可以说说卡在哪一步，或者选择跳过；这次不会记录为错误答案。"
     return ""
+
+
+def _bounded_text(value: str, limit: int) -> str:
+    """Keep a malformed historical task from bloating an explanation prompt."""
+    compact = " ".join((value or "").split())
+    return compact[:limit].rstrip()
+
+
+def _local_task_explanation(prompt: str, expected: str, rubric: list[str]) -> str:
+    """Useful explanation when the live teacher call is unavailable.
+
+    The trusted answer/rubric is much safer and more relevant than a broad
+    retrieval fallback: it is exactly the material the completed task used for
+    judging.  This is intentionally a real explanation structure, not a raw
+    source excerpt.
+    """
+    answer = expected or "请根据下列要点逐项完成推理。"
+    steps = "\n".join(f"{index}. {item}" for index, item in enumerate(rubric, start=1))
+    return (
+        "## 这题怎么想\n"
+        "先把题目要求拆成可验证的结论，再分别说明每个结论成立的理由；不要只给最终结果。\n\n"
+        f"## 参考结论\n{answer}\n\n"
+        f"## 关键检查点\n{steps or '围绕题目中的条件、过程和结论逐步核对。'}\n\n"
+        "## 常见误区\n"
+        "只写一个结果、忽略边界条件，或把相近概念混为一谈，都会使答案缺少可验证的推理。"
+    )
 
 def _has_active_competing(mis, all_mis: list) -> bool:
     """True if another active misconception shares this one's hypothesis_group.

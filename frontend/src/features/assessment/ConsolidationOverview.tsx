@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import * as api from "../../api/client";
 import { toast } from "../../components/ui/primitives";
 import { useApp } from "../../store/appStore";
-import type { ConsolidationFilter, ConsolidationQueue } from "../../types/blocks";
+import type { ConsolidationFilter, ConsolidationMode, ConsolidationQueue } from "../../types/blocks";
 import { useConversationActions } from "../conversations/useConversationActions";
 
 const FILTERS: { value: ConsolidationFilter; label: string }[] = [
@@ -21,25 +21,27 @@ export function ConsolidationOverview() {
   const [queue, setQueue] = useState<ConsolidationQueue | null>(null);
   const [loading, setLoading] = useState(false);
   const projectId = state.activeProject?.project_id;
+  const mode: ConsolidationMode = state.mode === "ASSESSMENT" ? "ASSESSMENT" : "PRACTICE";
+  const isAssessment = mode === "ASSESSMENT";
 
   useEffect(() => {
     if (!projectId) return;
     let active = true;
     setLoading(true);
-    api.consolidationCandidates(projectId, "PRACTICE", filter)
+    api.consolidationCandidates(projectId, mode, filter)
       .then((result) => { if (active) setQueue(result); })
       .catch((error) => { if (active) toast((error as Error).message || "暂时无法加载候选知识点"); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [projectId, filter, state.summary]);
+  }, [projectId, filter, mode, state.summary]);
 
   const first = queue?.candidates[0];
   return (
     <aside className="activity-overview consolidation-overview review-overview">
       <span className="overview-icon">↻</span>
-      <span className="eyebrow">PRACTICE</span>
-      <h2>把疑问变成<br />能够独立作答</h2>
-      <p>做题、纠错和复验都在这里完成。可以提示或跳过；只有未使用提示并独立答对时，才会形成掌握证据。</p>
+      <span className="eyebrow">{isAssessment ? "ASSESSMENT" : "PRACTICE"}</span>
+      <h2>{isAssessment ? <>独立完成，<br />核对真实掌握</> : <>把疑问变成<br />能够独立作答</>}</h2>
+      <p>{isAssessment ? "评估题会单独保存在能力评估会话中。提交后才会依据作答证据更新学习状态。" : "做题、纠错和复验都在这里完成。可以提示或跳过；只有未使用提示并独立答对时，才会形成掌握证据。"}</p>
 
       <div className="overview-metrics">
         <div><strong>{queue?.counts.questioned || 0}</strong><span>有过疑问</span></div>
@@ -50,9 +52,9 @@ export function ConsolidationOverview() {
       <button
         className="btn primary consolidation-primary"
         disabled={loading || state.sending || !first}
-        onClick={() => void actions.startTask({ selection: filter })}
+        onClick={() => void actions.startTask({ selection: filter, mode })}
       >
-        {state.sending ? "正在准备题目…" : "开始推荐练习"}
+        {state.sending ? "正在准备题目…" : isAssessment ? "开始能力评估" : "开始推荐练习"}
       </button>
 
       <div className="candidate-filters" aria-label="筛选知识点">
@@ -69,7 +71,7 @@ export function ConsolidationOverview() {
           <button
             key={candidate.concept_id}
             disabled={state.sending}
-            onClick={() => void actions.startTask({ conceptId: candidate.concept_id })}
+            onClick={() => void actions.startTask({ conceptId: candidate.concept_id, mode })}
           >
             <span><strong>{candidate.name}</strong><small>{candidate.source_title} · {candidate.locator}</small></span>
             <em>{candidate.reason_label}</em>

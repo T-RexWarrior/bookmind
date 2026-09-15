@@ -12,7 +12,9 @@ import {
   StateChangeCard,
   StatusLine,
   TaskCard,
+  TaskOptionsCard,
 } from "./cards/Cards";
+import { MathText } from "./MathText";
 
 export function MessageBlocks({
   blocks,
@@ -39,7 +41,7 @@ export function MessageBlocks({
   onTaskHint: (taskId: string) => void;
   onTaskSkip: (taskId: string) => void;
   onStartConceptTask: (conceptId: string) => void;
-  onNextTask: () => void;
+  onNextTask: (taskId: string) => void;
   onExplainTask: (taskId: string) => void;
   onPracticeTask: (taskId: string) => void;
   onBackToSource: (sourceId: string, page: number) => void;
@@ -58,7 +60,7 @@ export function MessageBlocks({
           case "text":
             return (
               <div key={i} style={{ fontSize: 14, whiteSpace: "pre-wrap", wordBreak: "break-word", padding: "2px 0" }}>
-                {b.text}
+                <MathText text={b.text || ""} />
               </div>
             );
           case "citation":
@@ -91,6 +93,19 @@ export function MessageBlocks({
                 onBackToSource={onBackToSource}
                 onFinish={onFinishConsolidation}
                 onSupplement={onSupplementAnswer}
+                onSkip={onTaskSkip}
+                busy={busy}
+              />
+            );
+            if (d.kind === "task_options") return (
+              <TaskOptionsCard
+                key={i}
+                taskId={d.task_id}
+                onHint={onTaskHint}
+                onExplain={onExplainTask}
+                onSkip={onTaskSkip}
+                onSupplement={onSupplementAnswer}
+                hideHint={hideHint}
                 busy={busy}
               />
             );

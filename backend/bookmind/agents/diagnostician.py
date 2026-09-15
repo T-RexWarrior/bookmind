@@ -14,6 +14,7 @@ NEEDS_REVIEW; outputs only structured judgments — the Engine applies the rules
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from ..domain.enums import EvidenceResult, JudgmentStatus, SignalDirection, SignalStrength
@@ -37,6 +38,8 @@ class DiagnosticianAgent:
         answer_text: str,
         *,
         rubric: list[str] | None = None,
+        prompt_text: str = "",
+        expected_answer: str = "",
     ) -> AnswerJudgment:
         """Produce an AnswerJudgment for one answer.
 
@@ -50,7 +53,10 @@ class DiagnosticianAgent:
         guessed result.
         """
         rubric = rubric or task.rubric
-        res = self._call_model(task, answer_text, rubric)
+        res = self._call_model(
+            task, answer_text, rubric,
+            prompt_text=prompt_text, expected_answer=expected_answer,
+        )
         if res.ok and res.parsed_json is not None:
             judgment = _coerce_judgment(res.parsed_json)
             # The live model often invents bug_ids that are not in the Bug Library
@@ -74,13 +80,16 @@ class DiagnosticianAgent:
             judgment = _reconcile_changed_task(task, judgment, answer_text, rubric)
             return judgment
         # Model unavailable/unparseable → deterministic offline judge.
-        offline = _offline_judge(task, answer_text, rubric)
+        offline = _offline_judge(task, answer_text, rubric, expected_answer=expected_answer)
         if offline is not None:
             return offline
         return AnswerJudgment(judgment_status=JudgmentStatus.NEEDS_REVIEW, result=None,
                               reason=f"model unavailable and offline judge uncertain: {res.error or 'no json'}")
 
-    def _call_model(self, task: TrustedTaskContext, answer: str, rubric: list[str]) -> ModelResult:
+    def _call_model(
+        self, task: TrustedTaskContext, answer: str, rubric: list[str], *,
+        prompt_text: str = "", expected_answer: str = "",
+    ) -> ModelResult:
         targets = ", ".join(task.target_concept_ids)
         levels = ", ".join(l.value for l in task.evidence_for_levels)
         rubric_text = "\n".join(f"- {r}" for r in rubric)
@@ -109,9 +118,19 @@ class DiagnosticianAgent:
             '"misconception_signals":[{"bug_id":"...","direction":"FOR|AGAINST","strength":"WEAK|MEDIUM|STRONG","reason":"..."}],'
             '"reason":"..."}。'
             "misconception_signals 的 bug_id 只能填上面列出的已知 bug_id，否则填空数组。"
-            "无法可靠判定时设 judgment_status=NEEDS_REVIEW 且 result=null。"
+            "只有学生没有作答、答案无法辨认，或题目本身确实缺少判分依据时，才设 NEEDS_REVIEW。"
+            "学生给出了明确但错误、不完整或与评分点不符的作答时，必须设 DECIDED 且 result=FAIL 或 PARTIAL，不能用 NEEDS_REVIEW 逃避判定。"
         )
+        prompt_for_judge = (prompt_text or "未提供题干").strip()[:1400]
+        # Older generated tasks may have persisted an entire source excerpt as
+        # their expected answer.  It is neither a usable key nor safe to send
+        # wholesale to the model: it causes timeouts and hides the actual task.
+        expected_for_judge = (expected_answer or "").strip()
+        if len(expected_for_judge) > 1200:
+            expected_for_judge = "（历史题目的标准答案过长，已忽略；请依据题干和 Rubric 判定。）"
         user = (
+            f"题目（仅用于判分，不得在回答中泄露）:\n{prompt_for_judge}\n\n"
+            f"服务端标准答案（仅用于判分，不得复述给学生）:\n{expected_for_judge or '未提供标准答案，以 Rubric 为准'}\n\n"
             f"目标概念: {targets}\n验证等级: {levels}\nRubric:\n{rubric_text}\n"
             f"学生回答: {answer}"
         )
@@ -120,6 +139,7 @@ class DiagnosticianAgent:
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
             output_schema={"type": "object"},
             temperature=0.0,
+            max_tokens=512,
         )
 
 
@@ -388,7 +408,9 @@ def _decided(result, reason, rubric, signals=None) -> AnswerJudgment:
     )
 
 
-def _offline_judge(task: TrustedTaskContext, answer_text: str, rubric: list[str]) -> AnswerJudgment | None:
+def _offline_judge(
+    task: TrustedTaskContext, answer_text: str, rubric: list[str], *, expected_answer: str = "",
+) -> AnswerJudgment | None:
     """Deterministic offline judge. Returns None when uncertain (→ NEEDS_REVIEW)."""
     from .bug_library import BUG_LIBRARY
     from ..engine.misconception.probe_classifier import classify_answer
@@ -448,6 +470,34 @@ def _offline_judge(task: TrustedTaskContext, answer_text: str, rubric: list[str]
                 reason = "offline: quiz matched likely wrong answer"
                 return _decided(EvidenceResult.FAIL, reason, rubric,
                                 [_signal(bug.bug_id, SignalDirection.FOR, SignalStrength.WEAK, reason)])
+    # When the online judge times out, do not throw away an objectively visible
+    # part of a numeric/formula answer. This can only produce PARTIAL (never
+    # PASS), so it cannot falsely promote mastery. It is intentionally narrow:
+    # a formula such as O(n) or an exact numeric result must occur in both the
+    # server-only answer key and the learner response.
+    shared = _shared_checkable_tokens(answer, expected_answer)
+    if shared:
+        criteria = [CriterionResult(
+            criterion_id=str(index),
+            satisfied=any(token.casefold() in criterion.casefold() for token in shared),
+            note="",
+        ) for index, criterion in enumerate(rubric)]
+        return AnswerJudgment(
+            judgment_status=JudgmentStatus.DECIDED,
+            result=EvidenceResult.PARTIAL,
+            criterion_results=criteria,
+            reason="offline: matched checkable answer-key token after model timeout",
+        )
     # No confident wrong-answer match and no live model → let the caller emit
     # NEEDS_REVIEW. Do NOT fall back to a length-based PASS.
     return None
+
+
+def _shared_checkable_tokens(answer: str, expected_answer: str) -> list[str]:
+    """Find unambiguous formula/numeric tokens shared with an answer key."""
+    if not expected_answer:
+        return []
+    pattern = re.compile(r"(?:[OΘΩ]\s*\([^)]{1,24}\)|\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\s*=\s*\d+\b)")
+    expected = {re.sub(r"\s+", "", token) for token in pattern.findall(expected_answer)}
+    learner = re.sub(r"\s+", "", answer)
+    return sorted(token for token in expected if len(token) >= 3 and token in learner)

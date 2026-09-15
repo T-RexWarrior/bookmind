@@ -16,7 +16,7 @@ import type {
   User,
 } from "../types/blocks";
 
-export type UIMode = "LEARN" | "REVIEW";
+export type UIMode = "LEARN" | "REVIEW" | "ASSESSMENT";
 
 export function activityFromMode(mode: UIMode): ConversationActivity {
   return mode;

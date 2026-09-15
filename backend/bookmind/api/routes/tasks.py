@@ -18,10 +18,9 @@ from pydantic import BaseModel, field_validator
 from ...domain.enums import UIPreset
 from ...domain.models import ContentBlock, Message, User
 from ...storage.protocols import Repository
-from ..dependencies import get_current_user, get_qa_service, get_repo, get_run_service, get_task_service
+from ..dependencies import get_current_user, get_repo, get_run_service, get_task_service
 from ..errors import AppError
 from ...services.run_service import RunService
-from ...services.book_qa import BookQAService
 from ...services.task_service import TaskService
 
 router = APIRouter(prefix="/api", tags=["tasks"])
@@ -108,7 +107,16 @@ def create_task(
         source_task = _load_owned_task(repo, body.from_task_id, user)
         if source_task["project_id"] != conv.project_id:
             raise AppError("TASK_NOT_IN_PROJECT", "原题不属于当前学习空间", status_code=404)
-        selected_concept_id = next(iter(source_task.get("target_concept_ids") or []), "")
+        previous_concept_id = next(iter(source_task.get("target_concept_ids") or []), "")
+        previous_state = repo.get_state(conv.project_id, previous_concept_id)
+        # “下一题” is a continuation command.  Keep advancing the current
+        # concept through L1→L4; only after L4 choose the next mapped sibling
+        # instead of silently falling back to the first global candidate.
+        selected_concept_id = (
+            tasks.next_practice_concept_after(conv.project_id, previous_concept_id)
+            if previous_state.current_verified_level.value == "L4"
+            else previous_concept_id
+        )
     if selected_concept_id and not repo.concept_in_project_scope(selected_concept_id, conv.project_id):
         raise AppError("CONCEPT_NOT_IN_SCOPE", "这个知识点不在当前学习空间中", status_code=404)
 
@@ -127,7 +135,7 @@ def create_task(
     safe_fields = (
         "kind", "task_id", "prompt_text", "is_probe", "is_changed_task",
         "remediation_stage", "focus", "source_scope", "generation_reason",
-        "hints_issued", "status", "text", "existing",
+        "generation_mode", "generation_notice", "hints_issued", "status", "text", "existing",
     )
     payload = {key: payload[key] for key in safe_fields if key in payload}
     if pending is not None:
@@ -144,7 +152,22 @@ def create_task(
         content_blocks=[block],
     )
     runs.add_message(message)
-    return {"task": payload, "message_id": message.message_id, "existing": False}
+    # Return the rendered message as well as its id.  This avoids a second
+    # read-after-write round trip in the client, which previously made a
+    # successful button click look like it had done nothing when the refresh
+    # raced with a mode switch.
+    return {
+        "task": payload,
+        "message_id": message.message_id,
+        "message": {
+            "message_id": message.message_id,
+            "role": message.role,
+            "content_blocks": [block.model_dump() for block in message.content_blocks],
+            "run_id": message.run_id,
+            "created_at": message.created_at.isoformat(),
+        },
+        "existing": False,
+    }
 
 
 @router.post("/conversations/{conversation_id}/consolidation-summary")
@@ -194,15 +217,15 @@ def finish_consolidation(
 
 
 @router.post("/conversations/{conversation_id}/tasks/{task_id}/explanation")
-def explain_completed_task(
+def explain_task(
     conversation_id: str,
     task_id: str,
     user: User = Depends(get_current_user),
     repo: Repository = Depends(get_repo),
     runs: RunService = Depends(get_run_service),
-    qa: BookQAService = Depends(get_qa_service),
+    tasks: TaskService = Depends(get_task_service),
 ) -> dict:
-    """Explain a completed task without fabricating a user chat message."""
+    """Reveal a task-specific explanation and, if needed, close the attempt."""
     conv = runs.get_conversation(conversation_id)
     if conv is None:
         raise AppError("CONVERSATION_NOT_FOUND", "对话不存在", status_code=404)
@@ -210,62 +233,33 @@ def explain_completed_task(
     task = _load_owned_task(repo, task_id, user)
     if task["project_id"] != conv.project_id:
         raise AppError("TASK_NOT_IN_PROJECT", "题目不属于当前学习空间", status_code=404)
-    if task.get("status") == "PENDING":
-        raise AppError("TASK_NOT_COMPLETED", "请先完成或跳过这道题，再查看讲解", status_code=409)
-
-    target_ids = set(task.get("target_concept_ids") or [])
-    concepts = [
-        concept for source_id in repo.allowed_book_ids(conv.project_id)
-        for concept in repo.concepts_for_book(source_id)
-        if concept.concept_id in target_ids
-    ]
-    names = "、".join(concept.name for concept in concepts) or "本题知识点"
-    source_ids = sorted({concept.book_id for concept in concepts}) or None
-    answer = qa.ask(
-        project_id=conv.project_id,
-        learner_id=user.user_id,
-        question=f"请结合资料讲解“{names}”，并说明刚才这道题应如何思考。",
-        source_ids=source_ids,
-    )
+    explanation = tasks.explain_task(task_id)
     blocks: list[ContentBlock] = []
-    if answer.chunk_ids:
-        items = []
-        for chunk_id in answer.chunk_ids[:4]:
-            chunk = repo.chunk_by_id(chunk_id)
-            if chunk is None:
-                continue
-            source = repo.get_source(chunk.book_id)
-            items.append({
-                "source_id": chunk.book_id,
-                "title": source.title if source else "学习资料",
-                "locator": chunk.short_label(),
-            })
+    source_scope = explanation.get("source_scope") or []
+    if source_scope:
         blocks.append(ContentBlock(type="context", data={
-            "kind": "answer_context", "scope": "本题相关资料",
-            "reason": "根据本题考查的知识点回到资料检索后生成讲解。",
-            "items": items,
+            "kind": "answer_context", "scope": "本题资料定位",
+            "reason": "讲解依据本题的题干、标准答案和判分要点生成；资料定位仅供回原文复习。",
+            "items": source_scope,
         }))
+    if explanation.get("revealed_while_pending"):
+        blocks.append(ContentBlock(
+            type="status",
+            text="已展示讲解并结束本题；这次不会记为作答证据。可以开始下一题重新独立练习。",
+        ))
     blocks.append(ContentBlock(
         type="text",
-        text=answer.answer_text or "暂时没有找到足够可靠的资料依据。可以回到原文后再提问。",
+        text=explanation["text"],
     ))
-    for index, citation in enumerate(answer.citations):
-        chunk_id = citation.get("chunk_id", "")
-        chunk = repo.chunk_by_id(chunk_id) if chunk_id else None
-        source_id = citation.get("book_id") or (chunk.book_id if chunk else "")
-        page = citation.get("page") or (str(chunk.source_ref.physical_page) if chunk else "")
-        source = repo.get_source(source_id) if source_id else None
-        blocks.append(ContentBlock(
-            type="citation", chunk_id=chunk_id, quote=citation.get("quote", ""),
-            page=str(page), book_id=source_id,
-            label=f"[{index + 1}] {source.title if source else '学习资料'} · {chunk.short_label() if chunk else f'p.{page}'}",
-        ))
     message = Message(
         message_id=f"msg_{uuid.uuid4().hex[:12]}", conversation_id=conversation_id,
         role="assistant", content_blocks=blocks,
     )
     runs.add_message(message)
-    return {"message_id": message.message_id, "grounded": answer.grounded}
+    return {
+        "message_id": message.message_id,
+        "revealed_while_pending": explanation["revealed_while_pending"],
+    }
 
 
 @router.get("/tasks/{task_id}")

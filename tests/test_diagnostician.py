@@ -79,6 +79,16 @@ def test_judge_model_failure_uncertain_returns_needs_review():
     assert j.result is None
 
 
+def test_judge_model_timeout_can_record_safe_partial_from_answer_key():
+    d = DiagnosticianAgent(FakeRouter(fail=True))
+    j = d.judge(
+        _task(), "时间复杂度为 O(n)",
+        expected_answer="时间复杂度为 O(n)，并需要处理空数组。",
+    )
+    assert j.judgment_status == JudgmentStatus.DECIDED
+    assert j.result == EvidenceResult.PARTIAL
+
+
 def test_judge_decided_without_valid_result_degrades_to_needs_review():
     parsed = {"judgment_status": "DECIDED", "result": "BANANA", "misconception_signals": []}
     d = DiagnosticianAgent(FakeRouter(parsed=parsed))
@@ -145,6 +155,27 @@ def test_live_prompt_injects_known_bug_ids():
     system = router.captured_messages[0]["content"]
     assert "bug_ref_vs_object" in system
     assert "不得编造" in system or "只能从下列选取" in system or "必须从下列选取" in system
+
+
+def test_live_judge_receives_server_only_question_and_expected_answer():
+    router = _CapturingRouter(parsed={"judgment_status": "DECIDED", "result": "FAIL"})
+    DiagnosticianAgent(router).judge(
+        _ref_task(), "1000", prompt_text="n=4096 时预计运行时间是多少？",
+        expected_answer="应先推导复杂度，再按增长率计算。",
+    )
+    user = router.captured_messages[1]["content"]
+    assert "n=4096" in user
+    assert "按增长率计算" in user
+
+
+def test_live_judge_does_not_send_oversized_legacy_answer_key():
+    router = _CapturingRouter(parsed={"judgment_status": "DECIDED", "result": "FAIL"})
+    DiagnosticianAgent(router).judge(
+        _ref_task(), "1000", prompt_text="请计算运行时间", expected_answer="x" * 1300,
+    )
+    user = router.captured_messages[1]["content"]
+    assert "x" * 200 not in user
+    assert "标准答案过长" in user
 
 
 def test_live_invented_bug_id_is_dropped_on_pass():

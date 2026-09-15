@@ -13,7 +13,7 @@ import {
 } from "../../events/adapter";
 import { detectPendingTask } from "../shared";
 import { loadActivityConversation } from "../assessment/ModeSwitcher";
-import type { ApiMessage, ConsolidationFilter, ConversationActivity } from "../../types/blocks";
+import type { ApiMessage, ConsolidationFilter, ConsolidationMode, ConversationActivity } from "../../types/blocks";
 import { toast } from "../../components/ui/primitives";
 
 export function useConversationActions() {
@@ -207,21 +207,24 @@ export function useConversationActions() {
     selection = "RECOMMENDED",
     conceptId = "",
     fromTaskId = "",
+    mode,
   }: {
     selection?: ConsolidationFilter;
     conceptId?: string;
     fromTaskId?: string;
+    mode?: ConsolidationMode;
   }) => {
     const project = state.activeProject;
     if (!project) return;
     const projectId = project.project_id;
-    const targetMode = "REVIEW" as const;
-    const activity: ConversationActivity = "REVIEW";
+    const taskMode = mode || (state.mode === "ASSESSMENT" ? "ASSESSMENT" : "PRACTICE");
+    const targetMode = taskMode === "ASSESSMENT" ? "ASSESSMENT" as const : "REVIEW" as const;
+    const activity: ConversationActivity = taskMode === "ASSESSMENT" ? "ASSESSMENT" : "REVIEW";
     try {
       if (state.mode !== targetMode) {
         dispatch({ type: "SET_MODE", mode: targetMode });
         await api.updateProject(projectId, {
-          default_mode: "Review",
+          default_mode: taskMode === "ASSESSMENT" ? "Assessment" : "Review",
         });
       }
 
@@ -242,17 +245,33 @@ export function useConversationActions() {
       dispatch({ type: "SET_PENDING_TASK", pendingTask: detectPendingTask(beforeMessages), activity, projectId });
       dispatch({ type: "SET_SENDING", sending: true });
 
-      await api.createTask(conversation.conversation_id, {
-        mode: "PRACTICE",
+      const created = await api.createTask(conversation.conversation_id, {
+        mode: taskMode,
         selection,
         concept_id: conceptId,
         from_task_id: fromTaskId,
         idempotency_key: `task_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
       });
-      const fresh = await api.getConversation(conversation.conversation_id);
-      const messages = fresh.messages as ApiMessage[];
-      dispatch({ type: "SET_ACTIVE_CONVERSATION", conversation, messages, activity, projectId });
-      dispatch({ type: "SET_PENDING_TASK", pendingTask: detectPendingTask(messages), activity, projectId });
+      if (created.message) {
+        // The server has already persisted this card. Render that authoritative
+        // payload immediately so the click always produces visible feedback.
+        dispatch({ type: "APPEND_MESSAGE", message: created.message });
+        dispatch({
+          type: "SET_PENDING_TASK",
+          pendingTask: detectPendingTask([...beforeMessages, created.message]),
+          activity,
+          projectId,
+        });
+        toast("已生成练习题，请在下方作答。");
+      } else {
+        // An idempotent retry can point at an already-pending task.  In that
+        // case there is no new message in the response, so refresh once.
+        const fresh = await api.getConversation(conversation.conversation_id);
+        const messages = fresh.messages as ApiMessage[];
+        dispatch({ type: "SET_ACTIVE_CONVERSATION", conversation, messages, activity, projectId });
+        dispatch({ type: "SET_PENDING_TASK", pendingTask: detectPendingTask(messages), activity, projectId });
+        if (created.existing) toast("当前题仍待完成：可补充答案、查看讲解或跳过后再开始新题。");
+      }
       await refreshSidebars(projectId);
     } catch (error) {
       toast((error as Error).message || "这道题暂时没有准备好，请稍后再试。");
@@ -371,6 +390,7 @@ export function useConversationActions() {
         await api.skipTask(taskId);
         dispatch({ type: "SET_PENDING_TASK", pendingTask: null });
         if (state.activeConversation) await reloadConversation(state.activeConversation.conversation_id);
+        toast("已跳过本题，不会记为错误；现在可以开始下一题。");
       } catch (e) {
         toast((e as Error).message || "跳过失败");
       }

@@ -132,6 +132,17 @@ def test_group_pending_when_seen_but_unverified():
     assert v.group == GROUP_PENDING
 
 
+def test_group_weak_after_independent_l0_partial_attempt():
+    """An attempted-but-not-yet-verifiable concept must not look untouched."""
+    t0 = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    v = build_state_view(
+        _concept(), _state(), [_ev("p1", result=EvidenceResult.PARTIAL, when=t0)],
+        as_of=t0, policy=_policy(),
+    )
+    assert v.current_verified_level == "L0"
+    assert v.group == GROUP_WEAK
+
+
 def test_group_due_when_review_due_in_past():
     t0 = datetime(2025, 1, 1, tzinfo=timezone.utc)
     s = _state()

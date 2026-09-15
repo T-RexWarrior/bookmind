@@ -14,6 +14,7 @@ never writes Evidence, and answers only using chunks from the current context.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from ..domain.enums import Level
@@ -148,7 +149,19 @@ class TutorAgent:
     def _fallback_answer(self, question: str, chunks: list[DocumentChunk], res: ModelResult) -> TutorAnswer:
         top = chunks[0]
         reason = res.error or "模型网关未返回有效回答。"
-        text = f"（模型暂不可用：{reason}）\n当前先展示相关资料原文摘录：\n{top.content}"
+        excerpt = _safe_excerpt(top.content)
+        if excerpt:
+            text = (
+                f"模型暂不可用：{reason}\n"
+                f"我已定位到第 {top.source_ref.physical_page} 页的相关资料。"
+                f"为避免把解析残片当作答案，下面只保留可读摘要：\n{excerpt}"
+            )
+        else:
+            text = (
+                f"模型暂不可用：{reason}\n"
+                f"已定位到第 {top.source_ref.physical_page} 页的相关位置，但该片段含有解析乱码或代码残片，"
+                "不适合直接展示为答案。请查看原页，或在模型恢复后重试。"
+            )
         return TutorAnswer(
             text=text,
             citations=[{"chunk_id": top.chunk_id, "quote": top.content[:40], "page": str(top.source_ref.physical_page)}],
@@ -164,6 +177,21 @@ class TutorAgent:
             reason=f"citation validation failed twice: {failed}",
         )
 
+
+def _safe_excerpt(content: str) -> str:
+    """Return a short reader-safe fallback excerpt, never parser/code debris."""
+    normalized = " ".join(content.replace("\x00", " ").split())
+    if not normalized or "�" in normalized:
+        return ""
+    # A programming-language fragment is useful source material in a code
+    # lesson, but it is not a meaningful natural-language answer fallback.
+    suspicious = re.compile(r"\b(class|struct|public|private|static|void|int|def)\s+\w+\s*(\(|\{|:)|[{};]{2,}")
+    if suspicious.search(normalized):
+        return ""
+    readable = re.sub(r"\s+", " ", normalized).strip()
+    if len(readable) < 24:
+        return ""
+    return readable[:360].rsplit("。", 1)[0] or readable[:360]
 
 def _parse_answer(content: str) -> tuple[str, list[dict]]:
     """Split a model answer into prose + a trailing citation list.

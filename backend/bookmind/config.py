@@ -27,7 +27,11 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _load_dotenv(path: str = ".env") -> None:
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_DOTENV_PATH = _PROJECT_ROOT / ".env"
+
+
+def _load_dotenv(path: str | Path = _DOTENV_PATH) -> None:
     """Load variables from a ``.env`` file into ``os.environ`` (non-overriding).
 
     A real environment variable always wins over the file, so deploy / Docker
@@ -68,7 +72,13 @@ def _load_dotenv(path: str = ".env") -> None:
 # a real API key) never leaks into the test suite and turns it live. Explicit
 # _load_dotenv(path) calls are never gated — tests use them on temp files.
 if not os.environ.get("BOOKMIND_NO_DOTENV"):
-    _load_dotenv()
+    _load_dotenv(_DOTENV_PATH)
+    # Keep the historical cwd-based lookup as a non-overriding compatibility
+    # path for isolated test/demo workspaces.  The project root is loaded first
+    # and real environment variables always remain authoritative.
+    cwd_dotenv = Path.cwd() / ".env"
+    if cwd_dotenv.resolve() != _DOTENV_PATH.resolve():
+        _load_dotenv(cwd_dotenv)
 
 
 class Settings(BaseSettings):
@@ -80,7 +90,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_prefix="BOOKMIND_", extra="ignore",
+        env_file=str(_DOTENV_PATH), env_prefix="BOOKMIND_", extra="ignore",
         case_sensitive=False,
     )
 

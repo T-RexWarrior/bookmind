@@ -79,22 +79,29 @@ def _router_config_from_settings(settings: Settings, *, live: bool) -> RouterCon
     api-key env name when set. Keeps the default fallback chain otherwise."""
     from ..llm.router import ModelConfig
 
-    # Keep the user-facing path bounded. The previous GLM-only configuration
-    # regularly spent the entire 35-second request window reasoning and then
-    # forced an otherwise healthy, grounded question into the offline excerpt
-    # fallback. Use the configured fast chat model first and one short fallback
-    # so the browser gets a useful answer within its own request deadline.
+    # Keep interactive requests bounded while allowing reasoning-heavy judging
+    # and generation enough time on the campus gateway.  The primary model gets
+    # 25 seconds; a short fallback still prevents a prolonged total stall when
+    # the primary endpoint is unavailable.
     chat_model = settings.chat_model or "qwen-chat"
     chat_primary = ModelConfig(
         chat_model, "chat",
         base_url=settings.llm_base_url, timeout=25.0, retries=0,
         max_tokens=1024, supports_json_mode=True,
     )
-    fallback_name = "glm-5.3-flash" if chat_model != "glm-5.3-flash" else "qwen-chat"
+    # The DeepSeek-compatible endpoint only serves DeepSeek chat models.  Keep
+    # the primary as the sole attempt there; otherwise a transient failure
+    # would be followed by a guaranteed-invalid GLM request.
+    is_deepseek_endpoint = "api.deepseek.com" in settings.llm_base_url.lower()
+    fallback_name = (
+        chat_model
+        if is_deepseek_endpoint
+        else ("glm-5.3-flash" if chat_model != "glm-5.3-flash" else "qwen-chat")
+    )
     chat_fallbacks: tuple[ModelConfig, ...] = (
         ModelConfig(
             fallback_name, "chat",
-            base_url=settings.llm_base_url, timeout=20.0, retries=0,
+            base_url=settings.llm_base_url, timeout=6.0, retries=0,
             max_tokens=1024, supports_json_mode=False,
         ),
     )

@@ -127,7 +127,7 @@ def build_state_view(
         for e in sorted(evidence, key=lambda e: e.occurred_at, reverse=True)
     ]
 
-    group = _group(state, levels, as_of)
+    group = _group(state, levels, evidence, as_of)
 
     return LearnerStateView(
         concept_id=concept.concept_id,
@@ -142,7 +142,12 @@ def build_state_view(
     )
 
 
-def _group(state: LearnerConceptState, levels: list[LevelView], as_of: datetime) -> str:
+def _group(
+    state: LearnerConceptState,
+    levels: list[LevelView],
+    evidence: list[Evidence],
+    as_of: datetime,
+) -> str:
     """Assign one display bucket per concept (ARCHITECTURE §12)."""
     # Due: any level EXPIRED, or any review_due_at in the past.
     for lv in levels:
@@ -160,6 +165,20 @@ def _group(state: LearnerConceptState, levels: list[LevelView], as_of: datetime)
     # Verified: at least one level effectively VERIFIED.
     if any(lv.effective_status == DerivedEffectiveStatus.VERIFIED.value for lv in levels):
         return GROUP_VERIFIED
+    # A learner at L0 has no raw level record to destabilise yet.  Previously
+    # repeated independent FAIL/PARTIAL submissions therefore left the page
+    # looking exactly like a never-attempted concept.  The evidence ledger is
+    # authoritative here: surface the latest unresolved independent attempt as
+    # "weak" while still keeping the verified level honestly at L0.
+    gradable = [
+        item for item in evidence
+        if item.evidence_type.value in {"VERIFY", "PROBE", "CHANGED_TASK"}
+        and item.independent and item.result is not None
+    ]
+    if state.current_verified_level.value == "L0" and gradable:
+        latest = max(gradable, key=lambda item: item.occurred_at)
+        if latest.result is not None and latest.result.value in {"FAIL", "PARTIAL"}:
+            return GROUP_WEAK
     # Pending: exposed (SEEN/COMPLETED) but nothing verified yet.
     if state.exposure_state in (ExposureState.SEEN, ExposureState.COMPLETED):
         return GROUP_PENDING

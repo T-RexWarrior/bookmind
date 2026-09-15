@@ -30,7 +30,7 @@ export interface ContentBlock {
   data?: Record<string, unknown>;
 }
 
-export type TaskKind = "quiz" | "probe" | "changed_task" | "judgment" | "fallback";
+export type TaskKind = "quiz" | "probe" | "changed_task" | "judgment" | "task_options" | "fallback";
 
 /** The browser-safe task card payload (the assistant-ui data part). */
 export interface TaskCardData {
@@ -43,6 +43,8 @@ export interface TaskCardData {
   focus?: string;
   source_scope?: { source_id: string; title: string; locator: string }[];
   generation_reason?: string;
+  generation_mode?: "llm" | "offline_fallback" | "curated" | "template";
+  generation_notice?: string;
 }
 
 export interface CriterionResult {
@@ -164,6 +166,8 @@ export interface LearningSummary {
     group: string;
     question_count?: number;
     last_question_at?: string | null;
+    attempt_count?: number;
+    latest_attempt_result?: "PASS" | "PARTIAL" | "FAIL" | null;
   }[];
 }
 
@@ -196,6 +200,7 @@ export interface QuestionSignalData {
   signal_id: string;
   message: string;
   concepts: { concept_id: string; name: string; question_count: number }[];
+  unclassified?: boolean;
 }
 
 export interface ConceptLearningRecord {

@@ -9,6 +9,7 @@ from bookmind.domain.enums import Level
 from bookmind.engine.task.generator import generate_changed_task, generate_probe, generate_quiz
 from bookmind.engine.task.validator import validate
 from bookmind.storage.in_memory import InMemoryRepository
+from bookmind.services.task_service import TaskService
 
 
 def test_generate_probe_carries_discriminated_bug():
@@ -74,8 +75,12 @@ def test_generate_quiz_uses_live_model_for_grounded_reasoning_question():
             self.calls.append((task, messages, kwargs))
             return SimpleNamespace(
                 ok=True,
-                content="给定一个含 n 个元素的顺序表，比较在表头和表尾插入元素时的数据移动次数，并说明二者时间复杂度不同的原因。",
-                parsed_json=None,
+                content="{}",
+                parsed_json={
+                    "prompt_text": "给定一个含 n 个元素的顺序表，比较在表头和表尾插入元素时的数据移动次数，并说明二者时间复杂度不同的原因。",
+                    "expected_answer": "表头插入需要移动已有元素，表尾插入通常不需要移动已有元素，因此两者成本不同。",
+                    "rubric": ["说明表头插入的移动", "说明表尾插入的成本", "比较两者复杂度"],
+                },
             )
 
     concept = Concept(
@@ -96,11 +101,11 @@ def test_generate_quiz_uses_live_model_for_grounded_reasoning_question():
     )
 
     assert draft.prompt_text.startswith("给定一个含 n 个元素")
-    assert "资料中的核心说明" in draft.expected_answer
-    assert len(draft.rubric) == 4
+    assert "表头插入" in draft.expected_answer
+    assert len(draft.rubric) == 3
     assert router.calls[0][0] == "grounded_quiz_generation"
     assert "顺序表在表头插入" in router.calls[0][1][1]["content"]
-    assert "output_schema" not in router.calls[0][2]
+    assert "output_schema" in router.calls[0][2]
 
 
 def test_demo_concept_uses_curated_application_question_without_waiting_for_model():
@@ -126,3 +131,36 @@ def test_demo_concept_uses_curated_application_question_without_waiting_for_mode
     assert "先序序列" in draft.prompt_text
     assert "后序" in draft.expected_answer
     assert len(draft.rubric) == 3
+
+
+def test_practice_level_starts_at_l1_then_advances_with_verified_state():
+    """The product task service must follow the same ladder as mastery state."""
+    repo = InMemoryRepository()
+    router = SimpleNamespace(cfg=SimpleNamespace(live=False))
+    service = TaskService(repo, router, diagnostician=SimpleNamespace())
+
+    assert service._next_quiz_level("p1", "c1") == Level.L1
+    state = repo.get_state("p1", "c1")
+    state.current_verified_level = Level.L1
+    repo.save_state(state)
+    assert service._next_quiz_level("p1", "c1") == Level.L2
+
+
+def test_explanation_revealed_before_answer_closes_task_without_raw_retrieval():
+    repo = InMemoryRepository()
+    router = SimpleNamespace(cfg=SimpleNamespace(live=False))
+    service = TaskService(repo, router, diagnostician=SimpleNamespace())
+    repo.save_trusted_task({
+        "task_id": "t1", "project_id": "p1", "conversation_id": "c1",
+        "status": "PENDING", "prompt_text": "比较线性查找和二分查找的时间复杂度。",
+        "expected_answer": "线性查找为 O(n)，有序数组上的二分查找为 O(log n)。",
+        "rubric": ["给出 O(n)", "给出 O(log n)", "说明二分要求有序"],
+        "target_concept_ids": [], "hints_issued": 0,
+    })
+
+    result = service.explain_task("t1")
+
+    assert result["revealed_while_pending"] is True
+    assert repo.get_trusted_task("t1")["status"] == "EXPLAINED"
+    assert "参考结论" in result["text"]
+    assert "O(log n)" in result["text"]

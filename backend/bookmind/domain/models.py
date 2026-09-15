@@ -397,6 +397,10 @@ class TaskDraft(BaseModel):
     scenario_fingerprint: str | None = None
     remediation_stage: int = 0  # 1 = near transfer, 2 = far transfer
     source_refs: list[SourceRef] = Field(default_factory=list)
+    # Provenance is intentionally presentation-only.  It travels in the
+    # persisted task-card message, but does not affect validation or grading.
+    generation_mode: Literal["llm", "offline_fallback", "curated", "template"] = "offline_fallback"
+    generation_notice: str = ""
 
     @model_validator(mode="after")
     def _check_levels(self) -> "TaskDraft":

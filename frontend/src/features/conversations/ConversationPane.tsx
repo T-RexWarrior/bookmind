@@ -24,7 +24,7 @@ export function ConversationPane({
   const actions = useConversationActions();
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const activeSource = state.sources.find((source) => source.source_id === state.reader?.sourceId);
+  const activeSource = state.sources.find((source) => source.source_id === state.reader?.sourceId) || state.sources[0];
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -59,7 +59,7 @@ export function ConversationPane({
             onClick={() => void actions.startTask({})}
             disabled={state.sending || !state.activeConversation}
           >
-            {state.sending ? "正在出题…" : "开始一道练习题"}
+            {state.sending ? "正在出题…" : state.mode === "ASSESSMENT" ? "开始一道评估题" : "开始一道练习题"}
           </Button>
         </div>
       )}
@@ -68,7 +68,7 @@ export function ConversationPane({
         {state.messages.length === 0 ? (
           <div className="assistant-empty">
             <div className="assistant-mark">迹</div>
-            <h3>{state.mode === "REVIEW" ? "今天想巩固哪个知识点？" : "一边看资料，一边把问题聊明白"}</h3>
+            <h3>{state.mode === "ASSESSMENT" ? "准备好独立检验这一阶段了吗？" : state.mode === "REVIEW" ? "今天想巩固哪个知识点？" : "一边看资料，一边把问题聊明白"}</h3>
             <p>{activeSource ? `现在打开的是：${activeSource.title}` : "先从左侧放进一份资料吧，原文件会马上显示。"}</p>
             {state.mode === "LEARN" && <div className="suggestion-grid">
               {suggestions.map((suggestion) => (
@@ -89,13 +89,22 @@ export function ConversationPane({
                 onTaskHint={actions.requestHint}
                 onTaskSkip={actions.skipTask}
                 onStartConceptTask={(conceptId) => void actions.startTask({ conceptId })}
-                onNextTask={() => void actions.startTask({})}
+                onNextTask={(taskId) => void actions.startTask({ fromTaskId: taskId })}
                 onExplainTask={(taskId) => void actions.explainTask(taskId)}
                 onPracticeTask={(taskId) => void actions.startTask({ fromTaskId: taskId })}
                 onBackToSource={(sourceId, page) => void actions.openTaskSource(sourceId, page)}
                 onFinishConsolidation={() => void actions.finishConsolidation()}
-                onSupplementAnswer={() => window.setTimeout(() => document.getElementById("composer")?.focus(), 0)}
-                hideHint={false}
+                onSupplementAnswer={() => {
+                  // The old button only focused the input, which looked like a
+                  // broken submit action. If the learner has already typed a
+                  // supplement, submit it; otherwise guide them to the input.
+                  if (state.composer.trim() && !state.sending) {
+                    void actions.submitTaskAnswer();
+                  } else {
+                    window.setTimeout(() => document.getElementById("composer")?.focus(), 0);
+                  }
+                }}
+                hideHint={state.mode === "ASSESSMENT"}
                 activeTaskId={state.pendingTask?.task_id}
                 canSubmit={Boolean(state.composer.trim()) && !state.sending}
                 busy={state.sending}
@@ -167,7 +176,7 @@ function MessageBubble({ role, blocks, streaming, onCitation, onTaskSubmit, onTa
   onTaskHint: (taskId: string) => void;
   onTaskSkip: (taskId: string) => void;
   onStartConceptTask: (conceptId: string) => void;
-  onNextTask: () => void;
+  onNextTask: (taskId: string) => void;
   onExplainTask: (taskId: string) => void;
   onPracticeTask: (taskId: string) => void;
   onBackToSource: (sourceId: string, page: number) => void;

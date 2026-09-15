@@ -121,9 +121,13 @@ def generate_quiz(
     The draft always goes through the shared validator before persistence.
     """
     targets = target_concept_ids or [concept.concept_id]
+    # Curated demo concepts are deliberately immediate and deterministic. For
+    # all other concepts the live model is used first, with offline fallback.
     generated = _curated_quiz(concept.concept_id) if not prompt_text else None
+    generation_mode = "curated" if generated is not None else "template" if prompt_text else "offline_fallback"
+    generation_notice = "内置示例题：无需调用模型，也可离线稳定运行。" if generated is not None else ""
     if generated is None and not prompt_text and router is not None and _router_live(router):
-        generated = _try_generate_quiz(
+        generated, generation_notice = _try_generate_quiz(
             router,
             concept_name=concept.name,
             concept_description=getattr(concept, "description", "") or "",
@@ -131,6 +135,9 @@ def generate_quiz(
             level=level,
             previous_prompts=previous_prompts or [],
         )
+        if generated is not None:
+            generation_mode = "llm"
+            generation_notice = "已使用在线模型根据当前资料生成题目；提交后会结合该题的标准答案与判分要点进行判定。"
     if generated is not None:
         generated_prompt, generated_answer, generated_rubric = generated
     else:
@@ -139,6 +146,13 @@ def generate_quiz(
             getattr(concept, "description", "") or "",
             source_context,
         )
+        if not generation_notice:
+            generation_notice = (
+                "当前没有可用的在线模型配置，已使用离线兜底题目；"
+                "它仍可判分，但题干会更通用。"
+            )
+        elif generation_mode == "offline_fallback":
+            generation_notice = f"在线模型未返回可用题干，已切换为离线兜底题目。{generation_notice}"
     return TaskDraft(
         task_id=_instance_id(f"quiz|{concept.concept_id}"),
         task_version=1,
@@ -147,6 +161,8 @@ def generate_quiz(
         rubric=rubric or generated_rubric,
         prompt_text=prompt_text or generated_prompt,
         expected_answer=generated_answer,
+        generation_mode=generation_mode,
+        generation_notice=generation_notice,
     )
 
 
@@ -245,18 +261,22 @@ def _try_generate_quiz(
     source_context: str,
     level: Level,
     previous_prompts: list[str],
-) -> tuple[str, str, list[str]] | None:
-    """Generate only the question wording; keep trusted grading local.
+) -> tuple[tuple[str, str, list[str]] | None, str]:
+    """Generate one self-contained question *and its matching grading spec*.
 
-    Asking this reasoning model to create a question, full answer and rubric in
-    one turn frequently exceeds the interactive timeout. A focused prompt is
-    both faster and safer: the server keeps its own source-derived grading
-    basis and only accepts a self-contained question from the model.
+    A question-only generation path used a generic local rubric for arbitrary
+    model questions.  The resulting prompt and answer key could describe
+    different skills, making a genuine learner answer impossible to judge.
+    The model now returns a compact, closed question/answer/rubric contract;
+    invalid contracts fall back to the deterministic local task.
     """
     system = (
         "你是一名严谨的数据结构课程教师。只依据材料出一道有区分度的中文练习题。"
         "必须要求应用、比较、推导、纠错或分析具体情境；禁止只问定义或复述概念。"
-        "题干必须自包含且可直接作答。只输出题干，不要答案、提示、标题或解释。"
+        "不得引入材料中未出现的定理、公式、算法或数字条件。"
+        "题干必须自包含且可直接作答。输出严格 JSON："
+        '{"prompt_text":"题干","expected_answer":"简洁标准答案","rubric":["评分点1","评分点2"]}。'
+        "rubric 必须有 2 到 4 条、可逐项判定，且与题干和标准答案完全对应。"
     )
     prior = "\n".join(f"- {item}" for item in previous_prompts[-3:]) or "无"
     user = (
@@ -269,19 +289,24 @@ def _try_generate_quiz(
     result = router.complete(
         "grounded_quiz_generation",
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        output_schema={"type": "object", "required": ["prompt_text", "expected_answer", "rubric"]},
         temperature=0.55,
-        max_tokens=4096,
+        max_tokens=1200,
     )
-    if not result.ok or not result.content:
-        return None
-    prompt = result.content.strip().strip('"').removeprefix("【题目】").strip()
-    _, answer, criteria = _offline_quiz(concept_name, concept_description, source_context)
+    parsed = result.parsed_json if result.ok else None
+    if not isinstance(parsed, dict):
+        return None, (result.error or "模型请求失败或返回为空")[:180]
+    prompt = str(parsed.get("prompt_text") or "").strip()
+    answer = str(parsed.get("expected_answer") or "").strip()
+    criteria = [str(item).strip() for item in (parsed.get("rubric") or []) if str(item).strip()]
     banned = ("请解释", "什么是", "定义是什么")
     if len(prompt) < 24 or len(prompt) > 800:
-        return None
+        return None, "模型返回的题干长度不符合要求"
+    if len(answer) < 12 or not 2 <= len(criteria) <= 4:
+        return None, "模型未返回可判定的标准答案或评分点"
     if any(prompt.startswith(prefix) for prefix in banned):
-        return None
-    return prompt, answer, criteria
+        return None, "模型返回了定义式题目，不符合应用型练习要求"
+    return (prompt, answer, criteria), ""
 
 
 def _offline_quiz(concept_name: str, description: str, source_context: str) -> tuple[str, str, list[str]]:

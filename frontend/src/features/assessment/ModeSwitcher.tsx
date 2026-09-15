@@ -9,19 +9,19 @@ import type { Dispatch } from "react";
 export const MODE_META: Record<UIMode, { label: string; short: string; icon: string }> = {
   LEARN: { label: "资料学习", short: "边读边问，回答回到原文", icon: "▤" },
   REVIEW: { label: "练习巩固", short: "做题、纠错与到期复验", icon: "↻" },
+  ASSESSMENT: { label: "能力评估", short: "独立作答，查看掌握证据", icon: "✓" },
 };
 
 const MODE_TO_PRESET: Record<UIMode, string> = {
   LEARN: "Deep Learning",
   REVIEW: "Review",
+  ASSESSMENT: "Assessment",
 };
 const PRESET_TO_MODE: Record<string, UIMode> = {
   "Quiet Reading": "LEARN",
   "Deep Learning": "LEARN",
   Review: "REVIEW",
-  // Existing projects created before the consolidation simplification open in
-  // the single practice workspace instead of reviving a removed third tab.
-  Assessment: "REVIEW",
+  Assessment: "ASSESSMENT",
 };
 
 function messagesFromConversation(
@@ -80,6 +80,10 @@ export function ModeSwitcher() {
         <button className={state.mode === "REVIEW" ? "is-active" : ""} onClick={() => switchTo("REVIEW")} aria-current={state.mode === "REVIEW" ? "page" : undefined}>
           <span className="activity-tabs__icon">✓</span>
           <span><strong>练习巩固</strong><small>做题、纠错与到期复验</small></span>
+        </button>
+        <button className={state.mode === "ASSESSMENT" ? "is-active" : ""} onClick={() => switchTo("ASSESSMENT")} aria-current={state.mode === "ASSESSMENT" ? "page" : undefined}>
+          <span className="activity-tabs__icon">✓</span>
+          <span><strong>能力评估</strong><small>独立作答，核对掌握证据</small></span>
         </button>
       </nav>
     </div>

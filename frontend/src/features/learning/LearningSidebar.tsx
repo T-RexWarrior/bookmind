@@ -26,6 +26,25 @@ export function LearningSidebar() {
   const [loadingRecord, setLoadingRecord] = useState(false);
   const projectId = state.activeProject?.project_id;
 
+  // The drawer can be opened long after an answer was submitted, or after the
+  // backend was restarted.  Refresh its read model on every open instead of
+  // silently retaining the initial null summary as “尚无学习记录”.
+  useEffect(() => {
+    if (!projectId || !state.rightDrawerOpen) return;
+    let active = true;
+    Promise.all([
+      api.learningSummary(projectId),
+      api.listMisconceptions(projectId),
+    ]).then(([summary, misconceptions]) => {
+      if (!active) return;
+      dispatch({ type: "SET_SUMMARY", summary, projectId });
+      dispatch({ type: "SET_MISCONCEPTIONS", misconceptions, projectId });
+    }).catch((error) => {
+      if (active) toast((error as Error).message || "学习状态暂时无法刷新");
+    });
+    return () => { active = false; };
+  }, [projectId, state.rightDrawerOpen, dispatch]);
+
   const concepts = useMemo(() => (summary?.concepts || []).filter((concept) => {
     if (filter === "all") return true;
     if (filter === "questioned") return (concept.question_count || 0) > 0;
@@ -81,7 +100,9 @@ export function LearningSidebar() {
             {concepts.slice(0, 40).map((concept) => (
               <button key={concept.concept_id} className={selectedId === concept.concept_id ? "is-active" : ""} onClick={() => setSelectedId(concept.concept_id)}>
                 <span><strong>{concept.name}</strong><small>{GROUP_LABELS[concept.group] || concept.group}</small></span>
-                {(concept.question_count || 0) > 0 ? <em>问过 {concept.question_count} 次</em> : <span>›</span>}
+                {(concept.attempt_count || 0) > 0
+                  ? <em>作答 {concept.attempt_count} 次</em>
+                  : (concept.question_count || 0) > 0 ? <em>问过 {concept.question_count} 次</em> : <span>›</span>}
               </button>
             ))}
             {!concepts.length ? <p>这个筛选下暂时没有知识点。</p> : null}

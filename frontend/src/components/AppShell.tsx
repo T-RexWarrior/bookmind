@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../store/appStore";
 import { Button, Dialog, Sheet, toast } from "./ui/primitives";
@@ -25,6 +25,15 @@ export function AppShell() {
   const project = state.activeProject!;
   const activeSource = state.sources.find((source) => source.source_id === state.reader?.sourceId) || state.sources[0];
   const mode = MODE_META[state.mode];
+
+  // A newly opened project has a first source before it has an explicit reader
+  // position.  Seed that position so “当前资料/当前页” is a real scope choice
+  // rather than a disabled-looking control until the user manually clicks PDF.
+  useEffect(() => {
+    if (activeSource && !state.reader) {
+      dispatch({ type: "SET_READER", reader: { sourceId: activeSource.source_id, page: 1 } });
+    }
+  }, [activeSource?.source_id, state.reader, dispatch]);
 
   const goHome = () => {
     dispatch({ type: "CLEAR_PROJECT" });
@@ -125,6 +134,16 @@ function ActivityPage({ activeSource, onSelectSource, onPageChange }: {
       <div className="activity-layout review-layout">
         <ConsolidationOverview />
         <ConversationPane focused heading="练习巩固" suggestions={["从我问过但还没验证的知识点出一道题。", "从我最薄弱的知识点出一道练习题。", "给我一道到期复验题。", "先帮我理清上次理解偏差的地方。"]} />
+        <aside className="evidence-rail"><LearningSidebar /></aside>
+      </div>
+    );
+  }
+
+  if (state.mode === "ASSESSMENT") {
+    return (
+      <div className="activity-layout review-layout">
+        <ConsolidationOverview />
+        <ConversationPane focused heading="能力评估" suggestions={["从我问过但还没验证的知识点出一道评估题。", "从我最薄弱的知识点出一道评估题。", "给我一道到期复验题。"]} />
         <aside className="evidence-rail"><LearningSidebar /></aside>
       </div>
     );

@@ -5,6 +5,7 @@
 
 import type {
   AnswerResult,
+  ApiMessage,
   LearningSourceView,
   Conversation,
   ConversationActivity,
@@ -236,7 +237,7 @@ export function createTask(
     from_task_id?: string;
     idempotency_key?: string;
   },
-): Promise<{ task: Record<string, unknown>; message_id: string | null; existing: boolean }> {
+): Promise<{ task: Record<string, unknown>; message_id: string | null; message?: ApiMessage; existing: boolean }> {
   return json(`/api/conversations/${conversationId}/tasks`, {
     method: "POST",
     body: JSON.stringify(body),
