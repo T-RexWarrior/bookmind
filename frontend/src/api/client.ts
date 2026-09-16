@@ -205,6 +205,7 @@ export function sendMessage(
     source_page?: number;
     source_scope?: "CURRENT_PAGE" | "CURRENT_SOURCE" | "ALL_SOURCES";
     selection_text?: string;
+    record_question_signal?: boolean;
   } = {},
 ): Promise<SendMessageResult> {
   return json(`/api/conversations/${cid}/messages`, {
@@ -340,6 +341,61 @@ export function sourceFileUrl(sourceId: string, page?: number | string): string 
   return page ? `${base}#page=${page}` : base;
 }
 
+export function getSourceOutline(sourceId: string): Promise<{
+  source_id: string;
+  items: LearningSourceView["outline"];
+  parser_version: string;
+}> {
+  return json(`/api/sources/${sourceId}/outline`);
+}
+
+export function updateSourceOutline(
+  sourceId: string,
+  items: LearningSourceView["outline"],
+): Promise<{ source_id: string; items: LearningSourceView["outline"]; message: string }> {
+  return json(`/api/sources/${sourceId}/outline`, {
+    method: "PATCH",
+    body: JSON.stringify({ items }),
+  });
+}
+
+export function reparseSource(sourceId: string): Promise<{ source_id: string; job_id: string; state: string }> {
+  return json(`/api/sources/${sourceId}/reparse`, { method: "POST" });
+}
+
+export function getSourceQuality(sourceId: string): Promise<{
+  source_id: string;
+  summary: Record<string, number>;
+  warnings: string[];
+  pages_done: number;
+  pages_total: number;
+  parser_mode: string;
+  pages: { page: number; printed_page?: string; parser: string; quality_score?: number; quality_label: string; warning?: string }[];
+}> {
+  return json(`/api/sources/${sourceId}/quality`);
+}
+
+export function getSourceTextLayer(sourceId: string, page: number): Promise<{
+  source_id: string;
+  page: number;
+  ready: boolean;
+  width?: number;
+  height?: number;
+  parser?: string;
+  printed_page?: string;
+  blocks: { block_id: string; text: string; bbox: [number, number, number, number]; type: string; confidence?: number }[];
+}> {
+  return json(`/api/sources/${sourceId}/pages/${page}/text-layer`);
+}
+
+export function searchSource(sourceId: string, query: string): Promise<{
+  source_id: string;
+  query: string;
+  results: { page: number; printed_page?: string; section_path: string[]; snippet: string; block_id: string }[];
+}> {
+  return json(`/api/sources/${sourceId}/search?q=${encodeURIComponent(query)}`);
+}
+
 const TERMINAL = ["SUCCEEDED", "FAILED", "RETRYABLE_FAILED", "CANCELLED"] as const;
 
 /** Poll a job until it reaches a terminal state; calls onProgress(job) each poll. */
@@ -380,7 +436,9 @@ const ALL_EVENTS: EventType[] = [
   "run_started", "mode_selected", "action_selected", "agent_started",
   "agent_delta", "tool_started", "tool_completed", "agent_completed",
   "citation_attached", "fallback_used", "evidence_created", "state_updated",
-  "review_scheduled", "run_completed", "run_failed",
+  "review_scheduled", "run_completed", "run_failed", "run_cancelled",
+  "retrieval_completed", "source_locations_ready", "answer_delta",
+  "answer_completed", "answer_unavailable",
 ];
 
 export interface RunSubscription {
@@ -396,7 +454,7 @@ export function subscribeRun(
   const handler = (e: MessageEvent) => {
     const data = e.data ? JSON.parse(e.data) : {};
     onEvent?.(e.type as EventType, data);
-    if (e.type === "run_completed" || e.type === "run_failed") {
+    if (e.type === "run_completed" || e.type === "run_failed" || e.type === "run_cancelled") {
       es.close();
       onDone?.();
     }

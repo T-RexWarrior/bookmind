@@ -57,6 +57,7 @@ export interface AppState {
   error: string;
   mode: UIMode;
   queryScope: QueryScope;
+  recordQuestionSignal: boolean;
   leftDrawerOpen: boolean;
   rightDrawerOpen: boolean;
 }
@@ -83,6 +84,7 @@ export type Action =
   | { type: "SET_STATUS"; status: "idle" | "loading" | "error"; error?: string }
   | { type: "SET_MODE"; mode: UIMode }
   | { type: "SET_QUERY_SCOPE"; scope: QueryScope }
+  | { type: "SET_RECORD_QUESTION_SIGNAL"; enabled: boolean }
   | { type: "SET_DRAWER"; left?: boolean; right?: boolean }
   | { type: "CLEAR_PROJECT" };
 
@@ -108,6 +110,7 @@ const initial: AppState = {
   error: "",
   mode: "LEARN",
   queryScope: "CURRENT_SOURCE",
+  recordQuestionSignal: true,
   leftDrawerOpen: false,
   rightDrawerOpen: false,
 };
@@ -136,6 +139,7 @@ function reducer(state: AppState, action: Action): AppState {
         composer: "",
         sending: false,
         queryScope: "CURRENT_SOURCE",
+        recordQuestionSignal: true,
         reader: action.project.last_source_id && action.sources.some(
           (source) => source.source_id === action.project.last_source_id,
         )
@@ -206,6 +210,8 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case "SET_QUERY_SCOPE":
       return { ...state, queryScope: action.scope };
+    case "SET_RECORD_QUESTION_SIGNAL":
+      return { ...state, recordQuestionSignal: action.enabled };
     case "SET_DRAWER":
       return {
         ...state,

@@ -16,8 +16,9 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 from ...domain.enums import BookRole
 from ...domain.models import Book, ProjectBook, User
@@ -33,6 +34,18 @@ from ..dependencies import (
 from ..errors import AppError
 
 router = APIRouter(prefix="/api", tags=["sources"])
+
+
+class OutlineItem(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    page: int = Field(ge=1)
+    page_end: int | None = Field(default=None, ge=1)
+    path: list[str] = Field(default_factory=list)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class OutlinePatch(BaseModel):
+    items: list[OutlineItem] = Field(max_length=500)
 
 
 def _sha256(data: bytes) -> str:
@@ -56,19 +69,34 @@ async def upload_book(
     """Upload a PDF learning source. Creates a draft source + ingestion job
     and returns immediately; processing runs in the background."""
     repo.assert_project_owned_by(project_id, user.user_id)
-    raw = await file.read()
-    return _store_and_enqueue_pdf(
-        project_id=project_id,
-        raw=raw,
-        filename=file.filename or "upload.pdf",
-        content_type=file.content_type or "",
-        title=title,
-        user=user,
-        repo=repo,
-        upload=upload,
-        jobs=jobs,
-        worker=worker,
-    )
+    filename = file.filename or "upload.pdf"
+    content_type = file.content_type or ""
+    staged = upload.create_staging_path(user.user_id)
+    digest = hashlib.sha256()
+    size = 0
+    header = b""
+    try:
+        with staged.open("wb") as target:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > upload.settings.max_upload_mb * 1024 * 1024:
+                    upload.validate_metadata(size, header, filename, content_type)
+                if len(header) < 5:
+                    header = (header + chunk)[:5]
+                digest.update(chunk)
+                target.write(chunk)
+        upload.validate_metadata(size, header, filename, content_type)
+        return _store_and_enqueue_staged_pdf(
+            project_id=project_id, staged=staged, source_hash=digest.hexdigest(),
+            filename=filename, title=title, user=user, repo=repo,
+            upload=upload, jobs=jobs, worker=worker,
+        )
+    except Exception:
+        try:
+            staged.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 @router.post("/projects/{project_id}/sources/sample")
@@ -194,6 +222,53 @@ def _store_and_enqueue_pdf(
             "warning": link_warning or None}
 
 
+def _store_and_enqueue_staged_pdf(
+    *, project_id: str, staged: Path, source_hash: str, filename: str,
+    title: str, user: User, repo: Repository, upload: UploadService,
+    jobs: JobService, worker: BackgroundWorker,
+) -> dict:
+    """Register a streamed upload and atomically publish its original PDF."""
+    book_id = f"book_{hashlib.md5((user.user_id + '|' + source_hash).encode()).hexdigest()[:12]}"
+    book_title = title or _strip_ext(filename)
+    link_warning = ""
+    existing_book = _find_book_by_hash(repo, user.user_id, source_hash)
+    reused = existing_book is not None
+    if existing_book is not None:
+        book_id = existing_book.book_id
+        staged.unlink(missing_ok=True)
+        if book_id not in repo.allowed_book_ids(project_id):
+            link_warning = _link_uploaded_book(repo, project_id, book_id)
+        prior = jobs.job_for_book(book_id)
+        if prior and prior.state.value == "SUCCEEDED" and not _graph_needs_rebuild(repo, book_id):
+            scoped = jobs.job_for_book(book_id, project_id)
+            if scoped is None:
+                from ...jobs.job_store import JobStage, JobState
+                scoped = jobs.create(
+                    project_id=project_id, book_id=book_id,
+                    source_hash=source_hash, filename=filename,
+                )
+                scoped.stage, scoped.progress, scoped.state = JobStage.DONE, 1.0, JobState.SUCCEEDED
+                jobs.update(scoped)
+            return {"source_id": book_id, "book_id": book_id,
+                    "job_id": scoped.job_id, "reused": True,
+                    "warning": link_warning or None}
+    else:
+        upload.adopt_staged(staged, user.user_id, book_id)
+        repo.add_book(Book(
+            book_id=book_id, owner_user_id=user.user_id, source_hash=source_hash,
+            title=book_title, source_type="PDF", original_filename=filename,
+        ))
+        link_warning = _link_uploaded_book(repo, project_id, book_id)
+    job = jobs.create(
+        project_id=project_id, book_id=book_id,
+        source_hash=source_hash, filename=filename,
+    )
+    worker.enqueue(job.job_id)
+    return {"source_id": book_id, "book_id": book_id,
+            "job_id": job.job_id, "reused": reused,
+            "warning": link_warning or None}
+
+
 def _link_uploaded_book(repo: Repository, project_id: str, book_id: str) -> str:
     """Always put an accepted upload inside the target project's scope.
 
@@ -257,6 +332,12 @@ def list_books(
             "state": job.state.value if job else "UNKNOWN",
             "stage": user_stage(job)["label"] if job else "",
             "progress": job.progress if job else 0.0,
+            "pages_done": job.pages_done if job else 0,
+            "pages_total": job.pages_total if job else (book.page_count if book else 0),
+            "parser_mode": job.parser_mode if job else "",
+            "quality_summary": job.quality_summary if job else {},
+            "warnings": job.warnings if job else [],
+            "checkpoint_stage": job.checkpoint_stage if job else "",
         })
     return out
 
@@ -348,6 +429,11 @@ def get_job(
         "progress": job.progress, "error": job.error,
         "user_stage": us["key"], "user_label": us["label"],
         "attempt": job.attempt,
+        "pages_done": job.pages_done, "pages_total": job.pages_total,
+        "parser_mode": job.parser_mode,
+        "quality_summary": job.quality_summary,
+        "warnings": job.warnings,
+        "checkpoint_stage": job.checkpoint_stage,
     }
 
 
@@ -445,11 +531,240 @@ def book_source_pdf(
                         filename=f"{book_id}.pdf")
 
 
+@router.get("/sources/{book_id}/outline")
+def source_outline(
+    book_id: str,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+) -> dict:
+    if not repo.book_accessible_by(book_id, user.user_id):
+        raise HTTPException(status_code=403, detail="无权访问该资料。")
+    book = _get_book(repo, book_id)
+    if book is None:
+        raise HTTPException(status_code=404, detail="资料不存在。")
+    return {"source_id": book_id, "items": book.outline, "parser_version": book.parser_version}
+
+
+@router.patch("/sources/{book_id}/outline")
+def update_source_outline(
+    book_id: str,
+    body: OutlinePatch,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+) -> dict:
+    if not repo.book_accessible_by(book_id, user.user_id):
+        raise HTTPException(status_code=403, detail="无权修改该资料。")
+    items = []
+    for item_model in body.items:
+        item = item_model.model_dump(exclude_none=True)
+        path = [part.strip() for part in item.get("path", []) if part.strip()]
+        item["path"] = [*path[:-1], item["title"]] if path else [item["title"]]
+        if item.get("page_end") is not None and item["page_end"] < item["page"]:
+            raise AppError("OUTLINE_PAGE_RANGE", "目录结束页不能早于开始页。", status_code=422)
+        items.append(item)
+    for previous, current in zip(items, items[1:]):
+        if current["page"] < previous["page"]:
+            raise AppError("OUTLINE_PAGE_ORDER", "目录页码必须从前向后递增。", status_code=422)
+    # A manual outline correction changes only section ownership. Keep OCR and
+    # chunk text intact, publish the revised metadata/index atomically, and
+    # then switch the live repository to the new chunk objects.
+    chunks = repo.chunks_for_book(book_id)
+    revised_chunks = _apply_outline_to_chunks(chunks, items)
+    if revised_chunks:
+        from ...retrieval.persistent_index import load_vectors, publish_index
+        from ...config import get_settings
+
+        index_root = Path(get_settings().data_dir) / "indexes" / book_id
+        vector_ids, matrix, embedding_model = load_vectors(index_root)
+        vector_by_id = {
+            chunk_id: matrix[index].tolist()
+            for index, chunk_id in enumerate(vector_ids)
+        } if matrix is not None else {}
+        vectors = [vector_by_id.get(chunk.chunk_id) for chunk in revised_chunks]
+        publish_index(
+            index_root,
+            revised_chunks,
+            vectors=None if any(vector is None for vector in vectors) else vectors,
+            embedding_model=embedding_model,
+        )
+        repo.replace_chunks(book_id, revised_chunks)
+        # BM25 terms and dense vectors are unchanged; only the location metadata
+        # referenced by retrieval hits needs to point at the revised chunks.
+        for project in repo.projects_for_user(user.user_id):
+            if book_id not in repo.allowed_book_ids(project.project_id):
+                continue
+            retriever = repo.get_retriever(project.project_id)
+            if retriever is not None:
+                for chunk in revised_chunks:
+                    retriever.chunks[chunk.chunk_id] = chunk
+    repo.update_source_metadata(book_id, section_count=len(items), outline=items)
+    return {
+        "source_id": book_id, "items": items,
+        "message": "目录已保存，章节归属和检索索引已更新；没有重新执行 OCR。",
+    }
+
+
+@router.get("/sources/{book_id}/quality")
+def source_quality(
+    book_id: str,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+    jobs: JobService = Depends(get_job_service),
+    settings: Settings = Depends(get_settings_dep),
+) -> dict:
+    if not repo.book_accessible_by(book_id, user.user_id):
+        raise HTTPException(status_code=403, detail="无权访问该资料。")
+    job = jobs.job_for_book(book_id)
+    book = _get_book(repo, book_id)
+    document = _latest_parsed_document(book, settings) if book else None
+    page_quality = [{
+        "page": page.physical_page, "printed_page": page.printed_page,
+        "parser": page.parser_name, "quality_score": page.quality_score,
+        "quality_label": page.quality_label, "warning": page.warning,
+    } for page in document.pages] if document else []
+    return {
+        "source_id": book_id,
+        "summary": job.quality_summary if job else {},
+        "warnings": job.warnings if job else [],
+        "pages_done": job.pages_done if job else 0,
+        "pages_total": job.pages_total if job else 0,
+        "parser_mode": job.parser_mode if job else "",
+        "pages": page_quality,
+    }
+
+
+@router.get("/sources/{book_id}/pages/{page_number}/text-layer")
+def source_page_text_layer(
+    book_id: str,
+    page_number: int,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+    settings: Settings = Depends(get_settings_dep),
+) -> dict:
+    if not repo.book_accessible_by(book_id, user.user_id):
+        raise HTTPException(status_code=403, detail="无权访问该资料。")
+    book = _get_book(repo, book_id)
+    document = _latest_parsed_document(book, settings) if book else None
+    if document is None:
+        return {"source_id": book_id, "page": page_number, "ready": False, "blocks": []}
+    page = next((item for item in document.pages if item.physical_page == page_number), None)
+    if page is None:
+        return {"source_id": book_id, "page": page_number, "ready": False, "blocks": []}
+    block_map = {block.block_id: block for block in document.blocks}
+    return {
+        "source_id": book_id, "page": page_number, "ready": True,
+        "width": page.width, "height": page.height,
+        "parser": page.parser_name, "printed_page": page.printed_page,
+        "blocks": [{
+            "block_id": block.block_id, "text": block.text, "bbox": block.bbox,
+            "type": block.block_type, "confidence": block.confidence,
+        } for block_id in page.block_ids
+          if (block := block_map.get(block_id)) is not None and block.text and block.bbox],
+    }
+
+
+@router.get("/sources/{book_id}/search")
+def search_source_text(
+    book_id: str,
+    q: str = Query(min_length=1, max_length=200),
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+    settings: Settings = Depends(get_settings_dep),
+) -> dict:
+    if not repo.book_accessible_by(book_id, user.user_id):
+        raise HTTPException(status_code=403, detail="无权访问该资料。")
+    book = _get_book(repo, book_id)
+    document = _latest_parsed_document(book, settings) if book else None
+    query = q.casefold().strip()
+    results: list[dict] = []
+    if document and query:
+        for block in document.blocks:
+            folded = block.text.casefold()
+            position = folded.find(query)
+            if position < 0:
+                continue
+            start = max(0, position - 45)
+            end = min(len(block.text), position + len(q) + 80)
+            results.append({
+                "page": block.physical_page, "printed_page": block.printed_page,
+                "section_path": list(block.section_path),
+                "snippet": block.text[start:end], "block_id": block.block_id,
+            })
+            if len(results) >= 100:
+                break
+    return {"source_id": book_id, "query": q, "results": results}
+
+
+@router.post("/sources/{book_id}/reparse", status_code=202)
+def reparse_source(
+    book_id: str,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+    jobs: JobService = Depends(get_job_service),
+    worker: BackgroundWorker = Depends(get_background_worker),
+) -> dict:
+    if not repo.book_accessible_by(book_id, user.user_id):
+        raise HTTPException(status_code=403, detail="无权重新处理该资料。")
+    book = _get_book(repo, book_id)
+    if book is None:
+        raise HTTPException(status_code=404, detail="资料不存在。")
+    project_ids = [
+        project.project_id for project in repo.projects_for_user(user.user_id)
+        if book_id in repo.allowed_book_ids(project.project_id)
+    ]
+    if not project_ids:
+        raise HTTPException(status_code=409, detail="资料未关联到学习空间。")
+    job = jobs.create(
+        project_id=project_ids[0], book_id=book_id,
+        source_hash=book.source_hash, filename=book.original_filename or "source.pdf",
+    )
+    job.force_reparse = True
+    job.checkpoint_stage = "等待强制重新解析"
+    jobs.update(job)
+    worker.enqueue(job.job_id)
+    return {"source_id": book_id, "job_id": job.job_id, "state": job.state.value}
+
+
 # --- helpers ---------------------------------------------------------------
 
 def _strip_ext(filename: str) -> str:
     import os
     return os.path.splitext(filename)[0] or "学习资料"
+
+
+def _apply_outline_to_chunks(chunks, items: list[dict]):
+    """Return metadata-only chunk revisions for a user-corrected outline."""
+    if not chunks:
+        return list(chunks)
+    if not items:
+        return [chunk.model_copy(update={
+            "section_path": ("全文",),
+            "source_ref": chunk.source_ref.model_copy(update={"section_path": ("全文",)}),
+        }) for chunk in chunks]
+    ordered = sorted(items, key=lambda item: item["page"])
+    last_page = max(
+        (chunk.page_end or chunk.page_start or chunk.source_ref.physical_page)
+        for chunk in chunks
+    )
+    ranges: list[tuple[int, int, tuple[str, ...]]] = []
+    for index, item in enumerate(ordered):
+        start = item["page"]
+        inferred_end = ordered[index + 1]["page"] - 1 if index + 1 < len(ordered) else last_page
+        end = item.get("page_end") or inferred_end
+        ranges.append((start, max(start, end), tuple(item.get("path") or [item["title"]])))
+
+    revised = []
+    for chunk in chunks:
+        page = chunk.page_start or chunk.source_ref.physical_page
+        path = next(
+            (section_path for start, end, section_path in reversed(ranges) if start <= page <= end),
+            chunk.section_path,
+        )
+        revised.append(chunk.model_copy(update={
+            "section_path": path,
+            "source_ref": chunk.source_ref.model_copy(update={"section_path": path}),
+        }))
+    return revised
 
 
 def _find_book_by_hash(repo: Repository, user_id: str, source_hash: str) -> Book | None:
@@ -458,6 +773,21 @@ def _find_book_by_hash(repo: Repository, user_id: str, source_hash: str) -> Book
 
 def _get_book(repo: Repository, book_id: str) -> Book | None:
     return repo.get_source(book_id)
+
+
+def _latest_parsed_document(book: Book | None, settings: Settings):
+    if book is None:
+        return None
+    root = Path(settings.data_dir) / "parsed" / book.source_hash
+    candidates = list(root.glob("*/*/document.json")) + list(root.glob("*/document.json"))
+    path = max(candidates, key=lambda item: item.stat().st_mtime, default=None)
+    if path is None:
+        return None
+    try:
+        from ...retrieval.parsed_document import ParsedDocument
+        return ParsedDocument.model_validate_json(path.read_text("utf-8"))
+    except Exception:
+        return None
 
 
 def _book_owner(repo: Repository, book_id: str) -> str | None:

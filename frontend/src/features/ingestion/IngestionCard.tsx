@@ -17,6 +17,12 @@ export function IngestionCard({ compact = false }: { compact?: boolean }) {
     return (
       <div className={`ingestion-card ${compact ? "is-compact" : ""}`}>
         <div className="ingestion-card__title">正在帮你整理这份资料 <span>{Math.round((job.progress || 0) * 100)}%</span></div>
+        {job.pages_total ? (
+          <div className="c-muted" style={{ fontSize: 12, marginBottom: 10 }}>
+            {job.checkpoint_stage || `解析第 ${job.pages_done}/${job.pages_total} 页`}
+            {job.parser_mode ? ` · ${job.parser_mode}` : ""}
+          </div>
+        ) : null}
         <ol style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10, padding: 0 }}>
           {PROCESSING_STAGES.map((k, i) => {
             const st = i < curIdx ? "done" : i === curIdx ? "active" : "wait";

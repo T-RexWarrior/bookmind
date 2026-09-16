@@ -100,7 +100,13 @@ export type EventType =
   | "state_updated"
   | "review_scheduled"
   | "run_completed"
-  | "run_failed";
+  | "run_failed"
+  | "run_cancelled"
+  | "retrieval_completed"
+  | "source_locations_ready"
+  | "answer_delta"
+  | "answer_completed"
+  | "answer_unavailable";
 
 export interface SseEvent {
   run_id: string;
@@ -262,11 +268,17 @@ export interface LearningSourceView {
   page_count: number;
   section_count: number;
   concept_count: number;
-  outline: { title: string; page: number; path: string[] }[];
+  outline: { title: string; page: number; page_end?: number; path: string[]; confidence?: number }[];
   job_id?: string | null;
   state: string;
   stage: string;
   progress: number;
+  pages_done?: number;
+  pages_total?: number;
+  parser_mode?: string;
+  quality_summary?: Record<string, number>;
+  warnings?: string[];
+  checkpoint_stage?: string;
 }
 
 /** Compatibility alias while persisted engine identifiers still use book_id. */
@@ -282,6 +294,12 @@ export interface JobView {
   user_stage: string;
   user_label: string;
   attempt: number;
+  pages_done: number;
+  pages_total: number;
+  parser_mode: string;
+  quality_summary: Record<string, number>;
+  warnings: string[];
+  checkpoint_stage: string;
 }
 
 export interface SendMessageResult {

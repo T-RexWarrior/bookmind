@@ -480,6 +480,9 @@ class InMemoryRepository:
                 self.chunks[book_id].append(c)
                 existing_ids.add(c.chunk_id)
 
+    def replace_chunks(self, book_id: str, chunks: list["DocumentChunk"]) -> None:
+        self.chunks[book_id] = list(chunks)
+
     def chunks_for_book(self, book_id: str) -> list["DocumentChunk"]:
         return list(self.chunks.get(book_id, []))
 

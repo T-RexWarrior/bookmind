@@ -28,3 +28,4 @@ def test_short_but_valid_answers_reach_the_judge():
     assert _clarification_for("O(1)") == ""
     assert _clarification_for("是") == ""
     assert _clarification_for("")
+

@@ -7,8 +7,9 @@ from fastapi.responses import StreamingResponse
 
 from ...domain.models import User
 from ...storage.protocols import Repository
-from ..dependencies import get_current_user, get_repo, get_run_service
+from ..dependencies import get_conversation_worker, get_current_user, get_repo, get_run_service
 from ...services.run_service import RunService
+from ...services.conversation_worker import ConversationWorker
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
@@ -47,6 +48,7 @@ def cancel_run(
     user: User = Depends(get_current_user),
     repo: Repository = Depends(get_repo),
     runs: RunService = Depends(get_run_service),
+    worker: ConversationWorker = Depends(get_conversation_worker),
 ) -> dict:
     run = runs.get_run(run_id)
     if run is None:
@@ -55,6 +57,5 @@ def cancel_run(
     if conv is None:
         raise HTTPException(status_code=404, detail="conversation not found")
     repo.assert_project_owned_by(conv.project_id, user.user_id)
-    # M2: runs complete synchronously, so cancel is a no-op ack. A future async
-    # model would interrupt the in-flight turn here.
-    return {"run_id": run_id, "status": run.status}
+    cancelled = worker.cancel(run_id)
+    return {"run_id": run_id, "status": cancelled.status if cancelled else run.status}

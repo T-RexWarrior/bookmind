@@ -29,6 +29,10 @@ class Block(BaseModel):
     reading_order: int = 0
     # The section path this block belongs to, e.g. ("Chapter 3", "3.2 Polymorphism").
     section_path: tuple[str, ...] = ()
+    # Parser provenance is page/block-specific in the adaptive v2 pipeline.
+    # Defaults keep old cached artifacts readable.
+    parser_name: str = ""
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
     model_config = {"frozen": True}
 
@@ -54,6 +58,10 @@ class Page(BaseModel):
     width: float | None = None
     height: float | None = None
     block_ids: list[str] = Field(default_factory=list)
+    parser_name: str = ""
+    quality_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    quality_label: str = ""  # GOOD | WARN | BAD
+    warning: str | None = None
 
     model_config = {"frozen": True}
 
@@ -74,6 +82,10 @@ class ParsedDocument(BaseModel):
     # this carries a precise reason ("encrypted" / "scanned" / "compressed") so
     # the runner can surface a meaningful error instead of a generic "no text".
     health_warning: str | None = None
+    pipeline_version: str = "pipeline_v1"
+    config_fingerprint: str = ""
+    quality_summary: dict = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
     def block_by_id(self, block_id: str) -> Block | None:
         for b in self.blocks:

@@ -29,7 +29,7 @@ def _run_in_clean_subprocess(code: str) -> str:
     """
     import subprocess
     env = dict(os.environ)
-    env.pop("USTC_LLM_API_KEY", None)
+    env.pop("DEEPSEEK_API_KEY", None)
     env.pop("BOOKMIND_TEST_KEY", None)
     env["BOOKMIND_NO_DOTENV"] = "1"
     proc = subprocess.run(
@@ -41,24 +41,24 @@ def _run_in_clean_subprocess(code: str) -> str:
 
 def test_load_dotenv_injects_unprefixed_key(tmp_path):
     env_file = tmp_path / ".env"
-    env_file.write_text("USTC_LLM_API_KEY=sk-from-env-file\n", encoding="utf-8")
+    env_file.write_text("DEEPSEEK_API_KEY=sk-from-env-file\n", encoding="utf-8")
     code = (
         f"import os, sys; sys.path.insert(0, {BACKEND_DIR!r}); "
         "from bookmind.config import _load_dotenv; "
         f"_load_dotenv({str(env_file)!r}); "
-        "print(os.environ.get('USTC_LLM_API_KEY'))"
+        "print(os.environ.get('DEEPSEEK_API_KEY'))"
     )
     assert _run_in_clean_subprocess(code) == "sk-from-env-file"
 
 
 def test_load_dotenv_does_not_override_real_env(tmp_path, monkeypatch):
     """A variable already in the real environment wins over the file."""
-    monkeypatch.setenv("USTC_LLM_API_KEY", "sk-from-real-env")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-from-real-env")
     monkeypatch.delenv("BOOKMIND_NO_DOTENV", raising=False)
     env_file = tmp_path / ".env"
-    env_file.write_text("USTC_LLM_API_KEY=sk-from-file\n", encoding="utf-8")
+    env_file.write_text("DEEPSEEK_API_KEY=sk-from-file\n", encoding="utf-8")
     _load_dotenv(str(env_file))
-    assert os.environ["USTC_LLM_API_KEY"] == "sk-from-real-env"
+    assert os.environ["DEEPSEEK_API_KEY"] == "sk-from-real-env"
 
 
 def test_load_dotenv_strips_quotes_and_comments(tmp_path, monkeypatch):
@@ -115,7 +115,7 @@ def test_load_dotenv_disabled_by_flag(tmp_path):
 
 def test_settings_sees_dotenv_key_via_llm_api_key(tmp_path):
     env_file = tmp_path / ".env"
-    env_file.write_text("USTC_LLM_API_KEY=sk-settings-sees-it\n", encoding="utf-8")
+    env_file.write_text("DEEPSEEK_API_KEY=sk-settings-sees-it\n", encoding="utf-8")
     code = (
         f"import os, sys; sys.path.insert(0, {BACKEND_DIR!r}); "
         "from bookmind.config import get_settings, _load_dotenv; "

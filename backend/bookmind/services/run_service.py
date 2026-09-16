@@ -10,6 +10,7 @@ resumes by replaying missed events.
 from __future__ import annotations
 
 import json
+import time
 from typing import Iterator, Literal
 
 from ..domain.models import Conversation, Message, Run, RunEvent
@@ -98,18 +99,30 @@ class RunService:
     def sse_stream(self, run_id: str, *, last_event_id: int | None = None) -> Iterator[str]:
         """Yield SSE-formatted lines for a run's events.
 
-        ``last_event_id`` (from the ``Last-Event-ID`` header) resumes after the
-        given sequence. Events already persisted are replayed, then the stream
-        ends (this is a historical replay model — sufficient for M2 where the
-        run completes synchronously before streaming begins)."""
+        ``last_event_id`` resumes after the given sequence. The generator polls
+        the repository until the asynchronous run reaches a terminal state."""
         after = last_event_id if last_event_id is not None else -1
-        for ev in self.events_for(run_id, after_sequence=after):
-            data = {
-                "run_id": ev.run_id, "sequence": ev.sequence,
-                "timestamp": ev.created_at.isoformat(),
-                "event_type": ev.event_type,
-                **ev.payload,
-            }
-            yield f"event: {ev.event_type}\n"
-            yield f"data: {json.dumps(data, ensure_ascii=False)}\n"
-            yield f"id: {ev.sequence}\n\n"
+        from ..config import get_settings
+        deadline = time.monotonic() + max(10.0, get_settings().qa_deadline_seconds + 10.0)
+        while True:
+            events = self.events_for(run_id, after_sequence=after)
+            for ev in events:
+                data = {
+                    "run_id": ev.run_id, "sequence": ev.sequence,
+                    "timestamp": ev.created_at.isoformat(),
+                    "event_type": ev.event_type,
+                    **ev.payload,
+                }
+                yield f"event: {ev.event_type}\n"
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n"
+                yield f"id: {ev.sequence}\n\n"
+                after = max(after, ev.sequence)
+            run = self.get_run(run_id)
+            if run is None or run.status in {"COMPLETED", "FAILED", "CANCELLED"}:
+                break
+            if time.monotonic() >= deadline:
+                yield ": keep-alive timeout\n\n"
+                break
+            if not events:
+                yield ": keep-alive\n\n"
+            time.sleep(0.2)

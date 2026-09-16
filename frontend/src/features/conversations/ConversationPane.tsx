@@ -95,9 +95,6 @@ export function ConversationPane({
                 onBackToSource={(sourceId, page) => void actions.openTaskSource(sourceId, page)}
                 onFinishConsolidation={() => void actions.finishConsolidation()}
                 onSupplementAnswer={() => {
-                  // The old button only focused the input, which looked like a
-                  // broken submit action. If the learner has already typed a
-                  // supplement, submit it; otherwise guide them to the input.
                   if (state.composer.trim() && !state.sending) {
                     void actions.submitTaskAnswer();
                   } else {
@@ -158,12 +155,18 @@ function ScopePicker({ sourceTitle, page }: { sourceTitle?: string; page?: numbe
     { value: "ALL_SOURCES", label: "全部资料" },
   ];
   return (
-    <label className="scope-picker" title={sourceTitle || "全部资料"}>
-      <span>提问范围</span>
-      <select value={state.queryScope} onChange={(event) => dispatch({ type: "SET_QUERY_SCOPE", scope: event.target.value as QueryScope })} disabled={!sourceTitle}>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    </label>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <label className="scope-picker" title={sourceTitle || "全部资料"}>
+        <span>提问范围</span>
+        <select value={state.queryScope} onChange={(event) => dispatch({ type: "SET_QUERY_SCOPE", scope: event.target.value as QueryScope })} disabled={!sourceTitle}>
+          {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
+      <label title="关闭后，本次提问不会写入知识点疑问记录" style={{ fontSize: 12, color: "var(--muted)", display: "flex", gap: 4 }}>
+        <input type="checkbox" checked={state.recordQuestionSignal} onChange={(event) => dispatch({ type: "SET_RECORD_QUESTION_SIGNAL", enabled: event.target.checked })} />
+        记录知识点疑问
+      </label>
+    </div>
   );
 }
 

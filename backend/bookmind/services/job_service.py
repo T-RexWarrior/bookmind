@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import uuid
+import time
 from datetime import datetime, timezone
 from typing import Iterator
 
@@ -127,7 +128,19 @@ class JobService:
 
     def sse_stream(self, job_id: str, *, last_event_id: int | None = None) -> Iterator[str]:
         after = last_event_id if last_event_id is not None else -1
-        for ev in self.events_for(job_id, after_sequence=after):
-            yield f"event: {ev['event_type']}\n"
-            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n"
-            yield f"id: {ev['sequence']}\n\n"
+        while True:
+            events = self.events_for(job_id, after_sequence=after)
+            for ev in events:
+                yield f"event: {ev['event_type']}\n"
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n"
+                yield f"id: {ev['sequence']}\n\n"
+                after = max(after, ev["sequence"])
+            job = self.get(job_id)
+            if job is None or job.state in {
+                JobState.SUCCEEDED, JobState.FAILED,
+                JobState.RETRYABLE_FAILED, JobState.CANCELLED,
+            }:
+                break
+            if not events:
+                yield ": keep-alive\n\n"
+            time.sleep(0.25)

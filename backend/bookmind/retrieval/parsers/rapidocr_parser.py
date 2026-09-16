@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .base import DocumentParser, FileMetadata, ParseOptions, ParserHealth
+from .quality import detect_printed_page, quality_label, score_page_text, summarize_page_quality
 from ..parsed_document import Block, Page, ParsedDocument, Section
 
 
@@ -29,7 +30,7 @@ class RapidOcrParser(DocumentParser):
     """Render each page and run local Chinese/English OCR."""
 
     name = "rapidocr"
-    version = "rapidocr_v1"
+    version = "rapidocr_v2"
 
     def __init__(
         self,
@@ -86,7 +87,14 @@ class RapidOcrParser(DocumentParser):
 
         pdf = pdfium.PdfDocument(source)
         try:
+            selected_pages = set(options.page_numbers)
+            total_pages = len(pdf)
             for page_index in range(len(pdf)):
+                page_no = page_index + 1
+                if selected_pages and page_no not in selected_pages:
+                    continue
+                if options.is_cancelled and options.is_cancelled():
+                    raise RuntimeError("解析已取消")
                 pdf_page = pdf[page_index]
                 bitmap = None
                 page_block_ids: list[str] = []
@@ -124,6 +132,8 @@ class RapidOcrParser(DocumentParser):
                         bbox=tuple(value / self._render_scale for value in bbox),
                         reading_order=reading_order,
                         section_path=current_path,
+                        parser_name=self.name,
+                        confidence=max(0.0, min(1.0, score)),
                     ))
                     page_block_ids.append(block_id)
                     if current_section_index is not None:
@@ -133,12 +143,37 @@ class RapidOcrParser(DocumentParser):
                         )
                     reading_order += 1
 
+                page_text = "\n".join(
+                    block.text for block in blocks if block.physical_page == page_no
+                )
+                printed_page = detect_printed_page(page_text, page_no)
+                if printed_page:
+                    blocks = [
+                        block.model_copy(update={"printed_page": printed_page})
+                        if block.physical_page == page_no else block
+                        for block in blocks
+                    ]
+                text_score, text_warnings = score_page_text(page_text, expected_text_page=True)
+                page_confidences = [
+                    block.confidence for block in blocks
+                    if block.physical_page == page_no and block.confidence is not None
+                ]
+                ocr_confidence = sum(page_confidences) / len(page_confidences) if page_confidences else 0.0
+                page_score = round(0.65 * text_score + 0.35 * ocr_confidence, 4)
+                label = quality_label(page_score)
                 pages.append(Page(
-                    physical_page=page_index + 1,
+                    physical_page=page_no,
+                    printed_page=printed_page,
                     width=float(width),
                     height=float(height),
                     block_ids=page_block_ids,
+                    parser_name=self.name,
+                    quality_score=page_score,
+                    quality_label=label,
+                    warning=None if label == "GOOD" else "；".join(text_warnings) or "OCR 置信度较低",
                 ))
+                if options.on_page:
+                    options.on_page(page_no, total_pages, self.name)
         finally:
             pdf.close()
 
@@ -151,6 +186,10 @@ class RapidOcrParser(DocumentParser):
                 block_ids=[block.block_id for block in blocks],
             )]
 
+        quality_summary = summarize_page_quality(pages)
+        warnings = []
+        if quality_summary.get("warning_pages", 0) or quality_summary.get("bad_pages", 0):
+            warnings.append("部分页面的本地 OCR 质量较低。")
         return ParsedDocument(
             document_id=document_id,
             source_file=meta.filename,
@@ -161,6 +200,9 @@ class RapidOcrParser(DocumentParser):
             sections=sections,
             blocks=blocks,
             health_warning=None if blocks else "scanned: 本地中文 OCR 未识别到可用文字",
+            pipeline_version="pipeline_v2",
+            quality_summary=quality_summary,
+            warnings=warnings,
         )
 
 

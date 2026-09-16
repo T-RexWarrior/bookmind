@@ -6,14 +6,10 @@ should call ``os.environ.get`` directly for these settings; import ``Settings``
 instead. The Docker Compose file already sets ``DATABASE_URL``; we accept both
 ``BOOKMIND_DATABASE_URL`` and the conventional ``DATABASE_URL`` (the former wins).
 
-A ``.env`` file next to the project root is auto-loaded: its variables are
-parsed and injected into ``os.environ`` (without overriding anything already set
-in the real environment). This is what lets the LLM API key — read from the
-env var named by ``BOOKMIND_LLM_API_KEY_ENV`` (default ``USTC_LLM_API_KEY``),
-which has no ``BOOKMIND_`` prefix and so is not a Settings field — be configured
-by dropping a line into ``.env`` instead of exporting it in every shell. The
-same path picks up ``DATABASE_URL`` for Docker / single-machine parity. No
-``python-dotenv`` dependency: a tiny parser handles the subset we need.
+A ``.env`` file next to the project root is auto-loaded.  The LLM credential can
+either come from the environment variable named by ``BOOKMIND_LLM_API_KEY_ENV``
+or from ``BOOKMIND_LLM_API_KEY_FILE``.  File-based loading keeps a local secret
+outside the source tree and out of Settings/log dumps.
 """
 
 from __future__ import annotations
@@ -72,10 +68,10 @@ def _load_dotenv(path: str | Path = _DOTENV_PATH) -> None:
 # a real API key) never leaks into the test suite and turns it live. Explicit
 # _load_dotenv(path) calls are never gated — tests use them on temp files.
 if not os.environ.get("BOOKMIND_NO_DOTENV"):
+    # Always prefer the project-root file, regardless of the directory used to
+    # launch uvicorn/pytest. Keep the historical cwd lookup as a compatible,
+    # non-overriding fallback for deployments that intentionally provide one.
     _load_dotenv(_DOTENV_PATH)
-    # Keep the historical cwd-based lookup as a non-overriding compatibility
-    # path for isolated test/demo workspaces.  The project root is loaded first
-    # and real environment variables always remain authoritative.
     cwd_dotenv = Path.cwd() / ".env"
     if cwd_dotenv.resolve() != _DOTENV_PATH.resolve():
         _load_dotenv(cwd_dotenv)
@@ -90,7 +86,8 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=str(_DOTENV_PATH), env_prefix="BOOKMIND_", extra="ignore",
+        env_file=None if os.environ.get("BOOKMIND_NO_DOTENV") else str(_DOTENV_PATH),
+        env_prefix="BOOKMIND_", extra="ignore",
         case_sensitive=False,
     )
 
@@ -104,11 +101,21 @@ class Settings(BaseSettings):
     # Real sample source shown on the welcome page. Relative paths resolve
     # from the BookMind project root, not from the caller's current directory.
     # The bundled/local default points to the file supplied beside BookMind.
-    sample_book_path: str = "../dsacpp-3rd-edn.pdf"
+    sample_book_path: str = "dsacpp-3rd-edn.pdf"
     sample_book_title: str = "数据结构（C++语言版）第三版"
 
     # Upload limit (MB) for source PDFs (PRODUCTIZATION §11.3 size limit).
     max_upload_mb: int = 100
+
+    # Adaptive document processing.  The private high-accuracy service is
+    # optional; ``auto`` always retains the local CPU path.
+    document_parser: Literal["auto", "local", "ppstructure"] = "auto"
+    document_parser_url: str = ""
+    document_parser_timeout: float = 300.0
+    parse_batch_pages: int = 10
+    ingestion_workers: int = 1
+    chat_workers: int = 4
+    qa_deadline_seconds: float = 75.0
 
     # Network.
     host: str = "127.0.0.1"
@@ -116,11 +123,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://127.0.0.1:18765"
     session_secret: str = ""
 
-    # Model gateway (USTC OpenAI-compatible). The API key is *not* read here so
-    # that it never accidentally appears in a Settings dump; the router reads it
-    # directly from the env var name below.
-    llm_base_url: str = "https://api.llm.ustc.edu.cn/v1"
-    llm_api_key_env: str = "USTC_LLM_API_KEY"
+    # DeepSeek official OpenAI-compatible API.  Keep only a pointer to a key;
+    # the credential itself is never a Settings field and is never logged.
+    llm_base_url: str = "https://api.deepseek.com"
+    llm_api_key_env: str = "DEEPSEEK_API_KEY"
+    llm_api_key_file: str = ""
 
     # The router's chat / embedding / rerank model names can be overridden.
     chat_model: str = ""
@@ -151,8 +158,27 @@ class Settings(BaseSettings):
         return self.database_url == "memory://"
 
     def llm_api_key(self) -> str | None:
-        """Read the LLM API key by env-var name. Never logged."""
-        return os.environ.get(self.llm_api_key_env)
+        """Read the API key from an environment variable or a local file.
+
+        The file may contain a raw ``sk-...`` value or ``NAME=value``.  Only
+        the value is returned; callers must never include it in diagnostics.
+        """
+        value = (os.environ.get(self.llm_api_key_env) or "").strip()
+        if value:
+            return value
+        if not self.llm_api_key_file:
+            return None
+        try:
+            raw = Path(self.llm_api_key_file).expanduser().read_text("utf-8").strip()
+        except OSError:
+            return None
+        if not raw:
+            return None
+        line = next((item.strip() for item in raw.splitlines()
+                     if item.strip() and not item.lstrip().startswith("#")), "")
+        if "=" in line:
+            _, _, line = line.partition("=")
+        return line.strip().strip("'\"") or None
 
     @property
     def sample_book_file(self) -> Path:

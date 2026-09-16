@@ -65,7 +65,10 @@ class BM25Index:
         self, query: str, k: int = 10, *, allow_chunk_ids: set[str] | None = None,
     ) -> list[tuple[str, float]]:
         """Return the best pairs, ranking only inside the allowed scope."""
-        q_terms = _tokenize(query)
+        # Query expansion can repeat a concept across several phrases. Treat
+        # the query as a set of retrieval clues so generic repeated words do
+        # not swamp a more specific term such as 输入、输出 or 平衡因子.
+        q_terms = list(dict.fromkeys(_tokenize(query)))
         if not q_terms or self._n == 0:
             return []
         scores: dict[str, float] = {}

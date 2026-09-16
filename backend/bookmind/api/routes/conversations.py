@@ -1,10 +1,8 @@
-"""Conversation routes — /api/.../conversations and messages (PRODUCTIZATION §8.2).
+"""Conversation routes — persistent messages and asynchronous QA runs.
 
-Sending a message creates a run synchronously (M2: the run completes within the
-request), persists user + assistant messages + run events, and returns the run
-id. The frontend then subscribes to ``GET /api/runs/{run_id}/events`` (SSE) to
-replay the events — this keeps the contract identical between M2's synchronous
-execution and a future async streaming model.
+Sending a message durably creates the user message and queued run, returns
+HTTP 202 immediately, and lets the browser follow retrieval/model progress via
+the run SSE endpoint.
 """
 
 from __future__ import annotations
@@ -17,10 +15,13 @@ from pydantic import BaseModel, Field, field_validator
 
 from ...domain.models import User
 from ...storage.protocols import Repository
-from ..dependencies import get_current_user, get_orchestrator, get_repo, get_run_service
+from ..dependencies import (
+    get_conversation_worker, get_current_user, get_orchestrator, get_repo, get_run_service,
+)
 from ..errors import AppError
 from ...services.conversation_orchestrator import ConversationOrchestrator
 from ...services.run_service import RunService
+from ...services.conversation_worker import ConversationWorker
 
 router = APIRouter(prefix="/api", tags=["conversations"])
 
@@ -32,6 +33,7 @@ class SendMessageBody(BaseModel):
     source_page: int | None = Field(default=None, ge=1)
     source_scope: Literal["CURRENT_PAGE", "CURRENT_SOURCE", "ALL_SOURCES"] = "ALL_SOURCES"
     selection_text: str = ""
+    record_question_signal: bool = True
 
     @field_validator("content")
     @classmethod
@@ -163,7 +165,7 @@ def delete_conversation(
     return {"conversation_id": conversation_id, "deleted": True}
 
 
-@router.post("/conversations/{conversation_id}/messages")
+@router.post("/conversations/{conversation_id}/messages", status_code=202)
 def send_message(
     conversation_id: str,
     body: SendMessageBody,
@@ -171,9 +173,9 @@ def send_message(
     repo: Repository = Depends(get_repo),
     runs: RunService = Depends(get_run_service),
     orch: ConversationOrchestrator = Depends(get_orchestrator),
+    worker: ConversationWorker = Depends(get_conversation_worker),
 ) -> dict:
-    """Send a user message; run the orchestrator turn synchronously; persist
-    everything; return the run id. The frontend replays events via SSE."""
+    """Persist the user message, queue an async run, and return HTTP 202."""
     conv = runs.get_conversation(conversation_id)
     if conv is None:
         raise HTTPException(status_code=404, detail="conversation not found")
@@ -195,27 +197,22 @@ def send_message(
             "replay": True,
         }
 
-    # Execute the turn (synchronous in M2).
-    result = orch.process_message(
-        conversation=conv, user_text=body.content,
+    # Queue the turn in the independent chat pool and return immediately.
+    run, user_message, assistant_message_id = worker.submit(
+        orchestrator=orch, conversation=conv, user_text=body.content,
         learner_id=user.user_id, project_id=conv.project_id,
-        idempotency_key=idem,
-        history=runs.messages_for(conversation_id),
+        idempotency_key=idem, history=runs.messages_for(conversation_id),
         source_context={
             "source_id": body.source_id,
             "page": body.source_page,
             "scope": body.source_scope,
             "selection_text": body.selection_text,
+            "record_question_signal": body.record_question_signal,
         },
     )
-    # Persist messages + run + events.
-    runs.add_message(result.user_message)
-    runs.add_message(result.assistant_message)
-    runs.save_run(result.run)
-    runs.save_events(result.events)
     return {
-        "message_id": result.user_message.message_id,
-        "run_id": result.run.run_id,
-        "assistant_message_id": result.assistant_message.message_id,
-        "status": result.run.status,
+        "message_id": user_message.message_id,
+        "run_id": run.run_id,
+        "assistant_message_id": assistant_message_id,
+        "status": run.status,
     }

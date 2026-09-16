@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from bookmind.agents.tutor import TutorAgent, _parse_answer, _safe_excerpt
+from bookmind.agents.tutor import TutorAgent, _parse_answer, _repair_citation_quotes, _safe_excerpt
 from bookmind.domain.enums import Level
 from bookmind.domain.source_ref import SourceRef
 from bookmind.llm.router import ModelRouter, RouterConfig
@@ -123,8 +123,13 @@ def test_answer_falls_back_when_model_down():
     tutor = TutorAgent(router, _validator(chunks))
     ans = tutor.answer("变量是什么", [_hit("c1", chunks[0].content, 10)])
     assert ans.fallback is True
-    assert ans.grounded is True  # the fallback quote is from the real chunk
-    assert ans.citations[0]["chunk_id"] == "c1"
+    assert ans.grounded is False
+    assert ans.citations == []  # never expose an excerpt as a generated answer
+
+
+def test_model_fallback_never_exposes_parser_code_debris():
+    assert _safe_excerpt("class Fib { int prev() { return 1; } }") == ""
+    assert _safe_excerpt("A variable names a storage location used while a program runs.").startswith("A variable")
 
 
 def test_model_fallback_never_exposes_parser_code_debris():
@@ -144,6 +149,30 @@ def test_answer_never_drops_citation_but_keeps_claim():
     assert ans.grounded is False
     # The unsupported claim "某个论断" must NOT be returned as a grounded answer.
     assert "某个论断" not in ans.text
+
+
+def test_repair_citation_quote_resolves_tiny_punctuation_drift_to_source():
+    chunk = _chunk("c1", "算法是一个指令序列，\n用于解决信息处理问题。")
+    citations = [{
+        "chunk_id": "c1",
+        "quote": "算法是一个指令序列,用于解决信息处理问题。",
+    }]
+
+    repaired = _repair_citation_quotes(citations, [chunk])
+
+    assert repaired[0]["quote"] in chunk.content
+    assert "，" in repaired[0]["quote"]
+
+
+def test_repair_citation_quote_does_not_accept_material_paraphrase():
+    chunk = _chunk("c1", "算法是一个指令序列，用于解决信息处理问题。")
+    changed = "算法是一套程序代码，可以解决所有计算问题。"
+
+    repaired = _repair_citation_quotes(
+        [{"chunk_id": "c1", "quote": changed}], [chunk],
+    )
+
+    assert repaired[0]["quote"] == changed
 
 
 # --- _parse_answer robustness -------------------------------------------

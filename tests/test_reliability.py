@@ -113,7 +113,7 @@ def test_model_timeout_returns_degradation_not_crash(monkeypatch):
     import urllib.error
     def slow_http(url, payload, key, timeout):
         raise TimeoutError("simulated timeout")
-    monkeypatch.setenv("USTC_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
     cfg = RouterConfig(live=True)
     r = ModelRouter(cfg, http=slow_http)
     res = r.complete("t", [{"role": "user", "content": "x"}])
@@ -125,7 +125,7 @@ def test_model_timeout_returns_degradation_not_crash(monkeypatch):
 def test_model_timeout_on_embed_falls_back_offline(monkeypatch):
     def slow_http(url, payload, key, timeout):
         raise TimeoutError("timeout")
-    monkeypatch.setenv("USTC_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
     cfg = RouterConfig(live=True)
     r = ModelRouter(cfg, http=slow_http)
     res = r.embed(["text"])
@@ -139,7 +139,7 @@ def test_model_timeout_on_embed_falls_back_offline(monkeypatch):
 def test_invalid_json_from_model_returns_no_parsed_json(monkeypatch):
     """If the model returns non-JSON when JSON was requested, parsed_json is
     None and the caller (Diagnostician) must degrade to NEEDS_REVIEW."""
-    monkeypatch.setenv("USTC_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
     body = json.dumps({"choices": [{"message": {"content": "this is not json"}}], "usage": {}})
     def fake_http(url, payload, key, timeout):
         return 200, body
@@ -153,7 +153,7 @@ def test_invalid_json_from_model_returns_no_parsed_json(monkeypatch):
 def test_empty_content_from_model_handled(monkeypatch):
     """glm-5.3-flash can return content=null with reasoning_content; the router
     must not crash on null content."""
-    monkeypatch.setenv("USTC_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
     body = json.dumps({"choices": [{"message": {"content": None, "reasoning_content": "thinking..."}}], "usage": {}})
     def fake_http(url, payload, key, timeout):
         return 200, body

@@ -18,6 +18,7 @@ also fails, state plainly that the textbook lacks sufficient basis
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 
 from .chunk import DocumentChunk
 
@@ -72,7 +73,15 @@ class CitationValidator:
             if cid not in context_set:
                 checks.append(CitationCheck(False, cid, f"chunk {cid} not in the provided context"))
                 continue
-            if quote and quote not in chunk.content:
+            if not isinstance(quote, str) or not quote.strip():
+                checks.append(CitationCheck(False, cid, "quote is empty"))
+                continue
+            # PDF extraction inserts layout line breaks and spaces inside a
+            # sentence. Accept only the same character sequence after
+            # whitespace folding; punctuation and wording must still match.
+            normalized_quote = re.sub(r"\s+", "", quote)
+            normalized_content = re.sub(r"\s+", "", chunk.content)
+            if quote not in chunk.content and normalized_quote not in normalized_content:
                 checks.append(CitationCheck(False, cid, "quote not found in chunk content"))
                 continue
             if page is not None:

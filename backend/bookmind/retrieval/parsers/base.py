@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Callable
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,10 @@ class ParseOptions:
 
     document_id: str = ""
     save_raw_artifact: bool = True
+    page_numbers: tuple[int, ...] = ()  # one-based; empty means all pages
+    on_page: Callable[[int, int, str], None] | None = None
+    is_cancelled: Callable[[], bool] | None = None
+    force_reparse: bool = False
 
 
 class DocumentParser(ABC):

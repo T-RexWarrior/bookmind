@@ -11,7 +11,7 @@ from fastapi import Depends, HTTPException, Request
 from ..config import Settings, get_settings
 from ..domain.models import User
 from ..llm.router import ModelRouter, RouterConfig
-from ..retrieval.parsers import MinerUParser, PlainPdfFallback, PyPdfParser, RapidOcrParser
+from ..retrieval.parsers import AdaptivePdfParser, PlainPdfFallback, PpStructureParser
 from ..agents.diagnostician import DiagnosticianAgent
 from ..services.book_qa import BookQAService
 from ..services.conversation_orchestrator import ConversationOrchestrator
@@ -22,6 +22,7 @@ from ..services.upload_service import UploadService
 from ..services.job_service import JobService
 from ..services.ingestion_runner import IngestionRunner
 from ..services.background_worker import BackgroundWorker
+from ..services.conversation_worker import ConversationWorker
 from ..storage.protocols import Repository
 
 
@@ -59,59 +60,46 @@ def get_current_user(
     return user
 
 
-def get_router() -> ModelRouter:
+def get_router(request: Request) -> ModelRouter:
     """Build a ModelRouter from the live Settings (P1-13).
 
-    The old code ignored ``BOOKMIND_CHAT_MODEL`` / ``BOOKMIND_LLM_BASE_URL`` /
-    ``BOOKMIND_LLM_API_KEY_ENV`` and always used the RouterConfig defaults
-    (glm-5.2-107 + the campus gateway). A factory here translates Settings into a
-    RouterConfig so env overrides actually take effect across the API and the
-    background worker. ``live`` is True only when an API key is present.
+    A factory translates Settings into a RouterConfig so the official DeepSeek
+    endpoint, model, and file-based credential apply consistently to the API and
+    both background workers. ``live`` is True only when a key is available.
     """
-    settings = get_settings()
-    live = bool(settings.llm_api_key())
-    cfg = _router_config_from_settings(settings, live=live)
-    return ModelRouter(cfg)
+    shared = getattr(request.app.state, "model_router", None)
+    if shared is None:
+        settings = get_settings()
+        live = bool(settings.llm_api_key())
+        shared = ModelRouter(_router_config_from_settings(settings, live=live))
+        request.app.state.model_router = shared
+    return shared
 
 
 def _router_config_from_settings(settings: Settings, *, live: bool) -> RouterConfig:
-    """Translate Settings → RouterConfig, overriding model names + base URL +
-    api-key env name when set. Keeps the default fallback chain otherwise."""
+    """Build the single-provider DeepSeek configuration used by the product.
+
+    DeepSeek currently exposes chat/vision but no official embedding or rerank
+    endpoint. Dense retrieval is therefore disabled; the small BM25 shortlist
+    is reranked through DeepSeek's JSON-capable chat API.
+    """
     from ..llm.router import ModelConfig
 
-    # Keep interactive requests bounded while allowing reasoning-heavy judging
-    # and generation enough time on the campus gateway.  The primary model gets
-    # 25 seconds; a short fallback still prevents a prolonged total stall when
-    # the primary endpoint is unavailable.
-    chat_model = settings.chat_model or "qwen-chat"
+    chat_model = settings.chat_model or "deepseek-flash"
     chat_primary = ModelConfig(
         chat_model, "chat",
-        base_url=settings.llm_base_url, timeout=25.0, retries=0,
-        max_tokens=1024, supports_json_mode=True,
+        base_url=settings.llm_base_url, timeout=45.0, retries=0,
+        max_tokens=4096, supports_json_mode=True, thinking_mode="disabled",
     )
-    # The DeepSeek-compatible endpoint only serves DeepSeek chat models.  Keep
-    # the primary as the sole attempt there; otherwise a transient failure
-    # would be followed by a guaranteed-invalid GLM request.
-    is_deepseek_endpoint = "api.deepseek.com" in settings.llm_base_url.lower()
-    fallback_name = (
-        chat_model
-        if is_deepseek_endpoint
-        else ("glm-5.3-flash" if chat_model != "glm-5.3-flash" else "qwen-chat")
-    )
-    chat_fallbacks: tuple[ModelConfig, ...] = (
-        ModelConfig(
-            fallback_name, "chat",
-            base_url=settings.llm_base_url, timeout=6.0, retries=0,
-            max_tokens=1024, supports_json_mode=False,
-        ),
-    )
+    chat_fallbacks: tuple[ModelConfig, ...] = ()
     embedding = ModelConfig(
-        settings.embedding_model or "qwen3-embedding", "embedding",
-        base_url=settings.llm_base_url, timeout=12.0, retries=0,
+        "disabled", "embedding", base_url=settings.llm_base_url,
+        timeout=1.0, retries=0,
     )
     reranker = ModelConfig(
-        settings.rerank_model or "qwen3-reranker", "rerank",
-        base_url=settings.llm_base_url, timeout=8.0, retries=0,
+        settings.rerank_model or chat_model, "chat_rerank",
+        base_url=settings.llm_base_url, timeout=45.0, retries=0,
+        max_tokens=4096, supports_json_mode=True, thinking_mode="disabled",
     )
     return RouterConfig(
         chat_primary=chat_primary,
@@ -119,7 +107,13 @@ def _router_config_from_settings(settings: Settings, *, live: bool) -> RouterCon
         embedding=embedding,
         reranker=reranker,
         api_key_env=settings.llm_api_key_env,
+        api_key_file=settings.llm_api_key_file,
         live=live,
+        total_chat_timeout=settings.qa_deadline_seconds,
+        embedding_enabled=False,
+        rerank_via_chat=True,
+        breaker_failures=5,
+        breaker_cooldown=30.0,
     )
 
 
@@ -159,12 +153,26 @@ def get_run_service(repo: Repository = Depends(get_repo)) -> RunService:
     return RunService(repo)
 
 
+def get_conversation_worker(
+    request: Request, repo: Repository = Depends(get_repo),
+) -> ConversationWorker:
+    shared = getattr(request.app.state, "conversation_worker", None)
+    if shared is None:
+        shared = ConversationWorker(repo, max_workers=get_settings().chat_workers)
+        request.app.state.conversation_worker = shared
+    return shared
+
+
 def get_upload_service() -> UploadService:
     return UploadService(get_settings())
 
 
-def get_job_service(repo: Repository = Depends(get_repo)) -> JobService:
-    return JobService(repo)
+def get_job_service(request: Request, repo: Repository = Depends(get_repo)) -> JobService:
+    shared = getattr(request.app.state, "job_service", None)
+    if shared is None:
+        shared = JobService(repo)
+        request.app.state.job_service = shared
+    return shared
 
 
 def get_ingestion_runner(
@@ -172,10 +180,16 @@ def get_ingestion_runner(
     router: ModelRouter = Depends(get_router),
     jobs: JobService = Depends(get_job_service),
 ) -> IngestionRunner:
-    return IngestionRunner(
-        repo, router, jobs,
-        parsers=[MinerUParser(), PyPdfParser(), RapidOcrParser(), PlainPdfFallback()],
-    )
+    settings = get_settings()
+    high_precision = None
+    if settings.document_parser_url and settings.document_parser in {"auto", "ppstructure"}:
+        high_precision = PpStructureParser(
+            settings.document_parser_url, timeout=settings.document_parser_timeout,
+        )
+    return IngestionRunner(repo, router, jobs, parsers=[
+        AdaptivePdfParser(high_precision=high_precision, batch_pages=settings.parse_batch_pages),
+        PlainPdfFallback(),
+    ])
 
 
 def get_background_worker(

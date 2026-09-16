@@ -130,7 +130,9 @@ export function useConversationActions() {
         source_page: selectedText?.page || state.reader?.page,
         source_scope: selectedText ? "CURRENT_PAGE" : state.queryScope,
         selection_text: selectedText?.text,
+        record_question_signal: state.recordQuestionSignal,
       });
+      dispatch({ type: "SET_RECORD_QUESTION_SIGNAL", enabled: true });
       dispatch({ type: "SET_TEXT_SELECTION", selection: null });
       // Stream the run events into a live assistant message.
       const snap = newLiveRun();
@@ -144,7 +146,7 @@ export function useConversationActions() {
         const blocks: ApiMessage["content_blocks"] = [];
         if (snap.toolStatus) blocks.push({ type: "status", text: snap.toolStatus });
         if (snap.fallback)
-          blocks.push({ type: "status", text: "基础模式（模型不可用，使用离线回退）" });
+          blocks.push({ type: "status", text: "模型不可用，本次未生成回答" });
         if (snap.text) blocks.push({ type: "text", text: snap.text });
         for (const c of snap.citations)
           blocks.push({ type: "citation", label: c.label, source_id: c.book_id, book_id: c.book_id, page: c.page, chunk_id: c.chunk_id });
@@ -253,8 +255,6 @@ export function useConversationActions() {
         idempotency_key: `task_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
       });
       if (created.message) {
-        // The server has already persisted this card. Render that authoritative
-        // payload immediately so the click always produces visible feedback.
         dispatch({ type: "APPEND_MESSAGE", message: created.message });
         dispatch({
           type: "SET_PENDING_TASK",
@@ -262,10 +262,8 @@ export function useConversationActions() {
           activity,
           projectId,
         });
-        toast("已生成练习题，请在下方作答。");
+        toast(taskMode === "ASSESSMENT" ? "已生成评估题，请独立作答。" : "已生成练习题，请在下方作答。");
       } else {
-        // An idempotent retry can point at an already-pending task.  In that
-        // case there is no new message in the response, so refresh once.
         const fresh = await api.getConversation(conversation.conversation_id);
         const messages = fresh.messages as ApiMessage[];
         dispatch({ type: "SET_ACTIVE_CONVERSATION", conversation, messages, activity, projectId });

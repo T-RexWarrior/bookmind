@@ -71,6 +71,13 @@ class IngestionJob:
     parse_key: str = ""
     chunk_key: str = ""
     index_key: str = ""
+    pages_done: int = 0
+    pages_total: int = 0
+    parser_mode: str = "auto"
+    quality_summary: dict = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    checkpoint_stage: str = ""
+    force_reparse: bool = False
 
     def touch(self) -> None:
         self.updated_at = datetime.now(timezone.utc)

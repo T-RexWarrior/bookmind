@@ -30,7 +30,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import partial
-from typing import Iterator, Literal, TypedDict
+from typing import Callable, Iterator, Literal, TypedDict
 
 from ..domain.enums import (
     Action,
@@ -111,8 +111,6 @@ def classify_intent(text: str, *, has_pending_task: bool = False) -> Intent:
     for intent, kws in _DETERMINISTIC_INTENT_KEYWORDS.items():
         if any(k in t for k in kws):
             return intent  # type: ignore[return-value]
-    # This is only the no-model fallback.  The live path below handles natural
-    # language such as “先给点方向” or “这题先放着” with more context.
     compact = "".join(t.split()).lower()
     if has_pending_task and compact in {"跳过", "跳过这题", "换题", "下一题"}:
         return "SKIP_TASK"
@@ -137,12 +135,7 @@ def classify_intent(text: str, *, has_pending_task: bool = False) -> Intent:
 def interpret_intent(
     router: ModelRouter, text: str, *, has_pending_task: bool, task_prompt: str = "",
 ) -> Intent:
-    """Use the model to understand a learner's wording, never to change state.
-
-    The returned value is still passed through the graph/state-machine below.
-    Any transport, schema or confidence problem falls back to the deterministic
-    classifier, so offline mode keeps every task action usable.
-    """
+    """Classify natural task actions with DeepSeek, with an offline-safe floor."""
     fallback = classify_intent(text, has_pending_task=has_pending_task)
     if not getattr(router.cfg, "live", False):
         return fallback
@@ -221,6 +214,7 @@ class ConversationGraphState(TypedDict, total=False):
     events: list[RunEvent]
     blocks: list[ContentBlock]
     error: str
+    event_sink: Callable[[RunEvent], None]
 
 
 class ConversationOrchestrator:
@@ -256,15 +250,19 @@ class ConversationOrchestrator:
         idempotency_key: str = "",
         history: list[Message] | None = None,
         source_context: dict | None = None,
+        run_id: str | None = None,
+        user_message_id: str | None = None,
+        assistant_message_id: str | None = None,
+        event_sink: Callable[[RunEvent], None] | None = None,
     ) -> TurnResult:
         """Process one user message end-to-end and return the run + messages
         + events. Synchronous; the SSE endpoint runs this and streams events."""
         events: list[RunEvent] = []
         seq = 0
 
-        run_id = f"run_{uuid.uuid4().hex[:12]}"
-        user_msg_id = f"msg_{uuid.uuid4().hex[:12]}"
-        asst_msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+        run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
+        user_msg_id = user_message_id or f"msg_{uuid.uuid4().hex[:12]}"
+        asst_msg_id = assistant_message_id or f"msg_{uuid.uuid4().hex[:12]}"
 
         # 1. user message
         user_blocks = [ContentBlock(type="text", text=user_text)]
@@ -309,6 +307,7 @@ class ConversationOrchestrator:
                 "events": events,
                 "blocks": [],
                 "error": "",
+                "event_sink": event_sink,
             })
             run.intent = graph_result["intent"]
             blocks = graph_result.get("blocks", [])
@@ -411,6 +410,7 @@ class ConversationOrchestrator:
                     question=_rewrite_followup(state["user_text"], state["history"]),
                     run_id=state["run_id"], seq=seq, events=events,
                     source_context=state.get("source_context", {}),
+                    event_sink=state.get("event_sink"),
                 )
             elif forced_intent == "START_LEARNING":
                 blocks, seq = self._start_learning(
@@ -479,6 +479,7 @@ class ConversationOrchestrator:
                     question=_rewrite_followup(state["user_text"], state["history"]),
                     run_id=state["run_id"], seq=seq, events=events,
                     source_context=state.get("source_context", {}),
+                    event_sink=state.get("event_sink"),
                 )
                 if not blocks:
                     blocks = [ContentBlock(
@@ -512,10 +513,14 @@ class ConversationOrchestrator:
         self, *, project_id: str, learner_id: str, question: str,
         run_id: str, seq: int, events: list[RunEvent],
         source_context: dict | None = None,
+        event_sink: Callable[[RunEvent], None] | None = None,
     ) -> tuple[list[ContentBlock], int]:
         """ASK_BOOK path: retrieve → context → Tutor → citation validation.
         Reuses BookQAService.ask(). Emits tool_started/tool_completed/agent_*."""
-        events.append(_evt(run_id, seq, EventType.TOOL_STARTED, {"tool": "retrieval"}))
+        started_event = _evt(run_id, seq, EventType.TOOL_STARTED, {"tool": "retrieval"})
+        events.append(started_event)
+        if event_sink:
+            event_sink(started_event)
         seq += 1
 
         source_context = source_context or {}
@@ -529,9 +534,20 @@ class ConversationOrchestrator:
             f"{question}\n\n用户选中的原文：\n{selection_text}"
             if selection_text else question
         )
+        def locations_ready(locations: list[dict], confidence: float, grounded: bool) -> None:
+            nonlocal seq
+            event = _evt(run_id, seq, EventType.SOURCE_LOCATIONS_READY, {
+                "locations": locations, "confidence": confidence, "grounded": grounded,
+            })
+            events.append(event)
+            if event_sink:
+                event_sink(event)
+            seq += 1
+
         ans = self.qa_service.ask(
             project_id=project_id, learner_id=learner_id, question=retrieval_question,
             source_ids=source_ids, physical_page=physical_page,
+            on_retrieval=locations_ready,
         )
 
         # A grounded textbook question is an exposure/doubt signal, never a
@@ -544,10 +560,17 @@ class ConversationOrchestrator:
             question=question,
             run_id=run_id,
             chunk_ids=ans.chunk_ids if ans.grounded else [],
-        )
+            retrieval_confidence=ans.retrieval_confidence,
+            query_scope=scope,
+        ) if source_context.get("record_question_signal", True) else []
 
         events.append(_evt(run_id, seq, EventType.TOOL_COMPLETED, {
             "tool": "retrieval", "grounded": ans.grounded, "chunk_ids": ans.chunk_ids,
+        }))
+        seq += 1
+        events.append(_evt(run_id, seq, EventType.RETRIEVAL_COMPLETED, {
+            "grounded": ans.grounded, "confidence": ans.retrieval_confidence,
+            "chunk_ids": ans.chunk_ids,
         }))
         seq += 1
 
@@ -589,7 +612,16 @@ class ConversationOrchestrator:
         if ans.answer_text:
             events.append(_evt(run_id, seq, EventType.AGENT_DELTA, {"text": ans.answer_text}))
             seq += 1
+            events.append(_evt(run_id, seq, EventType.ANSWER_DELTA, {"text": ans.answer_text}))
+            seq += 1
             blocks.append(ContentBlock(type="text", text=ans.answer_text))
+        terminal_answer_event = (
+            EventType.ANSWER_UNAVAILABLE if ans.fallback else EventType.ANSWER_COMPLETED
+        )
+        events.append(_evt(run_id, seq, terminal_answer_event, {
+            "fallback": ans.fallback, "grounded": ans.grounded,
+        }))
+        seq += 1
 
         if questioned_concepts:
             preview = "、".join(item["name"] for item in questioned_concepts[:3])
@@ -606,10 +638,6 @@ class ConversationOrchestrator:
                 },
             ))
         elif ans.grounded:
-            # Preserve the user's question in the conversation, but never turn
-            # a weak chapter-level retrieval hit into a false learning-state
-            # record.  The explicit UI note makes this conservative choice
-            # visible instead of silently dropping the signal.
             blocks.append(ContentBlock(
                 type="question_signal",
                 data={
@@ -644,7 +672,7 @@ class ConversationOrchestrator:
                 book_id=book_id, label=f"[{i+1}] {title} · {locator}",
             ))
 
-        if not ans.grounded:
+        if ans.fallback or not ans.grounded:
             events.append(_evt(run_id, seq, EventType.FALLBACK_USED, {"reason": ans.reason}))
             seq += 1
             if not ans.answer_text:
@@ -663,6 +691,8 @@ class ConversationOrchestrator:
         question: str,
         run_id: str,
         chunk_ids: list[str],
+        retrieval_confidence: float = 0.0,
+        query_scope: str = "ALL_SOURCES",
     ) -> list[dict]:
         """Persist QUESTION evidence for conservatively matched concepts.
 
@@ -686,14 +716,7 @@ class ConversationOrchestrator:
         question_folded = question.casefold()
 
         def question_match_score(name: str) -> int:
-            """Return a deliberately strict lexical score for a concept name.
-
-            A retrieved chunk is only evidence that a concept is *available as
-            a candidate*; it is not evidence that the learner asked about that
-            concept.  For Chinese section labels, derive meaningful 3+ character
-            fragments as aliases (for example ``复杂度`` from ``复杂度度量``).
-            One-character labels such as ``串`` are never enough on their own.
-            """
+            """Return a strict lexical score; nearby retrieval alone is insufficient."""
             folded = name.casefold().strip()
             if not folded:
                 return 0
@@ -703,11 +726,13 @@ class ConversationOrchestrator:
             for part in re.findall(r"[\u4e00-\u9fff]{3,}|[a-z][a-z0-9_+#.-]{2,}", folded):
                 terms.add(part)
                 if re.fullmatch(r"[\u4e00-\u9fff]+", part):
-                    terms.update(part[i:i + width] for width in range(3, min(6, len(part)) + 1)
-                                 for i in range(len(part) - width + 1))
+                    terms.update(
+                        part[i:i + width]
+                        for width in range(3, min(6, len(part)) + 1)
+                        for i in range(len(part) - width + 1)
+                    )
             return max((len(term) for term in terms if term in question_folded), default=0)
 
-        # (direct-match-first, source rank, direct score, concept, supporting, book)
         matches: list[tuple[int, int, int, object, list[str], str]] = []
         for book_id in sorted({chunk.book_id for chunk in retrieved}):
             book_chunks = [chunk for chunk in retrieved if chunk.book_id == book_id]
@@ -726,10 +751,6 @@ class ConversationOrchestrator:
                 first_chunk = min(chunk_order.get(chunk_id, 99) for chunk_id in supporting)
                 matches.append((rank, first_chunk, direct_score, concept, supporting, book_id))
 
-        # A direct mention is sufficient and avoids an unnecessary model call.
-        # Otherwise, allow a live model to select *one* source-anchored concept
-        # from an explicitly closed candidate list.  A failure or low confidence
-        # records nothing — conversation history still preserves the question.
         direct = [item for item in matches if item[2] >= 3]
         chosen: list[tuple[int, int, int, object, list[str], str]] = []
         if direct:
@@ -747,17 +768,13 @@ class ConversationOrchestrator:
             try:
                 result = self.router.complete(
                     "question_concept_classification",
-                    [{
-                        "role": "system",
-                        "content": (
-                            "你负责把学习者的问题保守地归到一个知识点。只能从候选中选择一个；"
-                            "若问题只是该章节附近但没有明确语义关联，必须返回 null。"
-                            "输出严格 JSON：{\"concept_id\":\"候选 id 或 null\",\"confidence\":0到1}。"
-                        ),
-                    }, {
-                        "role": "user",
-                        "content": f"学习者问题：{question[:700]}\n候选知识点：\n{candidate_text}",
-                    }],
+                    [{"role": "system", "content": (
+                        "你负责把学习者的问题保守地归到一个知识点。只能从候选中选择一个；"
+                        "若问题只是该章节附近但没有明确语义关联，必须返回 null。"
+                        "输出严格 JSON：{\"concept_id\":\"候选 id 或 null\",\"confidence\":0到1}。"
+                    )}, {"role": "user", "content": (
+                        f"学习者问题：{question[:700]}\n候选知识点：\n{candidate_text}"
+                    )}],
                     output_schema={"type": "object"},
                     temperature=0.0,
                     max_tokens=180,
@@ -768,8 +785,6 @@ class ConversationOrchestrator:
                 if confidence >= 0.78:
                     chosen = [item for item in candidates if item[3].concept_id == concept_id][:1]
             except (TypeError, ValueError, AttributeError):
-                # Classification is auxiliary; no mapping is safer than a
-                # guessed mapping and should never affect answering the user.
                 chosen = []
 
         recorded: list[dict] = []
@@ -793,7 +808,10 @@ class ConversationOrchestrator:
                     occurred_at=_now(),
                     source_chunk_ids=supporting,
                     source_session=run_id,
-                    content_summary=f"question:{question[:500]}",
+                    content_summary=(
+                        f"question:{question[:500]}|confidence:{retrieval_confidence:.4f}"
+                        f"|scope:{query_scope}|chunks:{','.join(supporting)}"
+                    ),
                 )
                 question_count = sum(
                     1 for evidence in self.repo.evidence_for(project_id, concept.concept_id)
@@ -803,6 +821,9 @@ class ConversationOrchestrator:
                     "concept_id": concept.concept_id,
                     "name": concept.name,
                     "question_count": question_count,
+                    "chunk_ids": supporting,
+                    "retrieval_confidence": retrieval_confidence,
+                    "query_scope": query_scope,
                 })
             except Exception:
                 logging.getLogger("bookmind").exception(

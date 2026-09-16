@@ -12,6 +12,7 @@ import io
 import re
 
 from .base import DocumentParser, FileMetadata, ParseOptions, ParserHealth
+from .quality import detect_printed_page, quality_label, score_page_text, summarize_page_quality
 from ..parsed_document import Block, Page, ParsedDocument, Section
 
 
@@ -23,7 +24,7 @@ _HEADING = re.compile(
 
 class PyPdfParser(DocumentParser):
     name = "pypdf"
-    version = "pypdf_v4"
+    version = "pypdf_v6"
 
     @staticmethod
     def _available() -> bool:
@@ -82,7 +83,13 @@ class PyPdfParser(DocumentParser):
         current_section_index: int | None = None
         order = 0
 
+        selected_pages = set(options.page_numbers)
+        total_pages = len(reader.pages)
         for page_no, pdf_page in enumerate(reader.pages, start=1):
+            if options.is_cancelled and options.is_cancelled():
+                raise RuntimeError("解析已取消")
+            if selected_pages and page_no not in selected_pages:
+                continue
             while (
                 outline_cursor + 1 < len(outline_order)
                 and sections[outline_order[outline_cursor + 1]].physical_page <= page_no
@@ -96,6 +103,7 @@ class PyPdfParser(DocumentParser):
             except TypeError:  # older pypdf without extraction_mode
                 text = pdf_page.extract_text() or ""
             page_block_ids: list[str] = []
+            printed_page = detect_printed_page(text, page_no)
             for paragraph in _paragraphs(text):
                 normalized = _normalize_title(paragraph)
                 outline_match = next(
@@ -126,8 +134,11 @@ class PyPdfParser(DocumentParser):
                     block_type="heading" if is_heading else "text",
                     text=paragraph,
                     physical_page=page_no,
+                    printed_page=printed_page,
                     reading_order=order,
                     section_path=current_path,
+                    parser_name=self.name,
+                    confidence=1.0,
                 )
                 blocks.append(block)
                 page_block_ids.append(block_id)
@@ -137,12 +148,21 @@ class PyPdfParser(DocumentParser):
                         update={"block_ids": [*sec.block_ids, block_id]}
                     )
                 order += 1
+            page_score, page_warnings = score_page_text(text, expected_text_page=True)
+            label = quality_label(page_score)
             pages.append(Page(
                 physical_page=page_no,
+                printed_page=printed_page,
                 width=float(pdf_page.mediabox.width),
                 height=float(pdf_page.mediabox.height),
                 block_ids=page_block_ids,
+                parser_name=self.name,
+                quality_score=page_score,
+                quality_label=label,
+                warning=None if label == "GOOD" else "；".join(page_warnings) or "原生文字层质量较低，建议执行 OCR",
             ))
+            if options.on_page:
+                options.on_page(page_no, total_pages, self.name)
 
         if blocks and not sections:
             sections = [Section(
@@ -153,24 +173,10 @@ class PyPdfParser(DocumentParser):
                 block_ids=[b.block_id for b in blocks],
             )]
 
-        extracted_text = "\n".join(block.text for block in blocks)
-        if _cjk_text_layer_needs_ocr(meta.filename, extracted_text):
-            # Some scanned Chinese textbooks contain a tiny, broken hidden
-            # text layer (often only the cover and Latin C snippets). Treating
-            # that as a usable book creates a convincing but meaningless
-            # index. Keep page geometry for the Reader, but require OCR before
-            # retrieval/graph construction.
-            return ParsedDocument(
-                document_id=document_id,
-                source_file=meta.filename,
-                source_hash=source_hash,
-                parser=self.name,
-                parser_version=self.version,
-                pages=[page.model_copy(update={"block_ids": []}) for page in pages],
-                sections=[],
-                blocks=[],
-                health_warning="scanned: 中文正文文字层不可可靠读取，需要 MinerU 或中文 OCR",
-            )
+        quality_summary = summarize_page_quality(pages)
+        warnings = []
+        if quality_summary.get("warning_pages", 0) or quality_summary.get("bad_pages", 0):
+            warnings.append("部分页面的原生文字层质量较低，已交给自适应解析器复核。")
 
         return ParsedDocument(
             document_id=document_id,
@@ -182,6 +188,9 @@ class PyPdfParser(DocumentParser):
             sections=sections,
             blocks=blocks,
             health_warning=None if blocks else "scanned: no text layer — OCR is required",
+            pipeline_version="pipeline_v2",
+            quality_summary=quality_summary,
+            warnings=warnings,
         )
 
 

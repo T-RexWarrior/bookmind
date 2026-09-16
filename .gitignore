@@ -45,6 +45,9 @@ data/
 # but never mix generated databases/uploads/screenshots into the worktree.
 tmp/
 audit_artifacts/
+.integration-*/
+.integration-*.zip
+.pytest-temp-*/
 
 # Frontend build output is committed for offline demos, but node_modules is not.
 frontend/node_modules/

@@ -339,6 +339,10 @@ def _ingestion_job_to_row(job: IngestionJob) -> IngestionJobRow:
         chunker_version=job.chunker_version,
         embedding_model=job.embedding_model, embedding_dim=job.embedding_dim,
         parse_key=job.parse_key, chunk_key=job.chunk_key, index_key=job.index_key,
+        pages_done=job.pages_done, pages_total=job.pages_total,
+        parser_mode=job.parser_mode, quality_summary=job.quality_summary,
+        warnings=job.warnings, checkpoint_stage=job.checkpoint_stage,
+        force_reparse=job.force_reparse,
     )
 
 
@@ -352,6 +356,11 @@ def _ingestion_job_from_row(row: IngestionJobRow) -> IngestionJob:
         chunker_version=row.chunker_version,
         embedding_model=row.embedding_model, embedding_dim=row.embedding_dim,
         parse_key=row.parse_key, chunk_key=row.chunk_key, index_key=row.index_key,
+        pages_done=row.pages_done or 0, pages_total=row.pages_total or 0,
+        parser_mode=row.parser_mode or "auto",
+        quality_summary=row.quality_summary or {}, warnings=row.warnings or [],
+        checkpoint_stage=row.checkpoint_stage or "",
+        force_reparse=bool(row.force_reparse),
         created_at=row.created_at, updated_at=row.updated_at,
     )
 
@@ -527,7 +536,7 @@ class SqlRepository:
         """
         existing = {
             table: {column["name"] for column in inspect(self.engine).get_columns(table)}
-            for table in ("learning_projects", "books", "conversations")
+            for table in ("learning_projects", "books", "conversations", "ingestion_jobs")
         }
         project_columns = {
             "learning_scope": "TEXT DEFAULT ''",
@@ -547,6 +556,15 @@ class SqlRepository:
         conversation_columns = {
             "activity_type": "VARCHAR(16) DEFAULT 'LEARN' NOT NULL",
         }
+        ingestion_columns = {
+            "pages_done": "INTEGER DEFAULT 0",
+            "pages_total": "INTEGER DEFAULT 0",
+            "parser_mode": "VARCHAR(32) DEFAULT 'auto'",
+            "quality_summary": "JSON DEFAULT '{}'",
+            "warnings": "JSON DEFAULT '[]'",
+            "checkpoint_stage": "VARCHAR(64) DEFAULT ''",
+            "force_reparse": "BOOLEAN DEFAULT 0",
+        }
         with self.engine.begin() as conn:
             for name, ddl in project_columns.items():
                 if name not in existing["learning_projects"]:
@@ -557,6 +575,9 @@ class SqlRepository:
             for name, ddl in conversation_columns.items():
                 if name not in existing["conversations"]:
                     conn.exec_driver_sql(f"ALTER TABLE conversations ADD COLUMN {name} {ddl}")
+            for name, ddl in ingestion_columns.items():
+                if name not in existing["ingestion_jobs"]:
+                    conn.exec_driver_sql(f"ALTER TABLE ingestion_jobs ADD COLUMN {name} {ddl}")
 
     def ping(self) -> None:
         """Open a trivial connection — used by /ready."""
@@ -1273,6 +1294,9 @@ class SqlRepository:
             if c.chunk_id not in existing_ids:
                 self._chunks[book_id].append(c)
                 existing_ids.add(c.chunk_id)
+
+    def replace_chunks(self, book_id: str, chunks: list["DocumentChunk"]) -> None:
+        self._chunks[book_id] = list(chunks)
 
     def chunks_for_book(self, book_id: str) -> list["DocumentChunk"]:
         return list(self._chunks.get(book_id, []))

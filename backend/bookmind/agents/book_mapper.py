@@ -62,6 +62,20 @@ class BookMapperAgent:
         if not chunks:
             return SectionProposal(section_id=section.section_id,
                                    section_path=section.section_path, fallback=True)
+        # The ingestion runner deliberately uses an offline mapper so a large
+        # book cannot create hundreds of serial API calls. Go directly to the
+        # deterministic extractor instead of calling the router once per
+        # section and flooding logs with expected fallback warnings.
+        # A test/private deployment may inject a router subclass whose
+        # ``complete`` implementation is available without the built-in HTTP
+        # provider. Honour that dependency-injection seam; only force the
+        # deterministic path for the stock router when it is truly offline.
+        has_injected_completion = type(self.router).complete is not ModelRouter.complete
+        if not self.router.live_available and not has_injected_completion:
+            return self._offline_extract(
+                section, chunks, known_concept_names or [],
+                extract_definitions=extract_definitions,
+            )
         res = self._call_model(section, chunks, known_concept_names or [])
         if res.ok and res.parsed_json is not None:
             proposal = _coerce_section(res.parsed_json, section, chunks)

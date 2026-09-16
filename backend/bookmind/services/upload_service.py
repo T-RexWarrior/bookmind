@@ -17,6 +17,7 @@ and a stable ``code`` the frontend branches on.
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
 
 from ..errors import AppError
@@ -40,14 +41,20 @@ class UploadService:
         Checks: size, extension, MIME, file-header magic. The §5.2 user-facing
         copy is the message; ``code`` lets the frontend pick the right card.
         """
+        self.validate_metadata(len(file_bytes), file_bytes[:5], filename, content_type)
+
+    def validate_metadata(
+        self, size: int, header: bytes, filename: str, content_type: str = "",
+    ) -> None:
+        """Validate a streamed upload without loading its body into memory."""
         max_bytes = self.settings.max_upload_mb * 1024 * 1024
-        if len(file_bytes) > max_bytes:
+        if size > max_bytes:
             raise AppError(
                 "FILE_TOO_LARGE",
                 f"文件过大，当前上限 {self.settings.max_upload_mb} MB。请压缩或拆分后重试。",
                 status_code=413, can_retry=False, action="REPLACE_FILE",
             )
-        if not file_bytes:
+        if size <= 0:
             raise AppError(
                 "FILE_EMPTY",
                 "文件为空，请确认上传的是完整的 PDF 资料。",
@@ -70,7 +77,7 @@ class UploadService:
                 "文件类型不是 PDF，请上传 .pdf 文件。",
                 status_code=415, can_retry=False, action="REPLACE_FILE",
             )
-        if not file_bytes.startswith(_PDF_MAGIC):
+        if not header.startswith(_PDF_MAGIC):
             raise AppError(
                 "FILE_CORRUPT",
                 "文件无法打开，请确认原文件可以正常阅读后重试。",
@@ -81,6 +88,19 @@ class UploadService:
 
     def upload_dir(self, user_id: str, book_id: str) -> Path:
         return Path(self.settings.data_dir) / "uploads" / user_id / book_id
+
+    def create_staging_path(self, user_id: str) -> Path:
+        directory = Path(self.settings.data_dir) / "uploads" / ".staging" / user_id
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory / f"{uuid.uuid4().hex}.pdf"
+
+    def adopt_staged(self, staged: Path, user_id: str, book_id: str) -> Path:
+        """Atomically move a validated temporary upload into its final path."""
+        target_dir = self.upload_dir(user_id, book_id)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / "source.pdf"
+        os.replace(staged, target)
+        return target
 
     def save(self, user_id: str, book_id: str, file_bytes: bytes, filename: str) -> Path:
         """Persist the raw PDF under the server-generated path. Returns the path."""

@@ -44,13 +44,10 @@ def test_ingest_then_ask_returns_grounded_answer():
     assert r["chunks"] > 0
 
     ans = svc.ask(project_id="p1", learner_id="u1", question="引用和对象的区别")
-    # Offline model → Tutor falls back to a stitched answer from the top chunk;
-    # the fallback is grounded in a real chunk.
-    assert ans.grounded is True
-    assert ans.chunk_ids
-    # The cited chunk must exist in the repo and belong to the project's book.
-    from bookmind.storage.in_memory import InMemoryRepository  # noqa
-    assert ans.chunk_ids[0] in {c.chunk_id for c in svc.repo.chunks_for_project("p1")}
+    # Offline mode must not expose a retrieved excerpt as though a generated
+    # answer had passed the evidence gate.
+    assert ans.grounded is False
+    assert ans.chunk_ids == []
 
 
 def test_ask_before_ingest_returns_helpful_error():

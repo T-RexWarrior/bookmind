@@ -185,8 +185,8 @@ class IngestRequest(BaseModel):
 class AskRequest(BaseModel):
     learner_id: str
     question: str
-    top_k: int = 5
-    context_budget: int = 4
+    top_k: int = 12
+    context_budget: int = 12
 
 
 class MapBookRequest(BaseModel):
@@ -264,27 +264,40 @@ def create_app(repo: Repository | None = None) -> FastAPI:
             from ..services.ingestion_runner import IngestionRunner
             from ..services.job_service import JobService
             from ..llm.router import ModelRouter
-            from ..retrieval.parsers import MinerUParser, PlainPdfFallback, PyPdfParser, RapidOcrParser
+            from ..retrieval.parsers import AdaptivePdfParser, PlainPdfFallback, PpStructureParser
             from .dependencies import _router_config_from_settings
             settings = get_settings()
             jobs = JobService(repo)
+            model_router = ModelRouter(_router_config_from_settings(
+                settings, live=bool(settings.llm_api_key()),
+            ))
+            high_precision = None
+            if settings.document_parser_url and settings.document_parser in {"auto", "ppstructure"}:
+                high_precision = PpStructureParser(
+                    settings.document_parser_url, timeout=settings.document_parser_timeout,
+                )
             runner = IngestionRunner(
                 repo,
-                ModelRouter(_router_config_from_settings(
-                    settings, live=bool(settings.llm_api_key()),
-                )),
-                jobs, parsers=[MinerUParser(), PyPdfParser(), RapidOcrParser(), PlainPdfFallback()],
+                model_router,
+                jobs, parsers=[
+                    AdaptivePdfParser(high_precision=high_precision, batch_pages=settings.parse_batch_pages),
+                    PlainPdfFallback(),
+                ],
             )
             worker = BackgroundWorker(runner, jobs)
             app.state.background_worker = worker
             app.state.job_service = jobs
             app.state.ingestion_runner = runner
+            app.state.model_router = model_router
             worker.start()
         yield
         # Shutdown: stop the worker thread.
         worker = getattr(app.state, "background_worker", None)
         if worker is not None:
             worker.stop()
+        chat_worker = getattr(app.state, "conversation_worker", None)
+        if chat_worker is not None:
+            chat_worker.stop()
 
     app = FastAPI(title="学迹 · 资料学习空间", version="0.1.0", lifespan=lifespan)
     # The injected repo (or the module-level in-memory one in hermetic tests)

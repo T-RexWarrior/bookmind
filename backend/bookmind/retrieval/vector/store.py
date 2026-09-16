@@ -34,6 +34,10 @@ class VectorStore:
     def embedding_space(self) -> str:
         return self._embedding_space
 
+    @property
+    def dimension(self) -> int:
+        return len(self._vectors[0].vector) if self._vectors else 0
+
     def add(self, chunk: DocumentChunk, vector: list[float]) -> None:
         # All chunks in one index must share one embedding space. The first
         # non-empty space wins; any later chunk with a different non-empty
@@ -69,6 +73,11 @@ class VectorStore:
     ) -> list[tuple[str, float]]:
         """Return the best pairs, ranking only inside the allowed scope."""
         if not self._vectors:
+            return []
+        # Never compare vectors produced by different model spaces/dimensions.
+        # ``zip`` would otherwise silently truncate and return plausible-looking
+        # but meaningless similarities.
+        if len(query_vector) != self.dimension:
             return []
         qn = math.sqrt(sum(v * v for v in query_vector)) or 1.0
         scored: list[tuple[str, float]] = []

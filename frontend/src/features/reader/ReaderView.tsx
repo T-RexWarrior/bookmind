@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import { sourceFileUrl } from "../../api/client";
+import { getSourceQuality, getSourceTextLayer, searchSource, sourceFileUrl } from "../../api/client";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -29,11 +30,29 @@ export function ReaderView({
   const [zoom, setZoom] = useState(1);
   const [error, setError] = useState("");
   const [selection, setSelection] = useState<{ text: string; left: number; top: number } | null>(null);
+  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchPages, setSearchPages] = useState<number[]>([]);
+  const [searchIndex, setSearchIndex] = useState(0);
+  const [printedPages, setPrintedPages] = useState<Record<number, string>>({});
+  const [ocrLayer, setOcrLayer] = useState<Awaited<ReturnType<typeof getSourceTextLayer>> | null>(null);
 
   useEffect(() => {
     setPage(initialPage || 1);
     setError("");
   }, [initialPage, sourceId]);
+
+  useEffect(() => {
+    void getSourceQuality(sourceId).then((quality) => {
+      setPrintedPages(Object.fromEntries(quality.pages.filter((item) => item.printed_page).map((item) => [item.page, item.printed_page!])))
+    }).catch(() => setPrintedPages({}));
+  }, [sourceId]);
+
+  useEffect(() => {
+    setOcrLayer(null);
+    void getSourceTextLayer(sourceId, page).then(setOcrLayer).catch(() => setOcrLayer(null));
+  }, [sourceId, page]);
 
   useEffect(() => {
     const node = viewportRef.current;
@@ -84,6 +103,35 @@ export function ReaderView({
     setSelection({ text, left: Math.max(12, rect.left + rect.width / 2), top: Math.max(12, rect.top - 10) });
   };
 
+  const runSearch = async () => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query || !pdfDocument) return;
+    setSearching(true);
+    const matches: number[] = [];
+    try {
+      for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+        const pdfPage = await pdfDocument.getPage(pageNumber);
+        const content = await pdfPage.getTextContent();
+        const text = content.items.map((item) => "str" in item ? item.str : "").join(" ").toLocaleLowerCase();
+        if (text.includes(query)) matches.push(pageNumber);
+      }
+      const parsed = await searchSource(sourceId, searchQuery.trim()).catch(() => ({ results: [] }));
+      const combined = [...new Set([...matches, ...parsed.results.map((result) => result.page)])].sort((a, b) => a - b);
+      setSearchPages(combined);
+      setSearchIndex(0);
+      if (combined[0]) moveTo(combined[0]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const moveSearch = (offset: number) => {
+    if (!searchPages.length) return;
+    const next = (searchIndex + offset + searchPages.length) % searchPages.length;
+    setSearchIndex(next);
+    moveTo(searchPages[next]);
+  };
+
   return (
     <section className="source-viewer" aria-label={`正在阅读 ${title}`}>
       <div className="source-viewer__toolbar">
@@ -95,6 +143,21 @@ export function ReaderView({
           </div>
         </div>
         <div className="reader-controls">
+          <label className="page-input" title="在 PDF 文字层中搜索">
+            <input
+              style={{ width: 110, textAlign: "left" }}
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && void runSearch()}
+              placeholder="搜索正文"
+            />
+          </label>
+          <button className="icon-button" onClick={() => void runSearch()} disabled={searching || !searchQuery.trim()} aria-label="搜索">⌕</button>
+          {searchPages.length ? <>
+            <button className="icon-button" onClick={() => moveSearch(-1)} aria-label="上一个搜索结果">↑</button>
+            <span>{searchIndex + 1}/{searchPages.length}</span>
+            <button className="icon-button" onClick={() => moveSearch(1)} aria-label="下一个搜索结果">↓</button>
+          </> : null}
           <button className="icon-button" onClick={() => setZoom((z) => Math.max(.7, z - .1))} aria-label="缩小">−</button>
           <span>{Math.round(zoom * 100)}%</span>
           <button className="icon-button" onClick={() => setZoom((z) => Math.min(1.6, z + .1))} aria-label="放大">＋</button>
@@ -123,7 +186,9 @@ export function ReaderView({
         ) : (
           <Document
             file={sourceFileUrl(sourceId)}
-            onLoadSuccess={({ numPages: count }) => {
+            onLoadSuccess={(loadedDocument) => {
+              const count = loadedDocument.numPages;
+              setPdfDocument(loadedDocument);
               setNumPages(count);
               setError("");
               if (page > count) moveTo(count);
@@ -131,13 +196,28 @@ export function ReaderView({
             onLoadError={(reason) => setError(reason?.message || "无法打开原文件。")}
             loading={<div className="source-loading"><span className="loading-ring" />正在打开原资料…</div>}
           >
-            <Page
-              pageNumber={page}
-              renderTextLayer
-              renderAnnotationLayer
-              width={Math.min(980, width) * zoom}
-              loading={<div className="source-loading">正在渲染第 {page} 页…</div>}
-            />
+            <div style={{ position: "relative" }}>
+              <Page
+                pageNumber={page}
+                renderTextLayer
+                renderAnnotationLayer
+                width={Math.min(980, width) * zoom}
+                loading={<div className="source-loading">正在渲染第 {page} 页…</div>}
+              />
+              {ocrLayer?.ready && ocrLayer.parser !== "pypdf" && ocrLayer.width && ocrLayer.height && ocrLayer.blocks.length ? (
+                <div aria-label="OCR 可选择文字层" style={{ position: "absolute", inset: 0, zIndex: 3, pointerEvents: "none" }}>
+                  {ocrLayer.blocks.map((block) => {
+                    const [x0, y0, x1, y1] = block.bbox;
+                    return <span key={block.block_id} style={{
+                      position: "absolute", left: `${x0 / ocrLayer.width! * 100}%`, top: `${y0 / ocrLayer.height! * 100}%`,
+                      width: `${(x1 - x0) / ocrLayer.width! * 100}%`, height: `${(y1 - y0) / ocrLayer.height! * 100}%`,
+                      color: "transparent", userSelect: "text", pointerEvents: "auto", overflow: "hidden",
+                      fontSize: `${Math.max(8, (y1 - y0) / ocrLayer.height! * Math.min(980, width) * zoom)}px`, lineHeight: 1,
+                    }}>{block.text}</span>;
+                  })}
+                </div>
+              ) : null}
+            </div>
           </Document>
         )}
       </div>
@@ -157,7 +237,7 @@ export function ReaderView({
       {numPages > 0 && !error && (
         <nav className="reader-page-dock" aria-label="PDF 翻页">
           <button onClick={() => moveTo(page - 1)} disabled={page <= 1}>← 上一页</button>
-          <strong>第 {page} / {numPages} 页</strong>
+          <strong>第 {page} / {numPages} 页{printedPages[page] ? ` · 印刷页 ${printedPages[page]}` : ""}</strong>
           <button onClick={() => moveTo(page + 1)} disabled={page >= numPages}>下一页 →</button>
         </nav>
       )}

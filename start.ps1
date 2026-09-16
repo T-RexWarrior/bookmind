@@ -1,6 +1,6 @@
 # 学迹 / BookMind — Windows single-machine startup (PRODUCTIZATION §13 fallback).
 # No Docker / PostgreSQL needed. Starts the API (serving the frontend at /ui)
-# in offline deterministic mode. Set USTC_LLM_API_KEY for live-model enhancement.
+# with the official DeepSeek API when its key environment/file is configured.
 #
 # Usage:  powershell -ExecutionPolicy Bypass -File start.ps1
 #         then open http://localhost:18765/ui
@@ -50,10 +50,16 @@ Write-Host "BookMind is starting." -ForegroundColor Green
 Write-Host "UI:    http://${Host_}:$Port/ui/"
 Write-Host "API:   http://${Host_}:$Port/docs"
 $envFileHasKey = $false
+$envFileHasKeyFile = $false
 if (Test-Path -LiteralPath ".env") {
-    $envFileHasKey = [bool](Select-String -LiteralPath ".env" -Pattern '^USTC_LLM_API_KEY=.+$' -Quiet)
+    $envFileHasKey = [bool](Select-String -LiteralPath ".env" -Pattern '^DEEPSEEK_API_KEY=.+$' -Quiet)
+    $keyFileLine = Select-String -LiteralPath ".env" -Pattern '^BOOKMIND_LLM_API_KEY_FILE=(.+)$' | Select-Object -First 1
+    if ($keyFileLine) {
+        $keyFilePath = $keyFileLine.Matches[0].Groups[1].Value.Trim()
+        $envFileHasKeyFile = [bool]($keyFilePath -and (Test-Path -LiteralPath $keyFilePath))
+    }
 }
-$keySet = if ($env:USTC_LLM_API_KEY -or $envFileHasKey) { "campus model enabled" } else { "offline fallback" }
+$keySet = if ($env:DEEPSEEK_API_KEY -or $envFileHasKey -or $envFileHasKeyFile) { "DeepSeek official API enabled" } else { "offline fallback" }
 Write-Host "Model: $keySet"
 Write-Host "Press Ctrl+C to stop."
 Write-Host ""

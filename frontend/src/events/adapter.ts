@@ -72,6 +72,18 @@ export function applySseEvent(snap: LiveRunSnapshot, type: EventType, data: Reco
       };
       break;
     }
+    case "source_locations_ready": {
+      const locations = Array.isArray(data.locations) ? data.locations as Record<string, unknown>[] : [];
+      snap.citations = locations.map((location, index) => ({
+        index: index + 1,
+        chunk_id: String(location.chunk_id || ""),
+        page: String(location.page_start || location.page || ""),
+        book_id: String(location.book_id || ""),
+        label: `${Array.isArray(location.section_path) ? location.section_path.join(" · ") + " · " : ""}第 ${location.page_start || location.page || "?"}${location.page_end && location.page_end !== location.page_start ? `～${location.page_end}` : ""} 页`,
+      }));
+      snap.toolStatus = "已找到相关教材位置，正在生成回答…";
+      break;
+    }
     case "fallback_used":
       snap.fallback = true;
       break;
@@ -82,6 +94,11 @@ export function applySseEvent(snap: LiveRunSnapshot, type: EventType, data: Reco
     case "run_failed":
       snap.status = "failed";
       snap.error = (data.error as string) || "处理失败";
+      snap.toolStatus = "";
+      break;
+    case "run_cancelled":
+      snap.status = "failed";
+      snap.error = "已停止生成回答";
       snap.toolStatus = "";
       break;
     default:

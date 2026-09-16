@@ -252,6 +252,13 @@ class IngestionJobRow(Base):
     parse_key: Mapped[str] = mapped_column(String(64), default="")
     chunk_key: Mapped[str] = mapped_column(String(64), default="")
     index_key: Mapped[str] = mapped_column(String(64), default="")
+    pages_done: Mapped[int] = mapped_column(Integer, default=0)
+    pages_total: Mapped[int] = mapped_column(Integer, default=0)
+    parser_mode: Mapped[str] = mapped_column(String(32), default="auto")
+    quality_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    warnings: Mapped[list] = mapped_column(JSON, default=list)
+    checkpoint_stage: Mapped[str] = mapped_column(String(64), default="")
+    force_reparse: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 

@@ -1,20 +1,28 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../../store/appStore";
 import type { LearningSourceView } from "../../types/blocks";
 import { IngestionCard } from "../ingestion/IngestionCard";
+import * as api from "../../api/client";
+import { toast } from "../../components/ui/primitives";
 
 export function SourceLibrary({
   onSelect,
 }: {
   onSelect: (source: LearningSourceView, page?: number) => void;
 }) {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const [filter, setFilter] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<LearningSourceView["outline"]>([]);
   const active = state.sources.find((source) => source.source_id === state.reader?.sourceId);
   const sources = useMemo(
     () => state.sources.filter((source) => source.title.toLowerCase().includes(filter.toLowerCase())),
     [filter, state.sources],
   );
+  useEffect(() => {
+    setDraft(active?.outline || []);
+    setEditing(false);
+  }, [active?.source_id, active?.outline]);
 
   return (
     <aside className="source-library">
@@ -70,9 +78,53 @@ export function SourceLibrary({
             <span>资料目录</span>
             <small>{active.section_count ? `${active.section_count} 节` : "解析后生成"}</small>
           </div>
-          {active.outline?.length ? (
+          {active.warnings?.length ? (
+            <p className="outline-placeholder" style={{ color: "var(--warning)" }}>{active.warnings[0]}</p>
+          ) : null}
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <button className="btn subtle" onClick={() => setEditing((value) => !value)}>
+              {editing ? "取消编辑" : "编辑目录"}
+            </button>
+            <button className="btn subtle" onClick={async () => {
+              try {
+                const result = await api.reparseSource(active.source_id);
+                const projectId = state.activeProject?.project_id;
+                const initial = await api.getJob(result.job_id);
+                dispatch({ type: "SET_JOB", job: initial, projectId });
+                api.pollJob(result.job_id, { onProgress: (job) => dispatch({ type: "SET_JOB", job, projectId }) });
+              } catch (error) {
+                toast((error as Error).message || "无法重新处理资料");
+              }
+            }}>新版重解析</button>
+          </div>
+          {editing ? (
             <div className="outline-list">
-              {active.outline.slice(0, 80).map((item, index) => (
+              {draft.map((item, index) => (
+                <div key={index} style={{ display: "grid", gridTemplateColumns: "1fr 58px 26px 26px 26px", gap: 5 }}>
+                  <input value={item.title} onChange={(event) => setDraft((items) => items.map((old, i) => i === index ? { ...old, title: event.target.value } : old))} />
+                  <input type="number" min={1} value={item.page} onChange={(event) => setDraft((items) => items.map((old, i) => i === index ? { ...old, page: Number(event.target.value) } : old))} />
+                  <button title="降低层级" disabled={(item.path?.length || 1) <= 1} onClick={() => setDraft((items) => items.map((old, i) => i === index ? { ...old, path: [...(old.path || []).slice(0, -2), old.title] } : old))}>←</button>
+                  <button title="增加层级" disabled={index === 0} onClick={() => setDraft((items) => items.map((old, i) => i === index ? { ...old, path: [...(items[index - 1].path || [items[index - 1].title]), old.title] } : old))}>→</button>
+                  <button aria-label="删除目录项" onClick={() => setDraft((items) => items.filter((_, i) => i !== index))}>×</button>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn subtle" onClick={() => setDraft((items) => [...items, { title: "新目录项", page: items.at(-1)?.page || 1, path: [] }])}>添加</button>
+                <button className="btn primary" onClick={async () => {
+                  try {
+                    const result = await api.updateSourceOutline(active.source_id, draft);
+                    setDraft(result.items);
+                    setEditing(false);
+                    toast("目录已保存");
+                  } catch (error) {
+                    toast((error as Error).message || "目录保存失败");
+                  }
+                }}>保存</button>
+              </div>
+            </div>
+          ) : draft.length ? (
+            <div className="outline-list">
+              {draft.slice(0, 80).map((item, index) => (
                 <button key={`${item.page}-${index}`} onClick={() => onSelect(active, item.page)}>
                   <span>{item.title}</span>
                   <small>{item.page}</small>
@@ -97,6 +149,9 @@ function sourceStatus(source: LearningSourceView): string {
     if (source.concept_count) parts.push(`${source.concept_count} 个知识点`);
     return parts.join(" · ") || "可阅读、可提问";
   }
-  if (source.state === "RUNNING" || source.state === "PENDING") return source.stage || "正在慢慢整理";
+  if (source.state === "RUNNING" || source.state === "PENDING") {
+    if (source.pages_total) return `${source.checkpoint_stage || source.stage} · ${source.pages_done || 0}/${source.pages_total} 页`;
+    return source.stage || "正在慢慢整理";
+  }
   return source.stage || "还需要再试一次";
 }

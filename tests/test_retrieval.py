@@ -86,6 +86,28 @@ def test_chunk_ids_are_unique_across_sections_and_content_stays_readable():
     assert all("引 用 变 量" not in chunk.content for chunk in chunks)
 
 
+def test_repeated_section_path_is_not_merged_across_distant_pages():
+    doc = ParsedDocument(
+        document_id="d-repeat", source_file="book.pdf", source_hash="h",
+        parser="test", parser_version="1",
+        blocks=[
+            Block(block_id="b1", text="第一部分", physical_page=10,
+                  reading_order=0, section_path=("第一章",)),
+            Block(block_id="b2", text="中间章节", physical_page=20,
+                  reading_order=1, section_path=("第二章",)),
+            Block(block_id="b3", text="习题解析中的第一章", physical_page=410,
+                  reading_order=2, section_path=("第一章",)),
+        ],
+    )
+
+    chunks = Chunker(target_tokens=40, overlap_tokens=5).chunk(doc, "book1")
+
+    first_chapter = [chunk for chunk in chunks if chunk.section_path == ("第一章",)]
+    assert len(first_chapter) == 2
+    assert all(chunk.page_start == chunk.page_end for chunk in first_chapter)
+    assert first_chapter[0].parent_chunk_id != first_chapter[1].parent_chunk_id
+
+
 # --- BM25 ----------------------------------------------------------------
 
 def test_bm25_ranks_relevant_chunk_first():
@@ -143,6 +165,14 @@ def test_vector_store_cosine_and_space_guard():
         vs.add(c3, [1.0])
 
 
+def test_vector_store_rejects_mismatched_query_dimension():
+    vs = VectorStore()
+    chunk = _chunk(_doc_with_two_sections(), "ck1", "a", 1, ("s",), ["b1"])
+    vs.add(chunk.model_copy(update={"embedding_space": "space-a"}), [1.0, 0.0])
+
+    assert vs.search([1.0], k=1) == []
+
+
 # --- RRF -----------------------------------------------------------------
 
 def test_rrf_fuses_and_promotes_both_sources():
@@ -178,6 +208,29 @@ def test_hybrid_retriever_returns_relevant_within_budget():
     assert "ck3" in ids
 
 
+def test_retriever_carries_same_parent_neighbour_across_chunk_boundary(monkeypatch):
+    doc = _doc_with_two_sections()
+    parent = "section-parent"
+    chunks = [
+        _chunk(doc, "ck1", "算法是一个指令序列。", 1, ("算法",), ["b1"]).model_copy(
+            update={"parent_chunk_id": parent}
+        ),
+        _chunk(doc, "ck2", "算法的要素包括输入与输出。", 1, ("算法",), ["b2"]).model_copy(
+            update={"parent_chunk_id": parent}
+        ),
+        _chunk(doc, "ck3", "散列表使用散列函数。", 2, ("散列",), ["b3"]),
+    ]
+    router = ModelRouter(RouterConfig(live=False, embedding_enabled=False))
+    retriever = HybridRetriever(BM25Index(), VectorStore(), router, rerank_enabled=False)
+    retriever.index_chunks(chunks)
+    monkeypatch.setattr(router, "expand_query", lambda _: ["算法 指令序列"])
+
+    hits = retriever.retrieve("算法如何定义", context_budget=2)
+
+    assert [hit.chunk.chunk_id for hit in hits] == ["ck1", "ck2"]
+    assert hits[1].adjacent_context is True
+
+
 def test_hybrid_retriever_uses_ascii_concept_to_drop_unrelated_chapters():
     doc = _doc_with_two_sections()
     chunks = [
@@ -189,6 +242,88 @@ def test_hybrid_retriever_uses_ascii_concept_to_drop_unrelated_chapters():
         "改进版 bitmap 目前不支持什么功能", top_k=3, context_budget=3,
     )
     assert [hit.chunk.chunk_id for hit in hits] == ["ck1"]
+
+
+def test_hybrid_retriever_expands_chinese_query_on_english_book_miss(monkeypatch):
+    doc = _doc_with_two_sections()
+    chunks = [
+        _chunk(doc, "ck1", "A binary search tree stores ordered keys.", 10,
+               ("Binary Search Trees",), ["b1"]),
+        _chunk(doc, "ck2", "A priority queue supports insert and delete-min.", 20,
+               ("Priority Queues",), ["b2"]),
+    ]
+    router = ModelRouter(RouterConfig(live=False, embedding_enabled=False))
+    retriever = HybridRetriever(
+        bm25_index=BM25Index(), vector_store=VectorStore(), router=router,
+        rerank_enabled=False,
+    )
+    retriever.index_chunks(chunks)
+    monkeypatch.setattr(
+        router, "expand_query", lambda _: ["binary search tree", "BST"],
+    )
+
+    hits = retriever.retrieve("什么是二叉搜索树？", context_budget=2)
+
+    assert hits
+    assert hits[0].chunk.chunk_id == "ck1"
+
+
+def test_query_facets_recall_separate_answer_parts(monkeypatch):
+    doc = _doc_with_two_sections()
+    chunks = [
+        _chunk(doc, "ck1", "括号匹配时左括号压栈，右括号弹栈。", 10,
+               ("括号匹配",), ["b1"]),
+        _chunk(doc, "ck2", "每个字符只扫描一次，时间复杂度为 O(n)。", 11,
+               ("括号匹配",), ["b2"]),
+        _chunk(doc, "ck3", "二叉树由节点组成。", 20, ("树",), ["b3"]),
+    ]
+    router = ModelRouter(RouterConfig(live=False, embedding_enabled=False))
+    retriever = HybridRetriever(BM25Index(), VectorStore(), router, rerank_enabled=False)
+    retriever.index_chunks(chunks)
+    monkeypatch.setattr(
+        router, "expand_query",
+        lambda _: ["括号匹配 压栈 弹栈", "括号匹配 时间复杂度 O(n)"],
+    )
+
+    hits = retriever.retrieve("如何检查括号匹配，复杂度是多少？", context_budget=3)
+
+    assert {hit.chunk.chunk_id for hit in hits} >= {"ck1", "ck2"}
+
+
+def test_navigation_index_does_not_outrank_explanatory_text(monkeypatch):
+    doc = _doc_with_two_sections()
+    chunks = [
+        _chunk(doc, "body", "B-树节点上溢时通过分裂处理。", 240,
+               ("第8章", "B-树"), ["b1"]),
+        _chunk(doc, "index", "B-树 上溢 分裂 查找 外部存储 B-tree", 663,
+               ("附录", "关键词索引"), ["b2"]),
+    ]
+    router = ModelRouter(RouterConfig(live=False, embedding_enabled=False))
+    retriever = HybridRetriever(BM25Index(), VectorStore(), router, rerank_enabled=False)
+    retriever.index_chunks(chunks)
+    monkeypatch.setattr(router, "expand_query", lambda _: ["B-树 上溢 分裂"])
+
+    hits = retriever.retrieve("B-树上溢如何处理", context_budget=2)
+
+    assert [hit.chunk.chunk_id for hit in hits] == ["body"]
+
+
+def test_single_letter_in_translated_term_is_not_a_hard_filter(monkeypatch):
+    doc = _doc_with_two_sections()
+    chunks = [
+        _chunk(doc, "heading", "B-树是一种多路搜索树。", 234,
+               ("第8章", "B-树"), ["b1"]),
+        _chunk(doc, "reason", "外部存储适合批量访问，从而可以减少I/O次数。", 235,
+               ("第8章", "B-树"), ["b2"]),
+    ]
+    router = ModelRouter(RouterConfig(live=False, embedding_enabled=False))
+    retriever = HybridRetriever(BM25Index(), VectorStore(), router, rerank_enabled=False)
+    retriever.index_chunks(chunks)
+    monkeypatch.setattr(router, "expand_query", lambda _: [])
+
+    hits = retriever.retrieve("B-树为什么适合外部存储", context_budget=2)
+
+    assert {hit.chunk.chunk_id for hit in hits} == {"heading", "reason"}
 
 
 def test_hybrid_retriever_allowlist_filters():
@@ -249,6 +384,27 @@ def test_citation_rejects_quote_not_in_chunk():
     )
     assert report.ok is False
     assert "not found" in report.checks[0].reason
+
+
+def test_citation_accepts_only_layout_whitespace_differences():
+    doc = _doc_with_two_sections()
+    c = _chunk(doc, "ck1", "算法是一个指令序列，\n用于解决信息处理问题。", 1,
+               ("算法",), ["b1"])
+    report = CitationValidator({"ck1": c}, {"book1"}).validate(
+        citations=[{"chunk_id": "ck1", "quote": "算法是一个指令序列，用于解决信息处理问题。"}],
+        context_chunk_ids=["ck1"],
+    )
+    assert report.ok is True
+
+
+def test_citation_rejects_empty_quote():
+    doc = _doc_with_two_sections()
+    c = _chunk(doc, "ck1", "算法是一个指令序列。", 1, ("算法",), ["b1"])
+    report = CitationValidator({"ck1": c}, {"book1"}).validate(
+        citations=[{"chunk_id": "ck1", "quote": ""}], context_chunk_ids=["ck1"],
+    )
+    assert report.ok is False
+    assert report.checks[0].reason == "quote is empty"
 
 
 def test_citation_rejects_chunk_not_in_context():

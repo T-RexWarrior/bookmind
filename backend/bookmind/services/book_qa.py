@@ -8,6 +8,7 @@ transactions and scope checks that Agents and the Engine must not bypass.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 
 from ..agents.tutor import TutorAgent
 from ..domain.enums import ActivityMode, InterventionPolicy
@@ -26,6 +27,8 @@ class AskResult:
     grounded: bool
     chunk_ids: list[str]
     reason: str
+    retrieval_confidence: float = 0.0
+    fallback: bool = False
 
 
 class BookQAService:
@@ -73,9 +76,10 @@ class BookQAService:
         }
 
     def ask(self, *, project_id: str, learner_id: str, question: str,
-            top_k: int = 5, context_budget: int = 4,
+            top_k: int = 12, context_budget: int = 12,
             source_ids: list[str] | None = None,
-            physical_page: int | None = None) -> AskResult:
+            physical_page: int | None = None,
+            on_retrieval: Callable[[list[dict], float, bool], None] | None = None) -> AskResult:
         """Answer from the selected source range with grounded citations."""
         self.repo.assert_project_owned_by(project_id, learner_id)
         # P1-10: in ASSESSMENT mode the learner is being independently verified,
@@ -113,7 +117,11 @@ class BookQAService:
         scoped_chunks = [
             chunk for chunk in self.repo.chunks_for_project(project_id)
             if chunk.book_id in allowed_book_ids
-            and (physical_page is None or chunk.source_ref.physical_page == physical_page)
+            and (
+                physical_page is None
+                or (chunk.page_start or chunk.source_ref.physical_page) <= physical_page
+                <= (chunk.page_end or chunk.page_start or chunk.source_ref.physical_page)
+            )
         ]
         allow_chunks = {c.chunk_id for c in scoped_chunks}
         if not allow_chunks:
@@ -124,27 +132,86 @@ class BookQAService:
         )
         if not hits:
             return AskResult("", [], False, [], "no relevant chunks found")
+        if physical_page is not None:
+            for hit in hits:
+                if hit.bm25_rank is not None:
+                    hit.confidence = max(hit.confidence, 0.85)
+                    hit.confidence_label = "HIGH"
+        reliable_hits = [hit for hit in hits if hit.confidence_label == "HIGH"]
+        preliminary_locations = _server_locations(reliable_hits)
+        retrieval_confidence = max((hit.confidence for hit in hits), default=0.0)
+        if on_retrieval:
+            on_retrieval(preliminary_locations, retrieval_confidence, bool(reliable_hits))
+        if not reliable_hits:
+            return AskResult(
+                answer_text=(
+                    "未能在当前教材范围中可靠定位足够依据，本次不生成可能失真的回答。\n\n"
+                    "你可以切换到具体页面、选中一段原文后再问，或换用教材中的术语描述问题。"
+                ),
+                citations=[], grounded=False, chunk_ids=[],
+                reason="no high-confidence retrieval evidence",
+                retrieval_confidence=retrieval_confidence,
+            )
+        # A high-confidence hit opens the evidence gate. Its lower-scored
+        # same-section neighbours remain useful context (definitions and lists
+        # are commonly split across chunk boundaries), but the Tutor must cite
+        # the exact supporting chunk before any of them can appear in an answer.
+        answer_hits = hits
         # Build context (mode-agnostic for a plain question → Reading/Proactive).
         ctx = self.context_builder.build(ContextRequest(
             activity_mode=ActivityMode.READING,
             intervention_policy=InterventionPolicy.PROACTIVE,
-            retrieved_chunks=[h.chunk for h in hits],
+            retrieved_chunks=[h.chunk for h in answer_hits],
         ))
         validator = CitationValidator(
             {c.chunk_id: c for c in scoped_chunks},
             allowed_book_ids,
         )
         tutor = TutorAgent(self.router, validator)
-        # Product requests prefer one bounded, structured model call. A second
-        # full provider/fallback chain made malformed citations feel like the
-        # app had frozen; citation failure now returns an honest refusal.
-        # Grounded textbook answers are intentionally concise. A 4096-token
-        # output budget made reasoning models run until the transport timeout;
-        # 1024 leaves ample answer space while keeping latency predictable.
-        ans = tutor.answer(question, hits, max_attempts=1, max_tokens=1024)
+        # deepseek-flash can use a substantial part of the completion budget
+        # for reasoning before emitting the short JSON answer.  A 4096-token
+        # ceiling prevents false empty-content fallbacks; the prompt still asks
+        # for a concise learner-facing response.
+        ans = tutor.answer(
+            question, answer_hits, max_attempts=2, max_tokens=4096,
+        )
+        supported_ids = set(ans.chunk_ids) if ans.grounded else set()
+        supported_hits = [
+            hit for hit in answer_hits if hit.chunk.chunk_id in supported_ids
+        ]
+        quote_by_id = {
+            str(item.get("chunk_id") or ""): str(item.get("quote") or "")
+            for item in ans.citations
+        }
+        citations = _server_locations(supported_hits)
+        for citation in citations:
+            citation["quote"] = quote_by_id.get(citation["chunk_id"], "")
+        grounded = bool(ans.grounded and supported_hits)
+        answer_text = ans.text
+        reason = ans.reason
+        if ans.fallback:
+            if reliable_hits:
+                answer_text = "模型暂时不可用，本次没有生成回答。\n\n你可以先打开相关原文阅读，稍后重新生成回答。"
+                # Locations remain server-derived and safe even though no answer
+                # claim passed the evidence gate.
+                citations = preliminary_locations
+            else:
+                answer_text = (
+                    "模型暂时不可用，本次没有生成回答。\n\n"
+                    "当前也未能在教材中可靠定位相关内容，请选择具体页面或换一种问法。"
+                )
+        elif not grounded:
+            answer_text = (
+                f"{answer_text}\n\n回答的教材依据校验未通过，本次不记录知识点疑问。"
+            )
+        if not ans.fallback and answer_text:
+            answer_text = f"[AI综合回答]\n\n{answer_text}\n\nAI回答可能不完全正确，请结合教材原文核对。"
         return AskResult(
-            answer_text=ans.text, citations=ans.citations,
-            grounded=ans.grounded, chunk_ids=ans.chunk_ids, reason=ans.reason,
+            answer_text=answer_text, citations=citations,
+            grounded=grounded, chunk_ids=[hit.chunk.chunk_id for hit in supported_hits],
+            reason=reason,
+            retrieval_confidence=retrieval_confidence,
+            fallback=ans.fallback,
         )
 
     def _maybe_rebuild_retriever(self, project_id: str, learner_id: str) -> None:
@@ -184,7 +251,8 @@ class BookQAService:
                         if source is not None:
                             parsed_root = Path(settings.data_dir) / "parsed" / source.source_hash
                             if source.parser_version:
-                                parsed_candidates.append(parsed_root / source.parser_version / "document.json")
+                                parsed_candidates.extend((parsed_root / source.parser_version).glob("*/document.json"))
+                            parsed_candidates.extend(parsed_root.glob("*/*/document.json"))
                             parsed_candidates.extend(parsed_root.glob("*/document.json"))
                         parsed_path = next((candidate for candidate in parsed_candidates if candidate.is_file()), None)
                         if parsed_path is not None:
@@ -206,8 +274,27 @@ class BookQAService:
         if not chunks:
             return
         ret = HybridRetriever(bm25_index=BM25Index(), vector_store=VectorStore(),
-                              router=self.router, rerank_enabled=False)
-        ret.index_chunks(chunks, use_local_embeddings=True)
+                              router=self.router, rerank_enabled=True)
+        # Restore the exact persisted embedding vectors. Never silently replace
+        # a live embedding space with local hash vectors after restart.
+        for chunk in chunks:
+            ret.chunks[chunk.chunk_id] = chunk
+            ret.bm25_index.add(chunk)
+        from ..retrieval.persistent_index import load_vectors
+        by_id = {chunk.chunk_id: chunk for chunk in chunks}
+        active_space = ""
+        for bid in book_ids:
+            ids, matrix, model = load_vectors(Path(settings.data_dir) / "indexes" / bid)
+            if matrix is None or not model or (active_space and active_space != model):
+                continue
+            active_space = model
+            for row_index, chunk_id in enumerate(ids):
+                chunk = by_id.get(chunk_id)
+                if chunk is None:
+                    continue
+                indexed = chunk.model_copy(update={"embedding_space": model})
+                ret.chunks[chunk_id] = indexed
+                ret.vector_store.add(indexed, matrix[row_index].tolist())
         self.repo.set_retriever(project_id, ret)
         for bid in book_ids:
             self.repo.add_chunks(bid, [c for c in chunks if c.book_id == bid])
@@ -245,7 +332,8 @@ class BookQAService:
         root = Path(get_settings().data_dir) / "parsed" / source.source_hash
         candidates = []
         if source.parser_version:
-            candidates.append(root / source.parser_version / "document.json")
+            candidates.extend((root / source.parser_version).glob("*/document.json"))
+        candidates.extend(root.glob("*/*/document.json"))
         candidates.extend(root.glob("*/document.json"))
         path = next((item for item in candidates if item.is_file()), None)
         if path is None:
@@ -277,6 +365,28 @@ class BookQAService:
 def _sha256(data: bytes) -> str:
     import hashlib
     return hashlib.sha256(data).hexdigest()
+
+
+def _server_locations(hits: list[RetrievalHit]) -> list[dict]:
+    locations: list[dict] = []
+    seen: set[tuple] = set()
+    for hit in hits:
+        chunk = hit.chunk
+        start = chunk.page_start or chunk.source_ref.physical_page
+        end = chunk.page_end or start
+        key = (chunk.book_id, chunk.section_path, start, end)
+        if key in seen:
+            continue
+        seen.add(key)
+        locations.append({
+            "chunk_id": chunk.chunk_id, "book_id": chunk.book_id,
+            "section_path": list(chunk.section_path), "page": str(start),
+            "page_start": start, "page_end": end,
+            "confidence": hit.confidence,
+        })
+        if len(locations) >= 3:
+            break
+    return locations
 
 
 def _new_retriever(router: ModelRouter) -> HybridRetriever:
