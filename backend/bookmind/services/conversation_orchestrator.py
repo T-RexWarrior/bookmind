@@ -168,6 +168,15 @@ def interpret_intent(
         confidence = float(parsed.get("confidence", 0))
     except (TypeError, ValueError):
         confidence = 0.0
+    # With no outstanding exercise, the deterministic floor deliberately
+    # treats ordinary learner prose as a textbook question.  An intent-model
+    # “GENERAL_CHAT” must not turn a concrete short query such as “列表是
+    # 什么” into a generic chat acknowledgement; it loses both the answer and
+    # the QUESTION evidence.  GENERAL_CHAT remains available for explicit
+    # slash commands and empty input, which the deterministic floor already
+    # handles above.
+    if fallback == "ASK_BOOK" and intent == "GENERAL_CHAT":
+        return "ASK_BOOK"
     if intent in _INTENT_VALUES and confidence >= 0.72:
         return intent  # type: ignore[return-value]
     return fallback
@@ -407,6 +416,7 @@ class ConversationOrchestrator:
             if forced_intent == "ASK_BOOK":
                 blocks, seq = self._ask_book(
                     project_id=state["project_id"], learner_id=state["learner_id"],
+                    conversation_id=conversation.conversation_id,
                     question=_rewrite_followup(state["user_text"], state["history"]),
                     run_id=state["run_id"], seq=seq, events=events,
                     source_context=state.get("source_context", {}),
@@ -415,6 +425,7 @@ class ConversationOrchestrator:
             elif forced_intent == "START_LEARNING":
                 blocks, seq = self._start_learning(
                     project_id=state["project_id"], learner_id=state["learner_id"],
+                    conversation_id=conversation.conversation_id,
                     run_id=state["run_id"], seq=seq, events=events,
                 )
             elif forced_intent == "SWITCH_MODE":
@@ -462,8 +473,16 @@ class ConversationOrchestrator:
                 if pending is None:
                     blocks = [ContentBlock(type="text", text="当前没有待完成的题目。")]
                 else:
-                    self.task_service.skip_task(pending["task_id"])
-                    blocks = [ContentBlock(type="text", text="已跳过这道题，不会把它记为错误。现在可以开始下一题。")]
+                    task_id = pending["task_id"]
+                    self.task_service.skip_task(task_id)
+                    blocks = [
+                        ContentBlock(type="text", text="已跳过这道题，不会把它记为错误答案。"),
+                        ContentBlock(type="task", data={
+                            "kind": "task_complete", "task_id": task_id,
+                            "completion_status": "SKIPPED",
+                            "source_scope": self.task_service.source_scope_for_task(task_id),
+                        }),
+                    ]
             elif forced_intent == "UNSURE_OR_GIVE_UP":
                 pending = self.repo.pending_task_for_conversation(conversation.conversation_id)
                 if pending is None:
@@ -474,13 +493,34 @@ class ConversationOrchestrator:
                         "prompt_text": pending.get("prompt_text", ""),
                     })]
             elif forced_intent == "REQUEST_EXPLANATION":
-                blocks, seq = self._ask_book(
-                    project_id=state["project_id"], learner_id=state["learner_id"],
-                    question=_rewrite_followup(state["user_text"], state["history"]),
-                    run_id=state["run_id"], seq=seq, events=events,
-                    source_context=state.get("source_context", {}),
-                    event_sink=state.get("event_sink"),
-                )
+                pending = self.repo.pending_task_for_conversation(conversation.conversation_id)
+                if pending is not None:
+                    explanation = self.task_service.explain_task(pending["task_id"])
+                    source_scope = explanation.get("source_scope") or []
+                    blocks = []
+                    if source_scope:
+                        blocks.append(ContentBlock(type="context", data={
+                            "kind": "answer_context", "scope": "本题资料定位",
+                            "reason": "讲解依据本题的题干、标准答案和判分要点生成；资料定位仅供回原文复习。",
+                            "items": source_scope,
+                        }))
+                    blocks.extend([
+                        ContentBlock(type="status", text="已展示讲解并结束本题；这次不会记为作答证据。"),
+                        ContentBlock(type="text", text=explanation["text"]),
+                        ContentBlock(type="task", data={
+                            "kind": "task_complete", "task_id": pending["task_id"],
+                            "completion_status": "EXPLAINED", "source_scope": source_scope,
+                        }),
+                    ])
+                else:
+                    blocks, seq = self._ask_book(
+                        project_id=state["project_id"], learner_id=state["learner_id"],
+                        conversation_id=conversation.conversation_id,
+                        question=_rewrite_followup(state["user_text"], state["history"]),
+                        run_id=state["run_id"], seq=seq, events=events,
+                        source_context=state.get("source_context", {}),
+                        event_sink=state.get("event_sink"),
+                    )
                 if not blocks:
                     blocks = [ContentBlock(
                         type="text",
@@ -510,7 +550,7 @@ class ConversationOrchestrator:
     # --- intent handlers ---------------------------------------------------
 
     def _ask_book(
-        self, *, project_id: str, learner_id: str, question: str,
+        self, *, project_id: str, learner_id: str, conversation_id: str = "", question: str,
         run_id: str, seq: int, events: list[RunEvent],
         source_context: dict | None = None,
         event_sink: Callable[[RunEvent], None] | None = None,
@@ -557,12 +597,41 @@ class ConversationOrchestrator:
         questioned_concepts = self._record_question_signals(
             project_id=project_id,
             learner_id=learner_id,
+            conversation_id=conversation_id,
             question=question,
             run_id=run_id,
             chunk_ids=ans.chunk_ids if ans.grounded else [],
             retrieval_confidence=ans.retrieval_confidence,
             query_scope=scope,
+            selected_page=selected_page,
         ) if source_context.get("record_question_signal", True) else []
+
+        # When a graph node is directly identified, use its trusted source
+        # anchors to correct a broad retrieval before rendering the answer.
+        # Example: after a KMP question, “列表是什么” must not be answered
+        # from KMP chunks merely because they scored highly in BM25.  Current
+        # page remains a hard boundary: we report the location mismatch there
+        # instead of silently reading material from another page.
+        anchor_ids = [
+            chunk_id
+            for item in questioned_concepts[:1]
+            for chunk_id in item.get("chunk_ids", [])
+        ]
+        answer_ids = set(ans.chunk_ids)
+        if (
+            anchor_ids
+            and scope != "CURRENT_PAGE"
+            and not answer_ids.intersection(anchor_ids)
+        ):
+            canonical_name = str(questioned_concepts[0].get("name") or "")
+            ans = self.qa_service.ask(
+                project_id=project_id,
+                learner_id=learner_id,
+                question=f"{canonical_name}\n{retrieval_question}",
+                source_ids=source_ids,
+                preferred_chunk_ids=anchor_ids,
+                on_retrieval=locations_ready,
+            )
 
         events.append(_evt(run_id, seq, EventType.TOOL_COMPLETED, {
             "tool": "retrieval", "grounded": ans.grounded, "chunk_ids": ans.chunk_ids,
@@ -624,6 +693,15 @@ class ConversationOrchestrator:
         seq += 1
 
         if questioned_concepts:
+            if scope == "CURRENT_PAGE" and selected_page:
+                mapped = questioned_concepts[0]
+                target_page = int(mapped.get("source_page") or 0)
+                if target_page and target_page != selected_page:
+                    blocks.append(ContentBlock(type="status", text=(
+                        f"当前第 {selected_page} 页不包含“{mapped['name']}”的正文；"
+                        f"它位于第 {target_page} 页附近。已记录为待验证知识点，"
+                        "可切换到对应章节继续查看。"
+                    )))
             preview = "、".join(item["name"] for item in questioned_concepts[:3])
             suffix = "等" if len(questioned_concepts) > 3 else ""
             blocks.append(ContentBlock(
@@ -688,11 +766,13 @@ class ConversationOrchestrator:
         *,
         project_id: str,
         learner_id: str,
+        conversation_id: str,
         question: str,
         run_id: str,
         chunk_ids: list[str],
         retrieval_confidence: float = 0.0,
         query_scope: str = "ALL_SOURCES",
+        selected_page: int | None = None,
     ) -> list[dict]:
         """Persist QUESTION evidence for conservatively matched concepts.
 
@@ -700,27 +780,28 @@ class ConversationOrchestrator:
         the learner-state grouping never treats it as a failed assessment.
         Failure to write this auxiliary signal must not fail the user's answer.
         """
-        if not chunk_ids:
-            return []
-
         import hashlib
         import logging
         import re
+        from ..services.learning_memory import remember_question_context
 
         retrieved = [self.repo.chunk_by_id(chunk_id) for chunk_id in chunk_ids[:4]]
         retrieved = [chunk for chunk in retrieved if chunk is not None]
-        if not retrieved:
-            return []
-
         chunk_order = {chunk.chunk_id: index for index, chunk in enumerate(retrieved)}
         question_folded = question.casefold()
 
-        def question_match_score(name: str) -> int:
+        def question_match_score(name: str, *, permit_short_exact: bool = False) -> int:
             """Return a strict lexical score; nearby retrieval alone is insufficient."""
             folded = name.casefold().strip()
             if not folded:
                 return 0
             terms: set[str] = set()
+            # Two-character Chinese terms are common, valid textbook concepts
+            # (for example “列表”).  They are too broad for generic substring
+            # matching in descriptions, but are safe when they are the exact
+            # canonical name or section label of a graph node.
+            if permit_short_exact:
+                terms.update(re.findall(r"[\u4e00-\u9fff]{2,}|[a-z][a-z0-9_+#.-]{1,}", folded))
             if len(folded) >= 3:
                 terms.add(folded)
             for part in re.findall(r"[\u4e00-\u9fff]{3,}|[a-z][a-z0-9_+#.-]{2,}", folded):
@@ -734,7 +815,11 @@ class ConversationOrchestrator:
             return max((len(term) for term in terms if term in question_folded), default=0)
 
         matches: list[tuple[int, int, int, object, list[str], str]] = []
-        for book_id in sorted({chunk.book_id for chunk in retrieved}):
+        # Mapping a learner's topic to the knowledge graph must not depend on
+        # the current-page retrieval succeeding.  “KMP 是什么” while reading
+        # vectors should still record KMP as a QUESTION signal, while the
+        # answer itself remains correctly restricted to the selected page.
+        for book_id in sorted(self.repo.allowed_book_ids(project_id)):
             book_chunks = [chunk for chunk in retrieved if chunk.book_id == book_id]
             retrieved_ids = {chunk.chunk_id for chunk in book_chunks}
             for concept in self.repo.concepts_for_book(book_id):
@@ -743,15 +828,48 @@ class ConversationOrchestrator:
                     if ref.chunk_id and ref.chunk_id in retrieved_ids
                 ]
                 name = concept.name.strip()
-                direct_score = question_match_score(name)
+                direct_score = max(
+                    question_match_score(name, permit_short_exact=True),
+                    question_match_score(concept.section or "", permit_short_exact=True),
+                    question_match_score(concept.description or ""),
+                )
                 if not anchored and not direct_score:
                     continue
-                supporting = anchored or [book_chunks[0].chunk_id]
+                supporting = anchored or [
+                    ref.chunk_id for ref in concept.source_refs if ref.chunk_id
+                ][:3]
+                # Older/seeded graph nodes may lack SourceRef.chunk_id.  A
+                # direct name match should still leave an auditable route back
+                # to the source instead of creating a QUESTION record with no
+                # usable reference.  This is a conservative lexical fallback
+                # within the same book only; it never contributes mastery.
+                if not supporting and direct_score:
+                    concept_terms = {
+                        term for term in re.findall(
+                            r"[\u4e00-\u9fff]{2,}|[a-z][a-z0-9_+#.-]{1,}",
+                            f"{concept.name} {concept.section}".casefold(),
+                        ) if len(term) >= 2
+                    }
+                    supporting = [
+                        chunk.chunk_id
+                        for chunk in self.repo.chunks_for_project(project_id)
+                        if chunk.book_id == book_id
+                        and any(term in chunk.content.casefold() for term in concept_terms)
+                    ][:3]
                 rank = 0 if direct_score else 1
-                first_chunk = min(chunk_order.get(chunk_id, 99) for chunk_id in supporting)
+                # A graph concept can legitimately have a page anchor but no
+                # extracted chunk id yet.  A direct lexical match remains a
+                # valid QUESTION signal in that case; it simply has no
+                # retrieval-rank tiebreaker.
+                first_chunk = min(
+                    (chunk_order.get(chunk_id, 99) for chunk_id in supporting),
+                    default=99,
+                )
                 matches.append((rank, first_chunk, direct_score, concept, supporting, book_id))
 
-        direct = [item for item in matches if item[2] >= 3]
+        # Short exact canonical terms receive a deliberate high score so they
+        # are not confused with incidental two-character prose fragments.
+        direct = [item for item in matches if item[2] >= 2]
         chosen: list[tuple[int, int, int, object, list[str], str]] = []
         if direct:
             chosen = [sorted(direct, key=lambda item: (
@@ -789,7 +907,7 @@ class ConversationOrchestrator:
 
         recorded: list[dict] = []
         seen: set[str] = set()
-        for _, _, _, concept, supporting, book_id in chosen:
+        for _, _, match_score, concept, supporting, book_id in chosen:
             if concept.concept_id in seen:
                 continue
             seen.add(concept.concept_id)
@@ -813,6 +931,11 @@ class ConversationOrchestrator:
                         f"|scope:{query_scope}|chunks:{','.join(supporting)}"
                     ),
                 )
+                remember_question_context(
+                    self.repo, project_id=project_id, concept_id=concept.concept_id,
+                    conversation_id=conversation_id, question=question, run_id=run_id,
+                    confidence=max(retrieval_confidence, 1.0 if match_score else 0.78),
+                )
                 question_count = sum(
                     1 for evidence in self.repo.evidence_for(project_id, concept.concept_id)
                     if evidence.evidence_type == EvidenceType.QUESTION
@@ -824,6 +947,8 @@ class ConversationOrchestrator:
                     "chunk_ids": supporting,
                     "retrieval_confidence": retrieval_confidence,
                     "query_scope": query_scope,
+                    "source_id": book_id,
+                    "source_page": next((ref.physical_page for ref in concept.source_refs if ref.physical_page), 0),
                 })
             except Exception:
                 logging.getLogger("bookmind").exception(
@@ -848,7 +973,7 @@ class ConversationOrchestrator:
         return [ContentBlock(type="text", text="\n".join(lines))]
 
     def _start_learning(
-        self, *, project_id: str, learner_id: str,
+        self, *, project_id: str, learner_id: str, conversation_id: str,
         run_id: str, seq: int, events: list[RunEvent],
     ) -> tuple[list[ContentBlock], int]:
         """Start from the earliest mapped concept in the uploaded sources."""
@@ -868,7 +993,7 @@ class ConversationOrchestrator:
             "并给出一个便于初学者理解的例子。"
         )
         answer, seq = self._ask_book(
-            project_id=project_id, learner_id=learner_id, question=question,
+            project_id=project_id, learner_id=learner_id, conversation_id=conversation_id, question=question,
             run_id=run_id, seq=seq, events=events,
         )
         intro = ContentBlock(
@@ -938,7 +1063,7 @@ class ConversationOrchestrator:
             # Race: the task was answered/skipped in another tab. Treat the
             # input as an ordinary question.
             return self._ask_book(
-                project_id=project_id, learner_id=learner_id, question=user_text,
+                project_id=project_id, learner_id=learner_id, conversation_id=conversation_id, question=user_text,
                 run_id=run_id, seq=seq, events=events, source_context={},
             )
 
@@ -1003,6 +1128,13 @@ class ConversationOrchestrator:
             blocks.append(ContentBlock(
                 type="text", text=_next_action_copy(next_action.get("selected_action")),
             ))
+        if not result.get("needs_review"):
+            blocks.append(ContentBlock(type="task", data={
+                "kind": "task_complete",
+                "task_id": pending["task_id"],
+                "completion_status": "ANSWERED",
+                "source_scope": self.task_service.source_scope_for_task(pending["task_id"]),
+            }))
         return blocks, seq
 
     # --- Next Best Action (read-only, for the sidebar) ---------------------
@@ -1035,10 +1167,32 @@ class ConversationOrchestrator:
 
 
 def _rewrite_followup(text: str, history: list[Message]) -> str:
-    """Resolve short/deictic follow-ups against the latest user question."""
+    """Resolve only genuinely deictic follow-ups against the prior question.
+
+    A short question is not automatically a follow-up: ``列表是什么？`` after
+    ``KMP 算法是什么？`` must retrieve lists, not KMP.  The old length-only
+    rule made this very common interaction fail.  We preserve context only for
+    explicit references such as “那它为什么…”, or for fragmentary questions
+    without their own topic.
+    """
+    import re
+
     cleaned = text.strip()
-    cues = ("那", "它", "这个", "上述", "前面", "为什么", "怎么", "然后")
-    if len(cleaned) > 24 and not cleaned.startswith(cues):
+    if not cleaned:
+        return cleaned
+    deictic_prefixes = ("那", "它", "这个", "上述", "前面", "刚才", "上面", "然后")
+    if cleaned.startswith(deictic_prefixes):
+        should_rewrite = True
+    elif len(cleaned) > 24:
+        should_rewrite = False
+    else:
+        # A self-contained question contains a concrete subject before an
+        # interrogative form, e.g. “列表是什么”“链表和数组有什么区别”.
+        direct_forms = ("是什么", "的定义", "有什么区别", "怎么实现", "如何实现", "时间复杂度", "适用", "作用", "特点")
+        has_direct_form = any(form in cleaned for form in direct_forms)
+        subject = re.split(r"是什么|的定义|有什么区别|怎么实现|如何实现|时间复杂度|适用|作用|特点|[？?]", cleaned, maxsplit=1)[0].strip()
+        should_rewrite = not (has_direct_form and len(subject) >= 2)
+    if not should_rewrite:
         return cleaned
     previous = ""
     for message in reversed(history):

@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 import type {
   JudgmentCardData,
+  TaskCompletionCardData,
   JudgmentPayload,
   QuestionSignalData,
   StateChangeData,
@@ -127,21 +128,13 @@ const JUDGMENT_LABEL: Record<string, string> = {
 
 export function JudgmentCard({
   data,
-  onNext,
   onExplain,
-  onPractice,
-  onBackToSource,
-  onFinish,
   onSupplement,
   onSkip,
   busy,
 }: {
   data: JudgmentCardData;
-  onNext: (taskId: string) => void;
   onExplain: (taskId: string) => void;
-  onPractice: (taskId: string) => void;
-  onBackToSource: (sourceId: string, page: number) => void;
-  onFinish: () => void;
   onSupplement: () => void;
   onSkip: (taskId: string) => void;
   busy: boolean;
@@ -156,7 +149,6 @@ export function JudgmentCard({
       {c.satisfied ? "✓" : "✗"} {c.satisfied ? `已覆盖要点 ${i + 1}` : `还需补充要点 ${i + 1}`}
     </li>
   ));
-  const source = data.source_scope?.[0];
   return (
     <div
       className="r-radius"
@@ -184,17 +176,43 @@ export function JudgmentCard({
             <button className="btn ghost" disabled={busy} onClick={() => onSkip(data.task_id)}>跳过本题</button>
           </>
         ) : (
-          <>
-            <button className="btn primary" disabled={busy} onClick={() => onNext(data.task_id)}>下一题</button>
-            <button className="btn" disabled={busy} onClick={() => onExplain(data.task_id)}>查看讲解</button>
-            {(result === "PARTIAL" || result === "FAIL") ? <button className="btn" disabled={busy} onClick={() => onPractice(data.task_id)}>针对练习</button> : null}
-            {source ? <button className="btn ghost" disabled={busy} onClick={() => onBackToSource(source.source_id, source.page || 1)}>回原文</button> : null}
-            <button className="btn ghost" disabled={busy} onClick={onFinish}>结束本次巩固</button>
-          </>
+          <span className="c-muted" style={{ fontSize: 12 }}>本题已判定；请在下方选择下一步。</span>
         )}
       </div>
     </div>
   );
+}
+
+export function TaskCompletionCard({
+  data, onNext, onExplain, onFollowup, onFollowupEnd, onBackToSource, onFinish, followupActive, busy,
+}: {
+  data: TaskCompletionCardData;
+  onNext: (taskId: string) => void;
+  onExplain: (taskId: string) => void;
+  onFollowup: (taskId: string) => void;
+  onFollowupEnd: (taskId: string) => void;
+  onBackToSource: (sourceId: string, page: number) => void;
+  onFinish: () => void;
+  followupActive: boolean;
+  busy: boolean;
+}) {
+  const label = data.completion_status === "EXPLAINED"
+    ? "已查看讲解并结束本题"
+    : data.completion_status === "SKIPPED" ? "已跳过本题" : "这道题已结束";
+  const source = data.source_scope?.[0];
+  return <div className="r-radius" style={{ maxWidth: 720, margin: "12px auto", background: "var(--panel)", border: "1px solid var(--border)", padding: "16px 20px" }}>
+    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{label}</div>
+    {followupActive ? <div className="judgment-actions">
+      <span className="c-muted" style={{ fontSize: 12 }}>正在追问本题；结束追问后才可开始下一题。</span>
+      <button className="btn primary" disabled={busy} onClick={() => onFollowupEnd(data.task_id)}>结束追问</button>
+    </div> : <div className="judgment-actions">
+      <button className="btn primary" disabled={busy} onClick={() => onNext(data.task_id)}>下一题</button>
+      {data.completion_status !== "EXPLAINED" ? <button className="btn" disabled={busy} onClick={() => onExplain(data.task_id)}>查看讲解</button> : null}
+      <button className="btn" disabled={busy} onClick={() => onFollowup(data.task_id)}>追问本题</button>
+      {source ? <button className="btn ghost" disabled={busy} onClick={() => onBackToSource(source.source_id, source.page || 1)}>回原文</button> : null}
+      <button className="btn ghost" disabled={busy} onClick={onFinish}>结束本次练习</button>
+    </div>}
+  </div>;
 }
 
 export function TaskOptionsCard({

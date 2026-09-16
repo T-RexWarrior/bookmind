@@ -101,6 +101,14 @@ class TaskService:
         returns ``{"kind": "fallback", "text": ...}`` rather than raising.
         """
         try:
+            active_followup = self.repo.active_followup_task_for_conversation(conversation_id)
+            if active_followup is not None:
+                raise AppError(
+                    "FOLLOWUP_ACTIVE",
+                    "请先结束上一题的追问，再开始下一题。",
+                    status_code=409,
+                    action="END_FOLLOWUP",
+                )
             pending = self.repo.pending_task_for_conversation(conversation_id)
             if pending is not None:
                 payload = self.get_task(pending["task_id"]) or {}
@@ -116,10 +124,13 @@ class TaskService:
             # rendered in the left panel.  Previously RECOMMENDED skipped this
             # branch and fell back to the decision engine's first graph node.
             if preferred is None:
-                candidate = next(iter(self.consolidation_candidates(
-                    project_id, mode="PRACTICE", filter=selection,
-                )["candidates"]), None)
-                preferred = self._exact_concept(project_id, candidate["concept_id"]) if candidate else None
+                if selection.upper() == "RANDOM":
+                    preferred = self.random_unverified_concept(project_id)
+                else:
+                    candidate = next(iter(self.consolidation_candidates(
+                        project_id, mode="PRACTICE", filter=selection,
+                    )["candidates"]), None)
+                    preferred = self._exact_concept(project_id, candidate["concept_id"]) if candidate else None
             if preferred is None:
                 preferred = self._preferred_practice_concept(project_id, user_text)
             if preferred is not None:
@@ -150,6 +161,8 @@ class TaskService:
                 conversation_id=conversation_id,
             )
             return self._card_payload(report.trusted, draft, decision, project_id)
+        except AppError:
+            raise
         except Exception:  # defensive: a turn failure is recoverable
             import logging
             logging.getLogger("bookmind").exception("Task generation failed")
@@ -404,8 +417,87 @@ class TaskService:
             "task_id": task_id,
             "text": explanation,
             "revealed_while_pending": was_pending,
+            # This is the state of the *completion card*, rather than a
+            # rewrite of the original assessment result.  A learner who opens
+            # an explanation after answering or skipping has still viewed an
+            # explanation, and should get the same unambiguous terminal UI.
+            "completion_status": "EXPLAINED",
             "source_scope": self.source_scope_for_task(task_id),
         }
+
+    def random_unverified_concept(self, project_id: str):
+        """Choose a fresh practice target among concepts not yet at L4.
+
+        The primary practice button intentionally uses random selection.  The
+        result-card “下一题” remains a same-concept continuation so L1--L4
+        evidence can still accumulate coherently.
+        """
+        import random
+        from ..services.learner_state_view import project_state_views
+        states = {item.concept_id: item for item in project_state_views(self.repo, project_id, policy=ReviewPolicy())}
+        choices = [
+            concept for concept in self._practice_concepts(project_id)
+            if states.get(concept.concept_id) is not None
+            and states[concept.concept_id].current_verified_level != "L4"
+        ]
+        return random.SystemRandom().choice(choices) if choices else None
+
+    def answer_followup(self, task_id: str, question: str) -> str:
+        """Answer a post-task question without submitting any new evidence.
+
+        This deliberately uses only the task's trusted context.  It is a
+        read-only tutor turn: no QUESTION signal, Evidence, diagnosis or
+        mastery state is written here.
+        """
+        task = self.repo.get_trusted_task(task_id)
+        if task is None:
+            raise AppError("TASK_NOT_FOUND", "题目不存在", status_code=404)
+        if task.get("status") == "PENDING":
+            raise AppError("TASK_STILL_PENDING", "请先作答、跳过或查看讲解后再追问。", status_code=409)
+        if not task.get("followup_open"):
+            raise AppError("FOLLOWUP_NOT_OPEN", "请先点击“追问本题”开始追问。", status_code=409)
+        prompt = _bounded_text(task.get("prompt_text", ""), 1400)
+        expected = _bounded_text(task.get("expected_answer", ""), 1400)
+        rubric = "\n".join(f"- {_bounded_text(item, 240)}" for item in (task.get("rubric") or [])[:5])
+        system = (
+            "你是题后辅导老师。依据给出的题目、参考答案和评分点回答学生追问。"
+            "解释推理，不要把追问当作新测验，不要评价或改写学生的掌握状态。"
+            "若上下文无法支持，明确说明缺少哪一部分。输出简洁 Markdown，最多 650 个中文字符。"
+        )
+        result = self.router.complete(
+            "task_followup",
+            [{"role": "system", "content": system}, {"role": "user", "content": (
+                f"题目：{prompt}\n\n参考答案：{expected}\n\n评分点：\n{rubric}\n\n学生追问：{question[:1600]}"
+            )}],
+            temperature=0.2, max_tokens=850,
+        )
+        if result.ok and result.content:
+            return result.content.strip()
+        return (
+            "这是一条题后追问，不会影响学习状态。\n\n"
+            f"本题应围绕以下结论理解：{expected or '请结合题干逐项核对评分点。'}\n\n"
+            f"可先对照评分点：\n{rubric or '- 题干中的条件、过程与结论。'}"
+        )
+
+    def start_followup(self, task_id: str) -> dict:
+        """Enter the persisted, read-only follow-up phase for one terminal task."""
+        task = self.repo.get_trusted_task(task_id)
+        if task is None:
+            raise AppError("TASK_NOT_FOUND", "题目不存在", status_code=404)
+        if task.get("status") == "PENDING":
+            raise AppError("TASK_STILL_PENDING", "请先作答、跳过或查看讲解后再追问。", status_code=409)
+        active = self.repo.active_followup_task_for_conversation(task["conversation_id"])
+        if active is not None and active["task_id"] != task_id:
+            raise AppError("FOLLOWUP_ACTIVE", "请先结束正在进行的题后追问。", status_code=409, action="END_FOLLOWUP")
+        self.repo.set_task_followup_open(task_id, True)
+        return {"task_id": task_id, "followup_open": True}
+
+    def end_followup(self, task_id: str) -> dict:
+        task = self.repo.get_trusted_task(task_id)
+        if task is None:
+            raise AppError("TASK_NOT_FOUND", "题目不存在", status_code=404)
+        self.repo.set_task_followup_open(task_id, False)
+        return {"task_id": task_id, "followup_open": False}
 
     # --- answer submission ------------------------------------------------
 

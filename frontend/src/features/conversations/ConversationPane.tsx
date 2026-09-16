@@ -30,10 +30,19 @@ export function ConversationPane({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [state.messages, state.sending]);
 
+  // Practice is task-led, not a second open-ended chat surface.  A new review
+  // conversation stays visually empty until the single practice button has
+  // created a task; the composer appears only for an answer or explicit
+  // read-only follow-up.
+  if (state.mode === "REVIEW" && !state.messages.length && !state.pendingTask) {
+    return <section className={`conversation-pane ${focused ? "is-focused" : ""}`} aria-label="等待开始练习" />;
+  }
+
   const onComposerKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
-      void actions.send();
+      if (state.activeFollowupTaskId) void actions.followupTask(state.activeFollowupTaskId, state.composer);
+      else void actions.send();
     }
   };
 
@@ -45,30 +54,14 @@ export function ConversationPane({
     <section className={`conversation-pane ${focused ? "is-focused" : ""}`}>
       <div className="conversation-pane__head">
         <div><span className="eyebrow">AI 学习伙伴</span><h2>{heading}</h2></div>
-        <ScopePicker sourceTitle={activeSource?.title} page={state.reader?.page} />
+        {state.mode === "LEARN" && <ScopePicker sourceTitle={activeSource?.title} page={state.reader?.page} />}
       </div>
-
-      {state.mode !== "LEARN" && !state.pendingTask && (
-        <div className="assessment-start-card">
-          <div>
-            <strong>练习一个知识点</strong>
-            <span>可以请求提示、查看解释或跳过；未使用提示并独立答对时，才会形成掌握证据。</span>
-          </div>
-          <Button
-            variant="primary"
-            onClick={() => void actions.startTask({})}
-            disabled={state.sending || !state.activeConversation}
-          >
-            {state.sending ? "正在出题…" : state.mode === "ASSESSMENT" ? "开始一道评估题" : "开始一道练习题"}
-          </Button>
-        </div>
-      )}
 
       <div ref={scrollRef} className="message-scroll" aria-live="polite">
         {state.messages.length === 0 ? (
           <div className="assistant-empty">
             <div className="assistant-mark">迹</div>
-            <h3>{state.mode === "ASSESSMENT" ? "准备好独立检验这一阶段了吗？" : state.mode === "REVIEW" ? "今天想巩固哪个知识点？" : "一边看资料，一边把问题聊明白"}</h3>
+            <h3>{state.mode === "REVIEW" ? "点击左侧按钮开始练习" : "一边看资料，一边把问题聊明白"}</h3>
             <p>{activeSource ? `现在打开的是：${activeSource.title}` : "先从左侧放进一份资料吧，原文件会马上显示。"}</p>
             {state.mode === "LEARN" && <div className="suggestion-grid">
               {suggestions.map((suggestion) => (
@@ -94,6 +87,10 @@ export function ConversationPane({
                 onPracticeTask={(taskId) => void actions.startTask({ fromTaskId: taskId })}
                 onBackToSource={(sourceId, page) => void actions.openTaskSource(sourceId, page)}
                 onFinishConsolidation={() => void actions.finishConsolidation()}
+                onTaskFollowup={(taskId) => {
+                  void actions.startTaskFollowup(taskId).then(() => window.setTimeout(() => document.getElementById("composer")?.focus(), 0));
+                }}
+                onTaskFollowupEnd={(taskId) => void actions.endTaskFollowup(taskId)}
                 onSupplementAnswer={() => {
                   if (state.composer.trim() && !state.sending) {
                     void actions.submitTaskAnswer();
@@ -101,8 +98,9 @@ export function ConversationPane({
                     window.setTimeout(() => document.getElementById("composer")?.focus(), 0);
                   }
                 }}
-                hideHint={state.mode === "ASSESSMENT"}
+                hideHint={false}
                 activeTaskId={state.pendingTask?.task_id}
+                activeFollowupTaskId={state.activeFollowupTaskId}
                 canSubmit={Boolean(state.composer.trim()) && !state.sending}
                 busy={state.sending}
                 onRetry={actions.restoreLastMessage}
@@ -115,7 +113,11 @@ export function ConversationPane({
         )}
       </div>
 
-      <div className="composer-wrap">
+      {(state.mode === "LEARN" || state.pendingTask || state.activeFollowupTaskId) && <div className="composer-wrap">
+        {state.activeFollowupTaskId ? <div className="selection-context">
+          <div><strong>正在追问上一题</strong><span>这段追问不会影响学习状态。结束追问后才能开始下一题。</span></div>
+          <button onClick={() => void actions.endTaskFollowup(state.activeFollowupTaskId)}>结束追问</button>
+        </div> : null}
         {state.textSelection && state.mode === "LEARN" ? (
           <div className="selection-context">
             <div><strong>已引用第 {state.textSelection.page} 页</strong><span>{state.textSelection.text}</span></div>
@@ -129,14 +131,15 @@ export function ConversationPane({
           onChange={(event) => dispatch({ type: "SET_COMPOSER", composer: event.target.value })}
           onKeyDown={onComposerKey}
           disabled={state.sending || !state.activeConversation}
-          placeholder={!state.activeConversation ? "正在为这个板块准备一段新对话…" : state.sending ? "我正在想一想…" : state.pendingTask ? "把你的答案写在这里" : "有哪里没看懂？直接问就好，Enter 发送"}
+          placeholder={!state.activeConversation ? "正在为这个板块准备一段新对话…" : state.sending ? "我正在想一想…" : state.activeFollowupTaskId ? "追问这道题；这不会影响学习状态" : "把你的答案写在这里"}
           aria-label="消息输入框"
         />
         <div className="composer-actions">
           <span>Shift + Enter 换行</span>
-          {state.sending ? <Button onClick={actions.stopGeneration}>停止</Button> : <Button variant="primary" onClick={actions.send} disabled={!state.composer.trim() || !state.activeConversation}>发送</Button>}
+          {state.sending ? <Button onClick={actions.stopGeneration}>停止</Button> : <Button variant="primary" onClick={() => state.activeFollowupTaskId ? void actions.followupTask(state.activeFollowupTaskId, state.composer) : void actions.send()} disabled={!state.composer.trim() || !state.activeConversation}>发送</Button>}
         </div>
       </div>
+      }
 
       <input id="learning-source-upload" ref={fileRef} type="file" accept="application/pdf,.pdf" hidden onChange={(event) => {
         const file = event.target.files?.[0];
@@ -170,7 +173,7 @@ function ScopePicker({ sourceTitle, page }: { sourceTitle?: string; page?: numbe
   );
 }
 
-function MessageBubble({ role, blocks, streaming, onCitation, onTaskSubmit, onTaskHint, onTaskSkip, onStartConceptTask, onNextTask, onExplainTask, onPracticeTask, onBackToSource, onFinishConsolidation, onSupplementAnswer, hideHint, activeTaskId, canSubmit, busy, onRetry }: {
+function MessageBubble({ role, blocks, streaming, onCitation, onTaskSubmit, onTaskHint, onTaskSkip, onStartConceptTask, onNextTask, onExplainTask, onPracticeTask, onBackToSource, onFinishConsolidation, onSupplementAnswer, onTaskFollowup, onTaskFollowupEnd, hideHint, activeTaskId, activeFollowupTaskId, canSubmit, busy, onRetry }: {
   role: "user" | "assistant";
   blocks: import("../../types/blocks").ContentBlock[];
   streaming: boolean;
@@ -185,8 +188,11 @@ function MessageBubble({ role, blocks, streaming, onCitation, onTaskSubmit, onTa
   onBackToSource: (sourceId: string, page: number) => void;
   onFinishConsolidation: () => void;
   onSupplementAnswer: () => void;
+  onTaskFollowup: (taskId: string) => void;
+  onTaskFollowupEnd: (taskId: string) => void;
   hideHint?: boolean;
   activeTaskId?: string;
+  activeFollowupTaskId?: string;
   canSubmit: boolean;
   busy: boolean;
   onRetry: () => void;
@@ -195,7 +201,7 @@ function MessageBubble({ role, blocks, streaming, onCitation, onTaskSubmit, onTa
     <div className={`message-row ${role === "user" ? "is-user" : "is-assistant"}`}>
       {role === "assistant" && <div className="message-avatar">迹</div>}
       <div className="message-content">
-        <MessageBlocks blocks={blocks} onCitation={onCitation} onTaskSubmit={onTaskSubmit} onTaskHint={onTaskHint} onTaskSkip={onTaskSkip} onStartConceptTask={onStartConceptTask} onNextTask={onNextTask} onExplainTask={onExplainTask} onPracticeTask={onPracticeTask} onBackToSource={onBackToSource} onFinishConsolidation={onFinishConsolidation} onSupplementAnswer={onSupplementAnswer} hideHint={hideHint} activeTaskId={activeTaskId} canSubmit={canSubmit} busy={busy} onRetry={onRetry} />
+        <MessageBlocks blocks={blocks} onCitation={onCitation} onTaskSubmit={onTaskSubmit} onTaskHint={onTaskHint} onTaskSkip={onTaskSkip} onStartConceptTask={onStartConceptTask} onNextTask={onNextTask} onExplainTask={onExplainTask} onPracticeTask={onPracticeTask} onBackToSource={onBackToSource} onFinishConsolidation={onFinishConsolidation} onSupplementAnswer={onSupplementAnswer} onTaskFollowup={onTaskFollowup} onTaskFollowupEnd={onTaskFollowupEnd} hideHint={hideHint} activeTaskId={activeTaskId} activeFollowupTaskId={activeFollowupTaskId} canSubmit={canSubmit} busy={busy} onRetry={onRetry} />
         {streaming && <ThinkingIndicator label="正在整理结果" />}
       </div>
     </div>

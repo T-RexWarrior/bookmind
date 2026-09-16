@@ -139,16 +139,6 @@ function ActivityPage({ activeSource, onSelectSource, onPageChange }: {
     );
   }
 
-  if (state.mode === "ASSESSMENT") {
-    return (
-      <div className="activity-layout review-layout">
-        <ConsolidationOverview />
-        <ConversationPane focused heading="能力评估" suggestions={["从我问过但还没验证的知识点出一道评估题。", "从我最薄弱的知识点出一道评估题。", "给我一道到期复验题。"]} />
-        <aside className="evidence-rail"><LearningSidebar /></aside>
-      </div>
-    );
-  }
-
   return null;
 }
 

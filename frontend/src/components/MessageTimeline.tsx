@@ -2,7 +2,7 @@
 // cards. Each block type maps to a dedicated component; nothing falls back to
 // raw markdown. Citations are clickable to open the Reader.
 
-import type { ContentBlock, JudgmentCardData, QuestionSignalData, StateChangeData, TaskCardData } from "../types/blocks";
+import type { ContentBlock, JudgmentCardData, QuestionSignalData, StateChangeData, TaskCardData, TaskCompletionCardData } from "../types/blocks";
 import {
   CitationChip,
   ContextCard,
@@ -12,6 +12,7 @@ import {
   StateChangeCard,
   StatusLine,
   TaskCard,
+  TaskCompletionCard,
   TaskOptionsCard,
 } from "./cards/Cards";
 import { MathText } from "./MathText";
@@ -29,8 +30,11 @@ export function MessageBlocks({
   onBackToSource,
   onFinishConsolidation,
   onSupplementAnswer,
+  onTaskFollowup,
+  onTaskFollowupEnd,
   hideHint,
   activeTaskId,
+  activeFollowupTaskId,
   canSubmit,
   busy,
   onRetry,
@@ -47,12 +51,18 @@ export function MessageBlocks({
   onBackToSource: (sourceId: string, page: number) => void;
   onFinishConsolidation: () => void;
   onSupplementAnswer: () => void;
+  onTaskFollowup: (taskId: string) => void;
+  onTaskFollowupEnd: (taskId: string) => void;
   hideHint?: boolean;
   activeTaskId?: string;
+  activeFollowupTaskId?: string;
   canSubmit: boolean;
   busy: boolean;
   onRetry: () => void;
 }) {
+  // Kept in the public renderer contract for existing callers; “下一题” is
+  // now the single continuation action rendered by TaskCompletionCard.
+  void onPracticeTask;
   return (
     <>
       {blocks.map((b, i) => {
@@ -87,13 +97,23 @@ export function MessageBlocks({
               <JudgmentCard
                 key={i}
                 data={d}
-                onNext={onNextTask}
                 onExplain={onExplainTask}
-                onPractice={onPracticeTask}
-                onBackToSource={onBackToSource}
-                onFinish={onFinishConsolidation}
                 onSupplement={onSupplementAnswer}
                 onSkip={onTaskSkip}
+                busy={busy}
+              />
+            );
+            if (d.kind === "task_complete") return (
+              <TaskCompletionCard
+                key={i}
+                data={d as unknown as TaskCompletionCardData}
+                onNext={onNextTask}
+                onExplain={onExplainTask}
+                onFollowup={onTaskFollowup}
+                onFollowupEnd={onTaskFollowupEnd}
+                onBackToSource={onBackToSource}
+                onFinish={onFinishConsolidation}
+                followupActive={d.task_id === activeFollowupTaskId}
                 busy={busy}
               />
             );

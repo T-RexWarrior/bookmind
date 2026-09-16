@@ -258,6 +258,42 @@ export function explainTask(
   return json(`/api/conversations/${conversationId}/tasks/${taskId}/explanation`, { method: "POST" });
 }
 
+export function setManualConceptLearning(
+  pid: string,
+  conceptId: string,
+  learned: boolean,
+): Promise<{ concept_id: string; manual_learned: boolean; label: string }> {
+  return json(`/api/projects/${pid}/concepts/${conceptId}/manual-learning`, {
+    method: "PUT",
+    body: JSON.stringify({ learned }),
+  });
+}
+
+export function followupTask(
+  conversationId: string,
+  taskId: string,
+  question: string,
+): Promise<{ message_id: string; text: string; read_only: boolean }> {
+  return json(`/api/conversations/${conversationId}/tasks/${taskId}/followup`, {
+    method: "POST",
+    body: JSON.stringify({ question }),
+  });
+}
+
+export function startTaskFollowup(
+  conversationId: string,
+  taskId: string,
+): Promise<{ task_id: string; followup_open: boolean }> {
+  return json(`/api/conversations/${conversationId}/tasks/${taskId}/followup/start`, { method: "POST" });
+}
+
+export function closeTaskFollowup(
+  conversationId: string,
+  taskId: string,
+): Promise<{ task_id: string; followup_open: boolean }> {
+  return json(`/api/conversations/${conversationId}/tasks/${taskId}/followup/close`, { method: "POST" });
+}
+
 // --- M4: tasks / answers / hints --------------------------------------------
 // The browser interacts with a server-owned task by task_id only. An answer
 // submits ONLY answer_text + idempotency_key — never PASS/FAIL, Concept ID,

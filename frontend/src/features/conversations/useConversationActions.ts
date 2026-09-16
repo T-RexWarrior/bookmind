@@ -57,6 +57,7 @@ export function useConversationActions() {
         })) as ApiMessage[];
         dispatch({ type: "SET_ACTIVE_CONVERSATION", conversation: conv, messages, activity, projectId });
         dispatch({ type: "SET_PENDING_TASK", pendingTask: detectPendingTask(messages), activity, projectId });
+        dispatch({ type: "SET_FOLLOWUP_TASK", taskId: conv.practice_state?.phase === "FOLLOWUP" ? conv.practice_state.task_id : "", activity, projectId });
       } catch (e) {
         toast((e as Error).message || "这段对话暂时没打开，再试一次好吗？");
       }
@@ -77,6 +78,7 @@ export function useConversationActions() {
         });
         dispatch({ type: "SET_ACTIVE_CONVERSATION", conversation: conv, messages: [], activity, projectId: pid });
         dispatch({ type: "SET_PENDING_TASK", pendingTask: null, activity, projectId: pid });
+        dispatch({ type: "SET_FOLLOWUP_TASK", taskId: "", activity, projectId: pid });
       } catch (e) {
         toast((e as Error).message || "新对话暂时没建好，再试一次好吗？");
       }
@@ -96,6 +98,7 @@ export function useConversationActions() {
       })) as ApiMessage[];
       dispatch({ type: "SET_MESSAGES", messages });
       dispatch({ type: "SET_PENDING_TASK", pendingTask: detectPendingTask(messages) });
+      dispatch({ type: "SET_FOLLOWUP_TASK", taskId: fresh.practice_state?.phase === "FOLLOWUP" ? fresh.practice_state.task_id : "" });
     },
     [dispatch],
   );
@@ -218,15 +221,19 @@ export function useConversationActions() {
   }) => {
     const project = state.activeProject;
     if (!project) return;
+    if (state.activeFollowupTaskId) {
+      toast("请先结束上一题的追问，再开始下一题。");
+      return;
+    }
     const projectId = project.project_id;
-    const taskMode = mode || (state.mode === "ASSESSMENT" ? "ASSESSMENT" : "PRACTICE");
-    const targetMode = taskMode === "ASSESSMENT" ? "ASSESSMENT" as const : "REVIEW" as const;
-    const activity: ConversationActivity = taskMode === "ASSESSMENT" ? "ASSESSMENT" : "REVIEW";
+    const taskMode = mode || "PRACTICE";
+    const targetMode = "REVIEW" as const;
+    const activity: ConversationActivity = "REVIEW";
     try {
       if (state.mode !== targetMode) {
         dispatch({ type: "SET_MODE", mode: targetMode });
         await api.updateProject(projectId, {
-          default_mode: taskMode === "ASSESSMENT" ? "Assessment" : "Review",
+          default_mode: "Review",
         });
       }
 
@@ -245,6 +252,11 @@ export function useConversationActions() {
       const beforeMessages = before.messages as ApiMessage[];
       dispatch({ type: "SET_ACTIVE_CONVERSATION", conversation, messages: beforeMessages, activity, projectId });
       dispatch({ type: "SET_PENDING_TASK", pendingTask: detectPendingTask(beforeMessages), activity, projectId });
+      dispatch({ type: "SET_FOLLOWUP_TASK", taskId: before.practice_state?.phase === "FOLLOWUP" ? before.practice_state.task_id : "", activity, projectId });
+      if (before.practice_state?.phase === "FOLLOWUP") {
+        toast("请先结束上一题的追问，再开始下一题。");
+        return;
+      }
       dispatch({ type: "SET_SENDING", sending: true });
 
       const created = await api.createTask(conversation.conversation_id, {
@@ -262,7 +274,7 @@ export function useConversationActions() {
           activity,
           projectId,
         });
-        toast(taskMode === "ASSESSMENT" ? "已生成评估题，请独立作答。" : "已生成练习题，请在下方作答。");
+        toast("已生成练习题，请在下方作答。");
       } else {
         const fresh = await api.getConversation(conversation.conversation_id);
         const messages = fresh.messages as ApiMessage[];
@@ -276,7 +288,7 @@ export function useConversationActions() {
     } finally {
       dispatch({ type: "SET_SENDING", sending: false });
     }
-  }, [state.activeProject, state.activeConversation, state.conversations, state.mode, dispatch, refreshSidebars]);
+  }, [state.activeProject, state.activeConversation, state.activeFollowupTaskId, state.conversations, state.mode, dispatch, refreshSidebars]);
 
   const openTaskSource = useCallback(async (sourceId: string, page: number) => {
     const project = state.activeProject;
@@ -320,6 +332,52 @@ export function useConversationActions() {
       await reloadConversation(conversation.conversation_id);
     } catch (error) {
       toast((error as Error).message || "暂时无法生成讲解");
+    } finally {
+      dispatch({ type: "SET_SENDING", sending: false });
+    }
+  }, [state.activeConversation, state.activeFollowupTaskId, dispatch, reloadConversation]);
+
+  const followupTask = useCallback(async (taskId: string, question: string) => {
+    const conversation = state.activeConversation;
+    if (!conversation || !question.trim() || state.activeFollowupTaskId !== taskId) return;
+    try {
+      dispatch({ type: "SET_SENDING", sending: true });
+      await api.followupTask(conversation.conversation_id, taskId, question.trim());
+      dispatch({ type: "SET_COMPOSER", composer: "" });
+      await reloadConversation(conversation.conversation_id);
+    } catch (error) {
+      toast((error as Error).message || "这条题后追问暂时没有回答成功");
+    } finally {
+      dispatch({ type: "SET_SENDING", sending: false });
+    }
+  }, [state.activeConversation, dispatch, reloadConversation]);
+
+  const startTaskFollowup = useCallback(async (taskId: string) => {
+    const conversation = state.activeConversation;
+    if (!conversation) return;
+    try {
+      dispatch({ type: "SET_SENDING", sending: true });
+      await api.startTaskFollowup(conversation.conversation_id, taskId);
+      dispatch({ type: "SET_FOLLOWUP_TASK", taskId });
+      dispatch({ type: "SET_COMPOSER", composer: "" });
+    } catch (error) {
+      toast((error as Error).message || "无法开始题后追问");
+    } finally {
+      dispatch({ type: "SET_SENDING", sending: false });
+    }
+  }, [state.activeConversation, dispatch]);
+
+  const endTaskFollowup = useCallback(async (taskId: string) => {
+    const conversation = state.activeConversation;
+    if (!conversation) return;
+    try {
+      dispatch({ type: "SET_SENDING", sending: true });
+      await api.closeTaskFollowup(conversation.conversation_id, taskId);
+      dispatch({ type: "SET_FOLLOWUP_TASK", taskId: "" });
+      dispatch({ type: "SET_COMPOSER", composer: "" });
+      await reloadConversation(conversation.conversation_id);
+    } catch (error) {
+      toast((error as Error).message || "无法结束题后追问");
     } finally {
       dispatch({ type: "SET_SENDING", sending: false });
     }
@@ -448,6 +506,9 @@ export function useConversationActions() {
     openTaskSource,
     finishConsolidation,
     explainTask,
+    followupTask,
+    startTaskFollowup,
+    endTaskFollowup,
     stopGeneration,
     restoreLastMessage,
     submitTaskAnswer,

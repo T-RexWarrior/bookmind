@@ -56,6 +56,9 @@ export function KnowledgeGraphPanel({ projectId, refreshKey }: { projectId: stri
               ))}
             </svg>
           </div>
+          {graph.nodes.length > layout.nodes.length && <div className="c-muted" style={{ fontSize: 11, marginTop: 5 }}>
+            图谱为保证可读性展示前 {layout.nodes.length} 个节点；完整知识点请在上方“全部”学习档案中查看和搜索。
+          </div>}
           {selectedNode && (
             <div style={{ fontSize: 12, marginTop: 8, lineHeight: 1.55 }}>
               <strong>{selectedNode.name}</strong>

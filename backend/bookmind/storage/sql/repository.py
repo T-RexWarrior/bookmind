@@ -56,6 +56,7 @@ from ...domain.models import (
     LearnerConceptState,
     LevelRecord,
     LearningProject,
+    LearningMemory,
     Message,
     MisconceptionHypothesis,
     MisconceptionSignal,
@@ -77,6 +78,7 @@ from .models import (
     ExpiryKeyRow,
     IngestionJobRow,
     LearnerConceptStateRow,
+    LearningMemoryRow,
     LearningProjectRow,
     MessageRow,
     MisconceptionHypothesisRow,
@@ -282,6 +284,27 @@ def _state_to_row(s: LearnerConceptState) -> LearnerConceptStateRow:
     )
 
 
+def _memory_from_row(row: LearningMemoryRow) -> LearningMemory:
+    from ...domain.enums import MemoryKind
+    return LearningMemory(
+        memory_id=row.memory_id, project_id=row.project_id,
+        kind=MemoryKind(row.kind), concept_id=row.concept_id or "",
+        conversation_id=row.conversation_id or "", content=row.content or "",
+        metadata=row.metadata_json or {}, created_at=row.created_at,
+        updated_at=row.updated_at or row.created_at,
+    )
+
+
+def _memory_to_row(memory: LearningMemory) -> LearningMemoryRow:
+    return LearningMemoryRow(
+        memory_id=memory.memory_id, project_id=memory.project_id,
+        kind=memory.kind.value, concept_id=memory.concept_id,
+        conversation_id=memory.conversation_id, content=memory.content,
+        metadata_json=memory.metadata, created_at=memory.created_at,
+        updated_at=memory.updated_at,
+    )
+
+
 def _mis_from_row(row: MisconceptionHypothesisRow) -> MisconceptionHypothesis:
     return MisconceptionHypothesis(
         project_id=row.project_id, bug_id=row.bug_id,
@@ -411,6 +434,7 @@ _TRUSTED_TASK_COLUMNS = (
     "discriminated_bug_ids", "is_changed_task", "remediation_stage",
     "prompt_text", "expected_answer", "distractors",
     "status", "hints_issued", "last_submission_id", "created_at", "expires_at",
+    "followup_open",
 )
 
 
@@ -419,7 +443,9 @@ def _trusted_task_from_row(row: TrustedTaskRow) -> dict:
 
 
 def _trusted_task_to_row(d: dict) -> TrustedTaskRow:
-    return TrustedTaskRow(**{col: d.get(col) for col in _TRUSTED_TASK_COLUMNS})
+    values = {col: d.get(col) for col in _TRUSTED_TASK_COLUMNS}
+    values["followup_open"] = bool(d.get("followup_open", False))
+    return TrustedTaskRow(**values)
 
 
 _SUBMISSION_COLUMNS = (
@@ -536,7 +562,7 @@ class SqlRepository:
         """
         existing = {
             table: {column["name"] for column in inspect(self.engine).get_columns(table)}
-            for table in ("learning_projects", "books", "conversations", "ingestion_jobs")
+            for table in ("learning_projects", "books", "conversations", "ingestion_jobs", "trusted_tasks")
         }
         project_columns = {
             "learning_scope": "TEXT DEFAULT ''",
@@ -565,6 +591,9 @@ class SqlRepository:
             "checkpoint_stage": "VARCHAR(64) DEFAULT ''",
             "force_reparse": "BOOLEAN DEFAULT 0",
         }
+        task_columns = {
+            "followup_open": "BOOLEAN DEFAULT 0 NOT NULL",
+        }
         with self.engine.begin() as conn:
             for name, ddl in project_columns.items():
                 if name not in existing["learning_projects"]:
@@ -578,6 +607,9 @@ class SqlRepository:
             for name, ddl in ingestion_columns.items():
                 if name not in existing["ingestion_jobs"]:
                     conn.exec_driver_sql(f"ALTER TABLE ingestion_jobs ADD COLUMN {name} {ddl}")
+            for name, ddl in task_columns.items():
+                if name not in existing["trusted_tasks"]:
+                    conn.exec_driver_sql(f"ALTER TABLE trusted_tasks ADD COLUMN {name} {ddl}")
 
     def ping(self) -> None:
         """Open a trivial connection — used by /ready."""
@@ -1113,6 +1145,49 @@ class SqlRepository:
             ).order_by(EvidenceRow.occurred_at))
             return [_evidence_from_row(r) for r in rows]
 
+    # --- learner memory ---------------------------------------------------
+
+    def save_memory(self, memory: LearningMemory) -> None:
+        session, own = self._own_session()
+        try:
+            row = session.get(LearningMemoryRow, memory.memory_id)
+            if row is None:
+                session.add(_memory_to_row(memory))
+            else:
+                new_row = _memory_to_row(memory)
+                for column in ("kind", "concept_id", "conversation_id", "content", "metadata_json", "updated_at"):
+                    setattr(row, column, getattr(new_row, column))
+            if own:
+                session.commit()
+        finally:
+            if own:
+                session.close()
+
+    def delete_memory(self, memory_id: str) -> bool:
+        session, own = self._own_session()
+        try:
+            row = session.get(LearningMemoryRow, memory_id)
+            if row is None:
+                return False
+            session.delete(row)
+            if own:
+                session.commit()
+            return True
+        finally:
+            if own:
+                session.close()
+
+    def memories_for_project(self, project_id: str, *, kind: str | None = None,
+                             concept_id: str | None = None) -> list[LearningMemory]:
+        with self.Session() as session:
+            query = select(LearningMemoryRow).where(LearningMemoryRow.project_id == project_id)
+            if kind is not None:
+                query = query.where(LearningMemoryRow.kind == kind)
+            if concept_id is not None:
+                query = query.where(LearningMemoryRow.concept_id == concept_id)
+            rows = session.scalars(query.order_by(LearningMemoryRow.updated_at.desc()))
+            return [_memory_from_row(row) for row in rows]
+
     # --- misconceptions ----------------------------------------------------
 
     def get_misconception(self, project_id: str, bug_id: str) -> MisconceptionHypothesis | None:
@@ -1233,6 +1308,14 @@ class SqlRepository:
             )).first()
             return _trusted_task_from_row(row) if row else None
 
+    def active_followup_task_for_conversation(self, conversation_id: str) -> dict | None:
+        with self.Session() as session:
+            row = session.scalars(select(TrustedTaskRow).where(
+                TrustedTaskRow.conversation_id == conversation_id,
+                TrustedTaskRow.followup_open.is_(True),
+            )).first()
+            return _trusted_task_from_row(row) if row else None
+
     def update_task_status(self, task_id: str, status: str, *, last_submission_id: str | None = None) -> None:
         session, own = self._own_session()
         try:
@@ -1246,6 +1329,20 @@ class SqlRepository:
                 row.last_submission_id = last_submission_id
             if own:
                 session.commit()
+        finally:
+            if own:
+                session.close()
+
+    def set_task_followup_open(self, task_id: str, open: bool) -> None:
+        session, own = self._own_session()
+        try:
+            row = session.scalars(select(TrustedTaskRow).where(
+                TrustedTaskRow.task_id == task_id,
+            )).first()
+            if row is not None:
+                row.followup_open = open
+                if own:
+                    session.commit()
         finally:
             if own:
                 session.close()

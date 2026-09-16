@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from ...domain.enums import BookRole, EvidenceType, UIPreset
 from ...domain.models import Book, LearningProject, ProjectBook, ReviewPolicy, User
 from ...services.learner_state_view import project_state_views
+from ...services.learning_memory import manually_learned_ids, set_manual_learned
 from ...storage.protocols import Repository
 from ..dependencies import get_current_user, get_repo
 from ..errors import AppError
@@ -120,6 +121,10 @@ class UpdateProjectBody(BaseModel):
     default_mode: UIPreset | None = None
 
 
+class ManualLearningBody(BaseModel):
+    learned: bool = True
+
+
 @router.patch("/projects/{project_id}")
 def update_project(
     project_id: str,
@@ -182,6 +187,7 @@ def concept_learning_record(
     )
     source = repo.get_source(concept.book_id)
     evidence = repo.evidence_for(project_id, concept_id)
+    manual_learned = concept_id in manually_learned_ids(repo, project_id)
     questions = [item for item in evidence if item.evidence_type == EvidenceType.QUESTION]
     attempts = [
         item for item in evidence
@@ -232,6 +238,7 @@ def concept_learning_record(
             "current_level": view.current_verified_level,
             "highest_level": view.highest_ever_level,
             "exposure": view.exposure,
+            "manual_learned": manual_learned,
         },
         "question_count": len(questions),
         "attempt_count": len(attempts),
@@ -251,6 +258,29 @@ def concept_learning_record(
             }
             for item in sorted(evidence, key=lambda value: value.occurred_at, reverse=True)
         ],
+    }
+
+
+@router.put("/projects/{project_id}/concepts/{concept_id}/manual-learning")
+def set_concept_manual_learning(
+    project_id: str,
+    concept_id: str,
+    body: ManualLearningBody,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+) -> dict:
+    """Store a reversible “已学” declaration without granting mastery."""
+    repo.assert_project_owned_by(project_id, user.user_id)
+    if not repo.concept_in_project_scope(concept_id, project_id):
+        raise AppError("CONCEPT_NOT_IN_SCOPE", "这个知识点不在当前学习空间中", status_code=404)
+    changed = set_manual_learned(
+        repo, project_id=project_id, concept_id=concept_id, learned=body.learned,
+    )
+    return {
+        "concept_id": concept_id,
+        "manual_learned": body.learned,
+        "changed": changed,
+        "label": "已学（待验证）" if body.learned else "未学",
     }
 
 
@@ -309,10 +339,17 @@ def learning_summary(
     read-side projection)."""
     repo.assert_project_owned_by(project_id, user.user_id)
     views = project_state_views(repo, project_id, policy=ReviewPolicy())
+    manual_learned = manually_learned_ids(repo, project_id)
+    concepts_by_id = {
+        concept.concept_id: concept
+        for book_id in repo.allowed_book_ids(project_id)
+        for concept in repo.concepts_for_book(book_id)
+    }
     groups: dict[str, int] = {}
     concept_rows: list[dict] = []
     questioned_count = 0
     for v in views:
+        concept = concepts_by_id.get(v.concept_id)
         groups[v.group] = groups.get(v.group, 0) + 1
         question_evidence = [e for e in v.evidence if e.evidence_type == "QUESTION"]
         question_count = len(question_evidence)
@@ -334,6 +371,13 @@ def learning_summary(
             # ``LearnerStateView`` is already a browser projection, so its
             # evidence result is a string rather than an enum.
             "latest_attempt_result": latest_attempt.result if latest_attempt and latest_attempt.result else None,
+            "manual_learned": v.concept_id in manual_learned,
+            # The profile is a navigation surface as well as a state summary;
+            # keep chapter/section metadata so the browser can show the whole
+            # graph in book order instead of silently cutting a flat list.
+            "book_id": concept.book_id if concept else None,
+            "chapter": concept.chapter if concept else None,
+            "section": concept.section if concept else None,
         })
     return {
         "total_concepts": len(views),
@@ -371,4 +415,26 @@ def project_misconceptions(
             "changed_task_pass_count": m.changed_task_pass_count,
         }
         for m in repo.all_misconceptions(project_id)
+    ]
+
+
+@router.get("/projects/{project_id}/memory")
+def project_memory(
+    project_id: str,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+) -> list[dict]:
+    """Auditable, browser-safe project memory; never includes task secrets."""
+    repo.assert_project_owned_by(project_id, user.user_id)
+    return [
+        {
+            "memory_id": item.memory_id,
+            "kind": item.kind.value,
+            "concept_id": item.concept_id,
+            "conversation_id": item.conversation_id,
+            "content": item.content,
+            "metadata": item.metadata,
+            "updated_at": item.updated_at.isoformat(),
+        }
+        for item in repo.memories_for_project(project_id)
     ]

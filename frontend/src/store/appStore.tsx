@@ -16,7 +16,7 @@ import type {
   User,
 } from "../types/blocks";
 
-export type UIMode = "LEARN" | "REVIEW" | "ASSESSMENT";
+export type UIMode = "LEARN" | "REVIEW";
 
 export function activityFromMode(mode: UIMode): ConversationActivity {
   return mode;
@@ -51,6 +51,7 @@ export interface AppState {
   reader: ReaderState | null;
   textSelection: TextSelection | null;
   pendingTask: TaskCardData | null;
+  activeFollowupTaskId: string;
   composer: string;
   sending: boolean;
   status: "idle" | "loading" | "error";
@@ -79,6 +80,7 @@ export type Action =
   | { type: "SET_READER"; reader: ReaderState | null; projectId?: string }
   | { type: "SET_TEXT_SELECTION"; selection: TextSelection | null }
   | { type: "SET_PENDING_TASK"; pendingTask: TaskCardData | null; activity?: ConversationActivity; projectId?: string }
+  | { type: "SET_FOLLOWUP_TASK"; taskId: string; activity?: ConversationActivity; projectId?: string }
   | { type: "SET_COMPOSER"; composer: string }
   | { type: "SET_SENDING"; sending: boolean; conversationId?: string }
   | { type: "SET_STATUS"; status: "idle" | "loading" | "error"; error?: string }
@@ -104,6 +106,7 @@ const initial: AppState = {
   reader: null,
   textSelection: null,
   pendingTask: null,
+  activeFollowupTaskId: "",
   composer: "",
   sending: false,
   status: "idle",
@@ -136,6 +139,7 @@ function reducer(state: AppState, action: Action): AppState {
         job: null,
         uploading: false,
         pendingTask: null,
+        activeFollowupTaskId: "",
         composer: "",
         sending: false,
         queryScope: "CURRENT_SOURCE",
@@ -188,6 +192,10 @@ function reducer(state: AppState, action: Action): AppState {
       if (action.activity && action.activity !== state.conversationActivity) return state;
       if (action.projectId && action.projectId !== state.activeProject?.project_id) return state;
       return { ...state, pendingTask: action.pendingTask };
+    case "SET_FOLLOWUP_TASK":
+      if (action.activity && action.activity !== state.conversationActivity) return state;
+      if (action.projectId && action.projectId !== state.activeProject?.project_id) return state;
+      return { ...state, activeFollowupTaskId: action.taskId };
     case "SET_COMPOSER":
       return { ...state, composer: action.composer };
     case "SET_SENDING":
@@ -204,6 +212,7 @@ function reducer(state: AppState, action: Action): AppState {
         activeConversation: null,
         messages: [],
         pendingTask: null,
+        activeFollowupTaskId: "",
         textSelection: null,
         composer: "",
         sending: false,
@@ -235,6 +244,7 @@ function reducer(state: AppState, action: Action): AppState {
         reader: null,
         textSelection: null,
         pendingTask: null,
+        activeFollowupTaskId: "",
         composer: "",
         sending: false,
         leftDrawerOpen: false,

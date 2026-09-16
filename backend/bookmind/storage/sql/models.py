@@ -183,6 +183,22 @@ class EvidenceRow(Base):
     scoring_type: Mapped[str] = mapped_column(String(32), default="")
 
 
+class LearningMemoryRow(Base):
+    """Project-scoped memory, kept distinct from the immutable evidence ledger."""
+
+    __tablename__ = "learning_memories"
+
+    memory_id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("learning_projects.project_id"), index=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    concept_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    conversation_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 # --- misconception (LEARNING_MODEL §8) ------------------------------------
 
 class MisconceptionHypothesisRow(Base):
@@ -357,6 +373,9 @@ class TrustedTaskRow(Base):
 
     # Lifecycle
     status: Mapped[str] = mapped_column(String(16), default="PENDING")  # PENDING|ANSWERED|EXPIRED|SKIPPED
+    # A terminal task can enter a read-only follow-up phase.  It is kept
+    # separate from status so the original answer outcome remains immutable.
+    followup_open: Mapped[bool] = mapped_column(Boolean, default=False)
     hints_issued: Mapped[int] = mapped_column(Integer, default=0)
     last_submission_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

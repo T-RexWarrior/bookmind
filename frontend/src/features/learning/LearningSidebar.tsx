@@ -21,6 +21,7 @@ export function LearningSidebar() {
   const summary = state.summary;
   const activeMis = state.misconceptions.filter((item) => item.status !== "DISMISSED");
   const [filter, setFilter] = useState<RecordFilter>("all");
+  const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [record, setRecord] = useState<ConceptLearningRecord | null>(null);
   const [loadingRecord, setLoadingRecord] = useState(false);
@@ -46,10 +47,26 @@ export function LearningSidebar() {
   }, [projectId, state.rightDrawerOpen, dispatch]);
 
   const concepts = useMemo(() => (summary?.concepts || []).filter((concept) => {
-    if (filter === "all") return true;
-    if (filter === "questioned") return (concept.question_count || 0) > 0;
-    return concept.group === filter;
-  }), [summary, filter]);
+    const matchesFilter = filter === "all"
+      || (filter === "questioned" ? (concept.question_count || 0) > 0 : concept.group === filter);
+    const needle = query.trim().toLocaleLowerCase();
+    const matchesQuery = !needle || [concept.name, concept.chapter, concept.section]
+      .filter(Boolean).some((value) => String(value).toLocaleLowerCase().includes(needle));
+    return matchesFilter && matchesQuery;
+  }).sort((a, b) =>
+    `${a.book_id || ""}/${a.chapter || ""}/${a.section || ""}/${a.name}`.localeCompare(
+      `${b.book_id || ""}/${b.chapter || ""}/${b.section || ""}/${b.name}`, "zh-CN",
+    )
+  ), [summary, filter, query]);
+
+  const conceptGroups = useMemo(() => {
+    const groups = new Map<string, typeof concepts>();
+    for (const concept of concepts) {
+      const label = concept.chapter || "未标注章节";
+      groups.set(label, [...(groups.get(label) || []), concept]);
+    }
+    return [...groups.entries()];
+  }, [concepts]);
 
   useEffect(() => {
     if (!projectId || !selectedId) {
@@ -96,14 +113,26 @@ export function LearningSidebar() {
             <FilterButton active={filter === "due"} onClick={() => setFilter("due")}>待复验 {summary.groups.due || 0}</FilterButton>
             <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>全部</FilterButton>
           </div>
+          <input
+            className="record-search"
+            aria-label="搜索知识点"
+            placeholder="搜索知识点或章节"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
           <div className="record-concept-list">
-            {concepts.slice(0, 40).map((concept) => (
-              <button key={concept.concept_id} className={selectedId === concept.concept_id ? "is-active" : ""} onClick={() => setSelectedId(concept.concept_id)}>
-                <span><strong>{concept.name}</strong><small>{GROUP_LABELS[concept.group] || concept.group}</small></span>
-                {(concept.attempt_count || 0) > 0
-                  ? <em>作答 {concept.attempt_count} 次</em>
-                  : (concept.question_count || 0) > 0 ? <em>问过 {concept.question_count} 次</em> : <span>›</span>}
-              </button>
+            {conceptGroups.map(([chapter, chapterConcepts]) => (
+              <details key={chapter} open>
+                <summary>{chapter} <small>{chapterConcepts.length} 个知识点</small></summary>
+                {chapterConcepts.map((concept) => (
+                  <button key={concept.concept_id} className={selectedId === concept.concept_id ? "is-active" : ""} onClick={() => setSelectedId(concept.concept_id)}>
+                    <span><strong>{concept.name}</strong><small>{concept.section || (concept.manual_learned ? "已学（待验证）" : (GROUP_LABELS[concept.group] || concept.group))}</small></span>
+                    {(concept.attempt_count || 0) > 0
+                      ? <em>作答 {concept.attempt_count} 次</em>
+                      : (concept.question_count || 0) > 0 ? <em>问过 {concept.question_count} 次</em> : <span>›</span>}
+                  </button>
+                ))}
+              </details>
             ))}
             {!concepts.length ? <p>这个筛选下暂时没有知识点。</p> : null}
           </div>
@@ -120,6 +149,7 @@ export function LearningSidebar() {
               <div className="concept-record-stats">
                 <span>{GROUP_LABELS[record.status.group] || record.status.group}</span>
                 <span>当前 {record.status.current_level}</span>
+                {record.status.manual_learned ? <span>已学（待验证）</span> : null}
                 <span>提问 {record.question_count} 次</span>
                 <span>作答 {record.attempt_count} 次</span>
               </div>

@@ -14,6 +14,7 @@ export function SourceLibrary({
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<LearningSourceView["outline"]>([]);
+  const [concepts, setConcepts] = useState<Awaited<ReturnType<typeof api.knowledgeGraph>>["nodes"]>([]);
   const active = state.sources.find((source) => source.source_id === state.reader?.sourceId);
   const sources = useMemo(
     () => state.sources.filter((source) => source.title.toLowerCase().includes(filter.toLowerCase())),
@@ -23,6 +24,32 @@ export function SourceLibrary({
     setDraft(active?.outline || []);
     setEditing(false);
   }, [active?.source_id, active?.outline]);
+  useEffect(() => {
+    const projectId = state.activeProject?.project_id;
+    if (!projectId || !active?.source_id) {
+      setConcepts([]);
+      return;
+    }
+    let alive = true;
+    api.knowledgeGraph(projectId)
+      .then((graph) => { if (alive) setConcepts(graph.nodes.filter((node) => node.book_id === active.source_id)); })
+      .catch(() => { if (alive) setConcepts([]); });
+    return () => { alive = false; };
+  }, [state.activeProject?.project_id, active?.source_id, state.summary]);
+
+  const manuallyLearned = new Set((state.summary?.concepts || []).filter((item) => item.manual_learned).map((item) => item.concept_id));
+  const markConcept = async (conceptId: string, learned: boolean) => {
+    const projectId = state.activeProject?.project_id;
+    if (!projectId) return;
+    try {
+      const result = await api.setManualConceptLearning(projectId, conceptId, learned);
+      const summary = await api.learningSummary(projectId);
+      dispatch({ type: "SET_SUMMARY", summary, projectId });
+      toast(result.label);
+    } catch (error) {
+      toast((error as Error).message || "学习标记没有保存成功");
+    }
+  };
 
   return (
     <aside className="source-library">
@@ -130,12 +157,28 @@ export function SourceLibrary({
                   <small>{item.page}</small>
                 </button>
               ))}
+              {draft.length > 80 ? <p className="c-muted" style={{ fontSize: 12 }}>目录共 {draft.length} 项；当前为便于阅读显示前 80 项，可搜索或编辑目录查看完整内容。</p> : null}
             </div>
           ) : (
             <p className="outline-placeholder">
               {active.state === "SUCCEEDED" ? "没有认出清晰的目录，但仍然可以阅读和提问。" : "我正在读目录和内容，再等一小会儿…"}
             </p>
           )}
+          {concepts.length ? (
+            <section className="source-concept-status" aria-label="知识点学习状态">
+              <div className="section-title-row"><span>知识点学习状态</span><small>默认未学；标记不等于验证通过</small></div>
+              {concepts.slice(0, 80).map((concept) => {
+                const learned = manuallyLearned.has(concept.concept_id);
+                return <div className="source-concept-status__row" key={concept.concept_id}>
+                  <span title={concept.description}>{concept.name}</span>
+                  <button className={learned ? "is-learned" : ""} onClick={() => void markConcept(concept.concept_id, !learned)}>
+                    {learned ? "已学（待验证）" : "标记已学"}
+                  </button>
+                </div>;
+              })}
+              {concepts.length > 80 ? <p className="c-muted" style={{ fontSize: 12 }}>该资料共有 {concepts.length} 个知识点；完整列表可在“学习状态”的全部知识点中查看。</p> : null}
+            </section>
+          ) : null}
         </div>
       )}
     </aside>

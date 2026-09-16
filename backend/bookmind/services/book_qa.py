@@ -79,6 +79,7 @@ class BookQAService:
             top_k: int = 12, context_budget: int = 12,
             source_ids: list[str] | None = None,
             physical_page: int | None = None,
+            preferred_chunk_ids: list[str] | None = None,
             on_retrieval: Callable[[list[dict], float, bool], None] | None = None) -> AskResult:
         """Answer from the selected source range with grounded citations."""
         self.repo.assert_project_owned_by(project_id, learner_id)
@@ -130,6 +131,25 @@ class BookQAService:
             question, top_k=top_k, context_budget=context_budget,
             allow_chunk_ids=allow_chunks,
         )
+        # A graph concept explicitly named in the learner's question is a
+        # stronger semantic anchor than a broad lexical ranking (which can
+        # otherwise select a table of contents or a previous topic).  Anchors
+        # still pass the same project/book/page scope filter above; they never
+        # broaden the selected source range.  Keep only those anchors for the
+        # answer so an unrelated high-BM25 chunk cannot become a citation.
+        scoped_by_id = {chunk.chunk_id: chunk for chunk in scoped_chunks}
+        preferred = [
+            scoped_by_id[chunk_id] for chunk_id in (preferred_chunk_ids or [])
+            if chunk_id in scoped_by_id
+        ]
+        if preferred:
+            hits = [
+                RetrievalHit(
+                    chunk=chunk, bm25_rank=1, final_score=1.0,
+                    confidence=0.99, confidence_label="HIGH",
+                )
+                for chunk in preferred[:context_budget]
+            ]
         if not hits:
             return AskResult("", [], False, [], "no relevant chunks found")
         if physical_page is not None:
@@ -202,7 +222,8 @@ class BookQAService:
                 )
         elif not grounded:
             answer_text = (
-                f"{answer_text}\n\n回答的教材依据校验未通过，本次不记录知识点疑问。"
+                f"{answer_text}\n\n回答的教材依据校验未通过；本次不把这段回答当作教材结论。"
+                "若问题可被可靠归类，学习档案会单独记录为“有过疑问”。"
             )
         if not ans.fallback and answer_text:
             answer_text = f"[AI综合回答]\n\n{answer_text}\n\nAI回答可能不完全正确，请结合教材原文核对。"

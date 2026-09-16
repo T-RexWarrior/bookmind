@@ -30,7 +30,7 @@ export interface ContentBlock {
   data?: Record<string, unknown>;
 }
 
-export type TaskKind = "quiz" | "probe" | "changed_task" | "judgment" | "task_options" | "fallback";
+export type TaskKind = "quiz" | "probe" | "changed_task" | "judgment" | "task_options" | "task_complete" | "fallback";
 
 /** The browser-safe task card payload (the assistant-ui data part). */
 export interface TaskCardData {
@@ -151,6 +151,18 @@ export interface ConversationSummary {
 export interface Conversation extends ConversationSummary {
   project_id: string;
   messages: ApiMessage[];
+  practice_state?: {
+    phase: "IDLE" | "ANSWERING" | "FOLLOWUP";
+    task_id: string;
+  };
+}
+
+/** One uniform exit card for every terminal task path. */
+export interface TaskCompletionCardData {
+  kind: "task_complete";
+  task_id: string;
+  completion_status: "ANSWERED" | "SKIPPED" | "EXPLAINED";
+  source_scope?: { source_id: string; title: string; page: number; locator: string }[];
 }
 
 export interface ApiMessage {
@@ -174,11 +186,15 @@ export interface LearningSummary {
     last_question_at?: string | null;
     attempt_count?: number;
     latest_attempt_result?: "PASS" | "PARTIAL" | "FAIL" | null;
+    manual_learned?: boolean;
+    book_id?: string | null;
+    chapter?: string | null;
+    section?: string | null;
   }[];
 }
 
-export type ConsolidationMode = "PRACTICE" | "ASSESSMENT";
-export type ConsolidationFilter = "RECOMMENDED" | "QUESTIONED" | "WEAK" | "DUE" | "UNVERIFIED" | "ALL";
+export type ConsolidationMode = "PRACTICE";
+export type ConsolidationFilter = "RECOMMENDED" | "QUESTIONED" | "WEAK" | "DUE" | "UNVERIFIED" | "ALL" | "RANDOM";
 
 export interface ConsolidationCandidate {
   concept_id: string;
@@ -215,7 +231,7 @@ export interface ConceptLearningRecord {
   description: string;
   chapter: string;
   section: string;
-  status: { group: string; current_level: string; highest_level: string; exposure: string };
+  status: { group: string; current_level: string; highest_level: string; exposure: string; manual_learned?: boolean };
   question_count: number;
   attempt_count: number;
   source_refs: { source_id: string; source_title: string; page: number; chunk_id?: string; label: string }[];

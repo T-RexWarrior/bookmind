@@ -108,6 +108,14 @@ class EvidenceType(StrEnum):
     CORRECTION = "CORRECTION"
 
 
+class MemoryKind(StrEnum):
+    """Project-scoped learner memory; never proof of mastery by itself."""
+
+    MANUAL_LEARNED = "MANUAL_LEARNED"
+    QUESTION_CONTEXT = "QUESTION_CONTEXT"
+    TASK_FOLLOWUP = "TASK_FOLLOWUP"
+
+
 class EvidenceResult(StrEnum):
     PASS = "PASS"
     PARTIAL = "PARTIAL"

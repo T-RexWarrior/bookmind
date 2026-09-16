@@ -28,6 +28,7 @@ from .enums import (
     JudgmentStatus,
     Level,
     LevelStatus,
+    MemoryKind,
     MisconceptionStatus,
     RelationType,
     SignalDirection,
@@ -221,6 +222,24 @@ class Evidence(BaseModel):
     scoring_type: str = ""  # which fixed-evidence-score bucket this counted as
 
     model_config = {"frozen": True}
+
+
+class LearningMemory(BaseModel):
+    """Durable, user/project-scoped context that is separate from Evidence.
+
+    It can preserve a learner's declared progress or a topic of discussion,
+    but only independently judged task evidence may advance L1--L4.
+    """
+
+    memory_id: str
+    project_id: str
+    kind: MemoryKind
+    concept_id: str = ""
+    conversation_id: str = ""
+    content: str = ""
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
 
 
 # --- Misconception (LEARNING_MODEL §8) ------------------------------------

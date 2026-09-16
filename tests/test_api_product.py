@@ -285,6 +285,129 @@ def test_learning_summary_after_seed(client):
     assert "pending" in body["groups"]
 
 
+def test_manual_learned_is_persistent_but_never_grants_mastery(client):
+    """A learner declaration is visible in the shared profile, not evidence."""
+    _bootstrap(client)
+    pid = client.post("/api/projects", json={"name": "自报学习状态"}).json()["project_id"]
+    client.post(f"/api/projects/{pid}/books/seed-demo")
+    before = client.get(f"/api/projects/{pid}/learning-summary").json()
+    concept_id = before["concepts"][0]["concept_id"]
+
+    marked = client.put(
+        f"/api/projects/{pid}/concepts/{concept_id}/manual-learning",
+        json={"learned": True},
+    )
+    assert marked.status_code == 200
+    assert marked.json()["label"] == "已学（待验证）"
+
+    after = client.get(f"/api/projects/{pid}/learning-summary").json()
+    row = next(item for item in after["concepts"] if item["concept_id"] == concept_id)
+    assert row["manual_learned"] is True
+    assert row["level"] == "L0"
+    memory = client.get(f"/api/projects/{pid}/memory").json()
+    assert any(item["kind"] == "MANUAL_LEARNED" and item["concept_id"] == concept_id for item in memory)
+
+    cleared = client.put(
+        f"/api/projects/{pid}/concepts/{concept_id}/manual-learning",
+        json={"learned": False},
+    )
+    assert cleared.status_code == 200
+    refreshed = client.get(f"/api/projects/{pid}/learning-summary").json()
+    assert next(item for item in refreshed["concepts"] if item["concept_id"] == concept_id)["manual_learned"] is False
+
+
+def test_random_practice_and_post_task_followup_are_state_safe(client):
+    """The primary practice action is random; its follow-up is read-only."""
+    _bootstrap(client)
+    pid = client.post("/api/projects", json={"name": "随机练习"}).json()["project_id"]
+    client.post(f"/api/projects/{pid}/books/seed-demo")
+    cid = client.post(
+        f"/api/projects/{pid}/conversations", params={"activity_type": "REVIEW"},
+    ).json()["conversation_id"]
+
+    created = client.post(
+        f"/api/conversations/{cid}/tasks",
+        json={"mode": "PRACTICE", "selection": "RANDOM"},
+    )
+    assert created.status_code == 200
+    task_id = created.json()["task"]["task_id"]
+    assert client.post(f"/api/tasks/{task_id}/skip").status_code == 200
+
+    before = client.get(f"/api/projects/{pid}/learning-summary").json()
+    followup = client.post(
+        f"/api/conversations/{cid}/tasks/{task_id}/followup",
+        json={"question": "为什么这个结论成立？"},
+    )
+    assert followup.status_code == 200
+    assert followup.json()["read_only"] is True
+    # The follow-up phase is persistent and blocks every new-task entrance,
+    # including a direct API call that would bypass disabled browser buttons.
+    state = client.get(f"/api/conversations/{cid}").json()["practice_state"]
+    assert state == {"phase": "FOLLOWUP", "task_id": task_id}
+    blocked = client.post(
+        f"/api/conversations/{cid}/tasks",
+        json={"mode": "PRACTICE", "selection": "RANDOM"},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "FOLLOWUP_ACTIVE"
+    assert client.post(f"/api/conversations/{cid}/consolidation-summary").status_code == 409
+    closed = client.post(f"/api/conversations/{cid}/tasks/{task_id}/followup/close")
+    assert closed.status_code == 200
+    assert client.get(f"/api/conversations/{cid}").json()["practice_state"]["phase"] == "IDLE"
+    after = client.get(f"/api/projects/{pid}/learning-summary").json()
+    assert [(item["concept_id"], item["level"]) for item in before["concepts"]] == [
+        (item["concept_id"], item["level"]) for item in after["concepts"]
+    ]
+    memory = client.get(f"/api/projects/{pid}/memory").json()
+    assert any(item["kind"] == "TASK_FOLLOWUP" for item in memory)
+
+
+def test_every_terminal_task_path_exposes_the_same_followup_exit(client):
+    """Skip and explanation must not strand the learner outside follow-up.
+
+    The browser renders one `task_complete` card for every terminal path; this
+    API test protects the server contract that makes that state machine real.
+    """
+    _bootstrap(client)
+    pid = client.post("/api/projects", json={"name": "统一结束出口"}).json()["project_id"]
+    client.post(f"/api/projects/{pid}/books/seed-demo")
+    cid = client.post(
+        f"/api/projects/{pid}/conversations", params={"activity_type": "REVIEW"},
+    ).json()["conversation_id"]
+    created = client.post(
+        f"/api/conversations/{cid}/tasks",
+        json={"mode": "PRACTICE", "selection": "RANDOM"},
+    )
+    assert created.status_code == 200
+    task_id = created.json()["task"]["task_id"]
+
+    skipped = client.post(f"/api/tasks/{task_id}/skip")
+    assert skipped.status_code == 200
+    skip_blocks = client.get(f"/api/conversations/{cid}").json()["messages"][-1]["content_blocks"]
+    assert any(
+        block.get("data", {}).get("kind") == "task_complete"
+        and block["data"].get("completion_status") == "SKIPPED"
+        for block in skip_blocks
+    )
+
+    explained = client.post(f"/api/conversations/{cid}/tasks/{task_id}/explanation")
+    assert explained.status_code == 200
+    explanation_blocks = client.get(f"/api/conversations/{cid}").json()["messages"][-1]["content_blocks"]
+    assert any(
+        block.get("data", {}).get("kind") == "task_complete"
+        and block["data"].get("completion_status") == "EXPLAINED"
+        for block in explanation_blocks
+    )
+
+    # A terminal task can open a read-only follow-up, and that phase is the
+    # only state that blocks creating the next task.
+    assert client.post(f"/api/conversations/{cid}/tasks/{task_id}/followup/start").status_code == 200
+    assert client.post(
+        f"/api/conversations/{cid}/tasks", json={"mode": "PRACTICE", "selection": "RANDOM"},
+    ).status_code == 409
+    assert client.post(f"/api/conversations/{cid}/tasks/{task_id}/followup/close").status_code == 200
+
+
 def test_mode_command_and_start_learning_are_real_handlers(client):
     _bootstrap(client)
     pid = client.post("/api/projects", json={"name": "P"}).json()["project_id"]

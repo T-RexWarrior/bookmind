@@ -111,11 +111,19 @@ def get_conversation(
         raise HTTPException(status_code=404, detail="conversation not found")
     repo.assert_project_owned_by(conv.project_id, user.user_id)
     messages = runs.messages_for(conversation_id)
+    pending = repo.pending_task_for_conversation(conversation_id)
+    active_followup = repo.active_followup_task_for_conversation(conversation_id)
     return {
         "conversation_id": conv.conversation_id,
         "project_id": conv.project_id,
         "activity_type": conv.activity_type,
         "title": conv.title,
+        # The practice phase is server-owned so refreshes and another browser
+        # tab cannot accidentally send a new answer to an old follow-up.
+        "practice_state": {
+            "phase": "FOLLOWUP" if active_followup else "ANSWERING" if pending else "IDLE",
+            "task_id": (active_followup or pending or {}).get("task_id", ""),
+        },
         "messages": [
             {"message_id": m.message_id, "role": m.role,
              "content_blocks": [b.model_dump() for b in m.content_blocks],

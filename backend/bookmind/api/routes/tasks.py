@@ -39,6 +39,20 @@ class AnswerBody(BaseModel):
         return value.strip()
 
 
+class FollowupBody(BaseModel):
+    question: str
+
+    @field_validator("question")
+    @classmethod
+    def limit_question(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("question is empty")
+        if len(value) > 4_000:
+            raise ValueError("question is too long")
+        return value
+
+
 class CreateTaskBody(BaseModel):
     """Explicit UI command for starting a consolidation task.
 
@@ -47,7 +61,7 @@ class CreateTaskBody(BaseModel):
     """
 
     mode: Literal["PRACTICE", "ASSESSMENT"]
-    selection: Literal["RECOMMENDED", "QUESTIONED", "WEAK", "DUE", "UNVERIFIED", "ALL"] = "RECOMMENDED"
+    selection: Literal["RECOMMENDED", "QUESTIONED", "WEAK", "DUE", "UNVERIFIED", "ALL", "RANDOM"] = "RANDOM"
     concept_id: str = ""
     from_task_id: str = ""
     idempotency_key: str = ""
@@ -101,6 +115,14 @@ def create_task(
             "当前对话不属于所选巩固模式，请切换后重试",
             status_code=409,
             action="SWITCH_MODE",
+        )
+    active_followup = repo.active_followup_task_for_conversation(conversation_id)
+    if active_followup is not None:
+        raise AppError(
+            "FOLLOWUP_ACTIVE",
+            "请先结束上一题的追问，再开始下一题。",
+            status_code=409,
+            action="END_FOLLOWUP",
         )
     selected_concept_id = body.concept_id
     if body.from_task_id:
@@ -184,6 +206,13 @@ def finish_consolidation(
     repo.assert_project_owned_by(conv.project_id, user.user_id)
     if conv.activity_type == "LEARN":
         raise AppError("ACTIVITY_MISMATCH", "资料问答不需要结束巩固", status_code=409)
+    if repo.active_followup_task_for_conversation(conversation_id) is not None:
+        raise AppError(
+            "FOLLOWUP_ACTIVE",
+            "请先结束上一题的追问，再结束本次练习。",
+            status_code=409,
+            action="END_FOLLOWUP",
+        )
 
     judgments: list[dict] = []
     for message in runs.messages_for(conversation_id):
@@ -251,6 +280,12 @@ def explain_task(
         type="text",
         text=explanation["text"],
     ))
+    blocks.append(ContentBlock(type="task", data={
+        "kind": "task_complete",
+        "task_id": task_id,
+        "completion_status": explanation.get("completion_status", "EXPLAINED"),
+        "source_scope": source_scope,
+    }))
     message = Message(
         message_id=f"msg_{uuid.uuid4().hex[:12]}", conversation_id=conversation_id,
         role="assistant", content_blocks=blocks,
@@ -260,6 +295,86 @@ def explain_task(
         "message_id": message.message_id,
         "revealed_while_pending": explanation["revealed_while_pending"],
     }
+
+
+@router.post("/conversations/{conversation_id}/tasks/{task_id}/followup")
+def follow_up_task(
+    conversation_id: str,
+    task_id: str,
+    body: FollowupBody,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+    runs: RunService = Depends(get_run_service),
+    tasks: TaskService = Depends(get_task_service),
+) -> dict:
+    """Read-only task follow-up; it never writes learning evidence."""
+    conv = runs.get_conversation(conversation_id)
+    if conv is None:
+        raise AppError("CONVERSATION_NOT_FOUND", "对话不存在", status_code=404)
+    repo.assert_project_owned_by(conv.project_id, user.user_id)
+    task = _load_owned_task(repo, task_id, user)
+    if task["project_id"] != conv.project_id:
+        raise AppError("TASK_NOT_IN_PROJECT", "题目不属于当前学习空间", status_code=404)
+    if task.get("conversation_id") != conversation_id:
+        raise AppError("TASK_NOT_IN_CONVERSATION", "题目不属于当前对话", status_code=404)
+    # Keep the message endpoint backward-compatible for clients that send the
+    # first follow-up directly, while the current UI explicitly opens the
+    # phase as soon as the learner clicks “追问本题”.
+    tasks.start_followup(task_id)
+    answer = tasks.answer_followup(task_id, body.question)
+    from ...services.learning_memory import remember_task_followup
+    remember_task_followup(
+        repo, project_id=conv.project_id, conversation_id=conversation_id,
+        task_id=task_id, question=body.question,
+    )
+    message = Message(
+        message_id=f"msg_{uuid.uuid4().hex[:12]}", conversation_id=conversation_id,
+        role="assistant", content_blocks=[
+            ContentBlock(type="status", text="题后追问不会影响学习状态。"),
+            ContentBlock(type="text", text=answer),
+        ],
+    )
+    runs.add_message(message)
+    return {"message_id": message.message_id, "text": answer, "read_only": True}
+
+
+@router.post("/conversations/{conversation_id}/tasks/{task_id}/followup/start")
+def start_task_followup(
+    conversation_id: str,
+    task_id: str,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+    runs: RunService = Depends(get_run_service),
+    tasks: TaskService = Depends(get_task_service),
+) -> dict:
+    """Open a durable follow-up phase before the learner types a question."""
+    conv = runs.get_conversation(conversation_id)
+    if conv is None:
+        raise AppError("CONVERSATION_NOT_FOUND", "对话不存在", status_code=404)
+    repo.assert_project_owned_by(conv.project_id, user.user_id)
+    task = _load_owned_task(repo, task_id, user)
+    if task["project_id"] != conv.project_id or task.get("conversation_id") != conversation_id:
+        raise AppError("TASK_NOT_IN_CONVERSATION", "题目不属于当前对话", status_code=404)
+    return tasks.start_followup(task_id)
+
+
+@router.post("/conversations/{conversation_id}/tasks/{task_id}/followup/close")
+def close_task_followup(
+    conversation_id: str,
+    task_id: str,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+    runs: RunService = Depends(get_run_service),
+    tasks: TaskService = Depends(get_task_service),
+) -> dict:
+    conv = runs.get_conversation(conversation_id)
+    if conv is None:
+        raise AppError("CONVERSATION_NOT_FOUND", "对话不存在", status_code=404)
+    repo.assert_project_owned_by(conv.project_id, user.user_id)
+    task = _load_owned_task(repo, task_id, user)
+    if task["project_id"] != conv.project_id or task.get("conversation_id") != conversation_id:
+        raise AppError("TASK_NOT_IN_CONVERSATION", "题目不属于当前对话", status_code=404)
+    return tasks.end_followup(task_id)
 
 
 @router.get("/tasks/{task_id}")
@@ -308,7 +423,21 @@ def skip_task(
     task_id: str,
     user: User = Depends(get_current_user),
     repo: Repository = Depends(get_repo),
+    runs: RunService = Depends(get_run_service),
     tasks: TaskService = Depends(get_task_service),
 ) -> dict:
-    _load_owned_task(repo, task_id, user)
-    return tasks.skip_task(task_id)
+    task = _load_owned_task(repo, task_id, user)
+    result = tasks.skip_task(task_id)
+    source_scope = tasks.source_scope_for_task(task_id)
+    message = Message(
+        message_id=f"msg_{uuid.uuid4().hex[:12]}", conversation_id=task["conversation_id"],
+        role="assistant", content_blocks=[
+            ContentBlock(type="text", text="已跳过这道题，不会把它记为错误答案。"),
+            ContentBlock(type="task", data={
+                "kind": "task_complete", "task_id": task_id,
+                "completion_status": "SKIPPED", "source_scope": source_scope,
+            }),
+        ],
+    )
+    runs.add_message(message)
+    return {**result, "message_id": message.message_id}

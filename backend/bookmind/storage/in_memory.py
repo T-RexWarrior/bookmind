@@ -21,6 +21,7 @@ from ..domain.models import (
     Evidence,
     LearnerConceptState,
     LearningProject,
+    LearningMemory,
     Message,
     MisconceptionHypothesis,
     ProjectBook,
@@ -48,6 +49,7 @@ class InMemoryRepository:
         self.states: dict[tuple[str, str], LearnerConceptState] = {}
         self.evidence: list[Evidence] = []
         self._evidence_by_key: dict[str, Evidence] = {}
+        self._memories: dict[str, LearningMemory] = {}
         self.misconceptions: dict[tuple[str, str], MisconceptionHypothesis] = {}
         self.transitions: list[StateTransition] = []
         # Idempotency set for derived expiry transitions (LEARNING_MODEL §6).
@@ -390,10 +392,33 @@ class InMemoryRepository:
     def evidence_for_project(self, project_id: str) -> list[Evidence]:
         return [e for e in self.evidence if e.project_id == project_id]
 
+    # --- learner memory ---------------------------------------------------
+
+    def save_memory(self, memory: LearningMemory) -> None:
+        self._memories[memory.memory_id] = memory
+
+    def delete_memory(self, memory_id: str) -> bool:
+        return self._memories.pop(memory_id, None) is not None
+
+    def memories_for_project(self, project_id: str, *, kind: str | None = None,
+                             concept_id: str | None = None) -> list[LearningMemory]:
+        return sorted(
+            (
+                item for item in self._memories.values()
+                if item.project_id == project_id
+                and (kind is None or item.kind.value == kind)
+                and (concept_id is None or item.concept_id == concept_id)
+            ),
+            key=lambda item: item.updated_at,
+            reverse=True,
+        )
+
     # --- trusted tasks / submissions (M4) ----------------------------------
 
     def save_trusted_task(self, task_data: dict) -> None:
-        self._trusted_tasks[task_data["task_id"]] = dict(task_data)
+        data = dict(task_data)
+        data.setdefault("followup_open", False)
+        self._trusted_tasks[task_data["task_id"]] = data
 
     def get_trusted_task(self, task_id: str) -> dict | None:
         t = self._trusted_tasks.get(task_id)
@@ -411,6 +436,12 @@ class InMemoryRepository:
                 return dict(t)
         return None
 
+    def active_followup_task_for_conversation(self, conversation_id: str) -> dict | None:
+        for task in self._trusted_tasks.values():
+            if task.get("conversation_id") == conversation_id and task.get("followup_open"):
+                return dict(task)
+        return None
+
     def update_task_status(self, task_id: str, status: str, *, last_submission_id: str | None = None) -> None:
         t = self._trusted_tasks.get(task_id)
         if t is None:
@@ -418,6 +449,11 @@ class InMemoryRepository:
         t["status"] = status
         if last_submission_id is not None:
             t["last_submission_id"] = last_submission_id
+
+    def set_task_followup_open(self, task_id: str, open: bool) -> None:
+        task = self._trusted_tasks.get(task_id)
+        if task is not None:
+            task["followup_open"] = open
 
     def increment_task_hints(self, task_id: str) -> int:
         t = self._trusted_tasks.get(task_id)
