@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from bookmind.agents.demo_corpus import DemoCorpus
 from bookmind.domain.enums import ConceptSource
-from bookmind.domain.models import LearningProject, User, Book, ProjectBook
+from bookmind.domain.models import Concept, LearningProject, User, Book, ProjectBook
 from bookmind.domain.enums import BookRole
 from bookmind.engine.book_graph.mapper import is_acyclic
 from bookmind.llm.router import ModelRouter, RouterConfig
@@ -159,7 +159,9 @@ def test_real_book_graph_comes_only_from_uploaded_content_and_ids_are_stable():
     concepts1 = repo.concepts_for_book("book-real")
     ids1 = {c.concept_id for c in concepts1}
     assert first.gold_concepts == 0
-    assert {c.name for c in concepts1} >= {"优化基础", "梯度下降", "神经网络训练", "反向传播"}
+    # Real books now persist the smallest reliable headings as the only
+    # learning units; in-prose terms are retrieval aliases, not mastery keys.
+    assert {c.name for c in concepts1} == {"第一章 优化基础", "第二章 神经网络训练"}
     assert all(c.source_refs for c in concepts1)
     assert not any(c.concept_id in {"c_variable", "c_reference", "c_object"} for c in concepts1)
 
@@ -180,4 +182,49 @@ def test_real_book_graph_persists_in_sql_repository():
     )
     assert report.gold_concepts == 0
     assert len(repo.concepts_for_book("book-real")) == report.total_concepts
-    assert repo.relations_for_book("book-real")
+    # Conservative heading units do not invent prerequisite edges from prose.
+    assert repo.relations_for_book("book-real") == []
+
+
+def test_rebuild_discards_broad_legacy_graph_and_migrates_only_exact_section_state():
+    repo = InMemoryRepository()
+    repo.add_user(User(user_id="u"))
+    repo.create_project(LearningProject(project_id="p", learner_id="u", name="重建"))
+    repo.add_book(Book(book_id="book", owner_user_id="u", source_hash="s", title="资料"))
+    repo.link_book(ProjectBook(project_id="p", book_id="book", role=BookRole.PRIMARY))
+    section_path = ("第1章", "§1.1 基础概念")
+    chunks = [DocumentChunk(
+        chunk_id="chunk-1", book_id="book", document_id="doc", section_path=section_path,
+        content="基础概念的正文。",
+        source_ref=SourceRef(document_id="doc", chunk_id="chunk-1", physical_page=1,
+                             section_path=section_path),
+    )]
+    repo.add_chunks("book", chunks)
+    # The exact-section node may retain state. The chapter-wide node must be
+    # discarded and must not be guessed into the new §1.1 unit.
+    repo.replace_book_graph("book", [
+        Concept(concept_id="old-exact", book_id="book", name="旧基础", section="第1章 · §1.1 基础概念",
+                source_refs=[SourceRef(document_id="doc", chunk_id="chunk-1", physical_page=1,
+                                       section_path=section_path)]),
+        Concept(concept_id="old-broad", book_id="book", name="基础", section="第1章",
+                source_refs=[
+                    SourceRef(document_id="doc", chunk_id="chapter", physical_page=1,
+                              section_path=("第1章",)),
+                    SourceRef(document_id="doc", chunk_id="chunk-1", physical_page=1,
+                              section_path=section_path),
+                ]),
+    ], [])
+    state = repo.get_state("p", "old-exact")
+    state.read_progress = 0.6
+    repo.save_state(state)
+    broad_state = repo.get_state("p", "old-broad")
+    broad_state.read_progress = 0.9
+    repo.save_state(broad_state)
+
+    report = BookMappingService(repo, ModelRouter(RouterConfig(live=False))).map_book(
+        project_id="p", learner_id="u", book_id="book", chunks=chunks,
+    )
+    new_concept = repo.concepts_for_book("book")[0]
+    assert report.migrated_states == 1
+    assert new_concept.concept_id != "old-broad"
+    assert repo.get_state("p", new_concept.concept_id).read_progress == 0.6

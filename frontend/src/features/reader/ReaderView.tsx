@@ -5,10 +5,15 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { getSourceQuality, getSourceTextLayer, searchSource, sourceFileUrl } from "../../api/client";
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+const pdfWorkerUrl = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url,
-).toString();
+);
+// The worker was once served by Windows as text/plain. Keep a deliberate URL
+// version so an already-open browser does not reuse that stale module cache
+// after the server-side MIME correction.
+pdfWorkerUrl.searchParams.set("v", "mime-fix-1");
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl.toString();
 
 export function ReaderView({
   sourceId,

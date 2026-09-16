@@ -51,6 +51,20 @@ class BuiltContext:
     def chunk_ids(self) -> list[str]:
         return [c.chunk_id for c in self.chunks]
 
+    def render_model_guidance(self) -> str:
+        """Render non-source continuity metadata for a tutor prompt.
+
+        Retrieved chunks are passed separately as citable textbook evidence.
+        Keeping them out here makes the trust boundary explicit: dialogue,
+        memory and learner state can adapt an explanation, but never support a
+        factual textbook claim or a citation.
+        """
+        return "\n\n".join(
+            f"[{segment.label}]\n{segment.text}"
+            for segment in sorted(self.segments, key=lambda item: item.priority)
+            if segment.text and segment.label != "Retrieved"
+        )
+
 
 # Priority ranks (ARCHITECTURE §7): lower number = higher priority.
 P_POLICY = 0
@@ -73,6 +87,8 @@ class ContextRequest:
     current_section_chunk_ids: list[str] = field(default_factory=list)
     learner_states: list[LearnerConceptState] = field(default_factory=list)
     recent_evidence_summary: str = ""
+    conversation_context_text: str = ""
+    memory_context_text: str = ""
     retrieved_chunks: list[DocumentChunk] = field(default_factory=list)
     misconceptions: list[MisconceptionHypothesis] = field(default_factory=list)
     # Assessment: the rubric/answer live only in the safe backend context.
@@ -126,6 +142,18 @@ class ContextBuilder:
             segs.append(ContextSegment(
                 priority=P_EVIDENCE, label="Recent Evidence",
                 text=req.recent_evidence_summary,
+            ))
+
+        if req.conversation_context_text:
+            segs.append(ContextSegment(
+                priority=P_TASK, label="Conversation Continuity",
+                text=req.conversation_context_text,
+            ))
+
+        if req.memory_context_text:
+            segs.append(ContextSegment(
+                priority=P_STATE, label="Learner Memory",
+                text=req.memory_context_text,
             ))
 
         if req.task_text:

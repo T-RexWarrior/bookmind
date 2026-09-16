@@ -28,12 +28,14 @@ from ..agents.concept_skeleton import PREREQUISITE_EDGES, build_skeleton, skelet
 from ..agents.demo_corpus import DEMO_BOOK_ID
 from ..domain.enums import ConceptSource, RelationType
 from ..domain.models import Concept, ConceptRelation
+from ..domain.proposals import ConceptProposal, SectionProposal
+from ..domain.source_ref import SourceRef
 from ..engine.book_graph.mapper import BookGraphBuild, build_book_graph, diff_from_build
 from ..llm.router import ModelRouter
 from ..retrieval.chunk import DocumentChunk
 from ..retrieval.parsed_document import ParsedDocument, Section
 from ..storage.protocols import Repository, ScopeError
-from .concept_scope import is_learning_section
+from .concept_scope import is_learning_section, normalise_section_name
 
 
 @dataclass
@@ -46,6 +48,7 @@ class MappingReport:
     dropped_edges: list[tuple[str, str, str]] = field(default_factory=list)
     gold_protected: int = 0
     fallback_sections: int = 0
+    migrated_states: int = 0
     # Reversible diff of proposal additions.
     added_concept_ids: list[str] = field(default_factory=list)
     added_edges: list[tuple[str, str]] = field(default_factory=list)
@@ -115,28 +118,40 @@ class BookMappingService:
         known_names = [c.name for c in gold_concepts]
 
         # 1. Per-section proposals.
+        #
+        # A persisted graph node is a learning unit, not every noun that
+        # occurs in the prose.  For an uploaded book, the smallest reliable
+        # heading is the only writable unit.  Terms inside it remain query
+        # aliases/anchors; automatically promoting them to mastery nodes is
+        # non-deterministic and makes a single answer look more precise than
+        # the evidence actually is.  This also makes real-book mapping cost
+        # zero LLM calls.
+        #
+        # The bundled demo keeps its hand-authored skeleton and mapper for its
+        # established pedagogical contract.  It is never used for an uploaded
+        # textbook.
         section_proposals = []
         fallback_sections = 0
-        # A detailed textbook outline already supplies enough stable learning
-        # units. Sentence-led fallback extraction across hundreds of sections
-        # produced hundreds of OCR-fragment concepts, making the graph and
-        # practice queue unusable.
-        extract_definitions = len(sections) <= 80
         for sec in sections:
             sec_chunks = [c for c in book_chunks if _chunk_in_section(c, sec)]
             if not sec_chunks:
                 continue
-            sp = self.mapper.map_section(
-                sec,
-                sec_chunks,
-                known_concept_names=known_names,
-                extract_definitions=extract_definitions,
-            )
-            if sp.fallback:
-                fallback_sections += 1
+            if is_demo_book:
+                sp = self.mapper.map_section(
+                    sec,
+                    sec_chunks,
+                    known_concept_names=known_names,
+                    extract_definitions=len(sections) <= 80,
+                )
+                if sp.fallback:
+                    fallback_sections += 1
+            else:
+                sp = _learning_unit_from_section(sec, sec_chunks)
             section_proposals.append(sp)
-            # Let later sections reuse names proposed earlier this run too.
-            known_names = list({*known_names, *[c.name for c in sp.concepts]})
+            if is_demo_book:
+                # Later demo sections may reuse earlier proposed names. Real
+                # heading units must remain independent and deterministic.
+                known_names = list({*known_names, *[c.name for c in sp.concepts]})
 
         # 2. Deterministic merge + validation.
         build = build_book_graph(
@@ -145,7 +160,7 @@ class BookMappingService:
         )
 
         # 3. Persist: replace proposal-origin concepts/edges, keep gold.
-        self._persist(book_id, build, gold_concepts)
+        migrated_states = self._persist(book_id, build, gold_concepts)
 
         # 4. Report + diff for undo.
         diff = diff_from_build(build)
@@ -158,6 +173,7 @@ class BookMappingService:
             total_prereq_edges=len(prereq_edges),
             dropped_edges=build.dropped_edges, gold_protected=build.gold_protected,
             fallback_sections=fallback_sections,
+            migrated_states=migrated_states,
             added_concept_ids=diff.added_concept_ids, added_edges=diff.added_edges,
         )
         if graph_key:
@@ -248,16 +264,53 @@ class BookMappingService:
                 ))
         return rels
 
-    def _persist(self, book_id: str, build: BookGraphBuild, gold_concepts: list[Concept]) -> None:
+    def _persist(self, book_id: str, build: BookGraphBuild, gold_concepts: list[Concept]) -> int:
         """Replace the book's concepts + relations with the build output.
 
         Gold concepts are always present (re-seeded from the skeleton). Any
         prior proposal-origin concepts are discarded — the build is the new
-        source of truth. Learner state keys by concept_id and is untouched;
-        state for removed proposal concepts simply becomes orphaned (harmless:
-        the decision loop only iterates over current concepts).
+        source of truth. A meaningful learner state transfers only when its
+        old and new units have the exact same smallest-section identity;
+        broad/noun-only legacy nodes never receive a guessed migration.
         """
+        previous = self.repo.concepts_for_book(book_id)
         self.repo.replace_book_graph(book_id, list(build.concepts), list(build.relations))
+        return self._migrate_states_by_section(book_id, previous, list(build.concepts))
+
+    def _migrate_states_by_section(
+        self, book_id: str, previous: list[Concept], replacement: list[Concept],
+    ) -> int:
+        """Copy state only across a one-to-one, exact section match.
+
+        Evidence stays append-only under its original concept id. This is
+        intentionally a state-view migration, not a rewrite of historical
+        evidence; ambiguous old aggregate nodes are left as history rather
+        than being falsely credited to a new section.
+        """
+        old_by_key = _unique_concepts_by_section(previous)
+        new_by_key = _unique_concepts_by_section(replacement)
+        moves = {
+            old_by_key[key].concept_id: new_by_key[key].concept_id
+            for key in old_by_key.keys() & new_by_key.keys()
+            if old_by_key[key].concept_id != new_by_key[key].concept_id
+        }
+        if not moves:
+            return 0
+        migrated = 0
+        for project_id in self.repo.project_ids_for_book(book_id):
+            states = {state.concept_id: state for state in self.repo.states_for_project(project_id)}
+            for old_id, new_id in moves.items():
+                old_state = states.get(old_id)
+                if old_state is None or not _state_has_learning_signal(old_state):
+                    continue
+                target_state = states.get(new_id)
+                if target_state is not None and _state_has_learning_signal(target_state):
+                    continue
+                migrated_state = old_state.model_copy(update={"concept_id": new_id}, deep=True)
+                self.repo.save_state(migrated_state)
+                states[new_id] = migrated_state
+                migrated += 1
+        return migrated
 
 
 def _chunk_in_section(c: DocumentChunk, sec: Section) -> bool:
@@ -267,6 +320,76 @@ def _chunk_in_section(c: DocumentChunk, sec: Section) -> bool:
         return True
     # Fallback: chunk's first path element matches the section title.
     return bool(c.section_path) and c.section_path[-1] == sec.title
+
+
+def _learning_unit_from_section(sec: Section, chunks: list[DocumentChunk]) -> SectionProposal:
+    """Create one deterministic, source-backed learning unit for a heading."""
+    refs: list[SourceRef] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        if chunk.chunk_id in seen:
+            continue
+        seen.add(chunk.chunk_id)
+        refs.append(SourceRef(
+            document_id=chunk.source_ref.document_id,
+            chunk_id=chunk.chunk_id,
+            block_id=chunk.source_ref.block_id,
+            physical_page=chunk.source_ref.physical_page,
+            section_path=chunk.section_path or sec.section_path,
+        ))
+    # Retaining § numbers prevents repeated labels such as “小结” or “实验”
+    # from collapsing into one book-wide concept identity.
+    name = (sec.section_path[-1] if sec.section_path else sec.title).strip()
+    return SectionProposal(
+        section_id=sec.section_id,
+        section_path=sec.section_path,
+        concepts=[ConceptProposal(
+            name=name,
+            description=f"教材学习单元：{' · '.join(sec.section_path)}",
+            chapter=sec.section_path[0] if sec.section_path else "",
+            section=" · ".join(sec.section_path),
+            importance=0.6,
+            source_refs=refs,
+            rationale="deterministic: smallest reliable textbook heading",
+        )],
+        relations=[],
+        fallback=False,
+    )
+
+
+def _unique_concepts_by_section(concepts: list[Concept]) -> dict[str, Concept]:
+    """Keep only unambiguous smallest-section identities for migration."""
+    grouped: dict[str, list[Concept]] = {}
+    for concept in concepts:
+        key = _smallest_section_key(concept)
+        if key:
+            grouped.setdefault(key, []).append(concept)
+    return {key: items[0] for key, items in grouped.items() if len(items) == 1}
+
+
+def _smallest_section_key(concept: Concept) -> str:
+    """Stable path identity; rejects chapter-wide and cross-section nodes."""
+    paths = {
+        tuple(ref.section_path)
+        for ref in concept.source_refs
+        if ref.section_path
+    }
+    if len(paths) != 1:
+        return ""
+    path = next(iter(paths))
+    if not is_learning_section(path[-1], path, require_leaf=True):
+        return ""
+    return " · ".join(normalise_section_name(item) for item in path)
+
+
+def _state_has_learning_signal(state) -> bool:
+    if state.read_progress > 0 or state.goal_relevance > 0:
+        return True
+    if state.exposure_state.value != "NONE":
+        return True
+    if state.highest_ever_level.value != "L0" or state.current_verified_level.value != "L0":
+        return True
+    return any(record.status.value != "UNVERIFIED" for record in state.levels.values())
 
 
 __all__ = ["BookMappingService", "MappingReport"]

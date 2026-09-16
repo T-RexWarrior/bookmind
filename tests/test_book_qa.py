@@ -12,6 +12,7 @@ from bookmind.llm.router import ModelRouter, RouterConfig
 from bookmind.retrieval.parsers import PlainPdfFallback
 from bookmind.jobs import JobStore, IngestionWorker
 from bookmind.services import BookQAService
+from bookmind.services.book_qa import question_requests_code
 from bookmind.storage.in_memory import InMemoryRepository
 
 
@@ -55,6 +56,12 @@ def test_ask_before_ingest_returns_helpful_error():
     ans = svc.ask(project_id="p1", learner_id="u1", question="anything")
     assert ans.grounded is False
     assert "ingest" in ans.reason
+
+
+def test_explicit_code_request_requires_a_code_supplement():
+    assert question_requests_code("能否给我一份 Python 代码实现？")
+    assert question_requests_code("请写出伪代码")
+    assert not question_requests_code("二叉树在什么地方有实际应用？")
 
 
 def test_ingest_is_scoped_rejects_other_learner():

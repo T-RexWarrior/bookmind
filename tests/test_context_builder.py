@@ -127,3 +127,20 @@ def test_review_only_carries_filtered_chunks():
     )
     ctx = cb.build(req)
     assert ctx.chunk_ids() == ["c1"]
+
+
+def test_model_guidance_excludes_citable_source_but_keeps_learning_metadata():
+    ctx = ContextBuilder().build(ContextRequest(
+        activity_mode=ActivityMode.READING,
+        intervention_policy=InterventionPolicy.PROACTIVE,
+        policy_text="Only cite the textbook.",
+        retrieved_chunks=[_chunk("c1", "textbook-only fact")],
+        learner_states=[_state("c1")],
+        conversation_context_text="学习者：那它为什么更快？",
+        memory_context_text="学习者标记为已学，仍待验证。",
+    ))
+    guidance = ctx.render_model_guidance()
+    assert "textbook-only fact" not in guidance
+    assert "Only cite the textbook" in guidance
+    assert "那它为什么更快" in guidance
+    assert "标记为已学" in guidance

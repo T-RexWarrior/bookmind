@@ -661,6 +661,12 @@ class SqlRepository:
             ).order_by(LearningProjectRow.created_at.desc()))
             return [_project_from_row(row) for row in rows]
 
+    def project_ids_for_book(self, book_id: str) -> list[str]:
+        with self.Session() as session:
+            return list(session.scalars(select(ProjectBookRow.project_id).where(
+                ProjectBookRow.book_id == book_id,
+            )))
+
     def assert_project_owned_by(self, project_id: str, learner_id: str) -> LearningProject:
         with self.Session() as session:
             row = session.get(LearningProjectRow, project_id)
@@ -1063,6 +1069,13 @@ class SqlRepository:
         finally:
             if own:
                 session.close()
+
+    def states_for_project(self, project_id: str) -> list[LearnerConceptState]:
+        with self.Session() as session:
+            rows = session.scalars(select(LearnerConceptStateRow).where(
+                LearnerConceptStateRow.project_id == project_id,
+            ))
+            return [_state_from_row(row) for row in rows]
 
     def save_state(self, state: LearnerConceptState) -> None:
         session, own = self._own_session()

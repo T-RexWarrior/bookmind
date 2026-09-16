@@ -7,8 +7,9 @@ transactions and scope checks that Agents and the Engine must not bypass.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from collections.abc import Callable
+import re
 
 from ..agents.tutor import TutorAgent
 from ..domain.enums import ActivityMode, InterventionPolicy
@@ -75,11 +76,47 @@ class BookQAService:
             "parser": res.job.parser, "reused": res.reused,
         }
 
+    def general_supplement(
+        self, *, question: str, subject_names: list[str], require_code: bool = False,
+    ) -> str:
+        """Answer an explicitly external/programming extension.
+
+        This route is deliberately separate from :meth:`ask`: it carries no
+        textbook citations and callers must label it as general knowledge. It
+        never participates in QUESTION evidence or mastery state.
+        """
+        if not getattr(self.router.cfg, "live", False):
+            return ""
+        subjects = "、".join(subject_names) or "未能可靠归类的教材主题"
+        code_requirement = (
+            "用户明确索要代码：必须给出一个完整、最小、可直接阅读的 Markdown 代码块，"
+            "使用用户指定语言；若未指定则使用 Python。代码须覆盖所问的核心操作，"
+            "并用一句话说明适用边界。"
+            if require_code else ""
+        )
+        result = self.router.complete(
+            "general_knowledge_supplement",
+            [{"role": "system", "content": (
+                "你是学习助理的通用知识补充模块。回答只能作为教材之外的补充，"
+                "不得伪称来自教材、不得编造页码或引用。若问题前提不确定，要说明条件；"
+                "对于“该用哪个数据结构”类问题，先列出任务约束，再给条件化建议。"
+                "必须覆盖用户问题中的每个明确子问；用简洁中文回答，最多 500 字。"
+                f"{code_requirement}"
+            )}, {"role": "user", "content": (
+                f"教材侧已识别的主题：{subjects}\n用户问题：{question[:1200]}"
+            )}],
+            temperature=0.2, max_tokens=900,
+        )
+        if not result.ok:
+            return ""
+        return str(result.content or "").strip()
     def ask(self, *, project_id: str, learner_id: str, question: str,
             top_k: int = 12, context_budget: int = 12,
             source_ids: list[str] | None = None,
             physical_page: int | None = None,
             preferred_chunk_ids: list[str] | None = None,
+            selected_chunk_ids: list[str] | None = None,
+            context_request: ContextRequest | None = None,
             on_retrieval: Callable[[list[dict], float, bool], None] | None = None) -> AskResult:
         """Answer from the selected source range with grounded citations."""
         self.repo.assert_project_owned_by(project_id, learner_id)
@@ -131,25 +168,68 @@ class BookQAService:
             question, top_k=top_k, context_budget=context_budget,
             allow_chunk_ids=allow_chunks,
         )
-        # A graph concept explicitly named in the learner's question is a
-        # stronger semantic anchor than a broad lexical ranking (which can
-        # otherwise select a table of contents or a previous topic).  Anchors
-        # still pass the same project/book/page scope filter above; they never
-        # broaden the selected source range.  Keep only those anchors for the
-        # answer so an unrelated high-BM25 chunk cannot become a citation.
+        # A resolved learning unit is a stronger semantic boundary than broad
+        # lexical ranking (which otherwise drifts to a table of contents or a
+        # previous topic).  Unlike the old “take the first graph chunk” rule,
+        # rank *within* the unit first, then retain adjacent anchors.  A
+        # definition often sits after an introductory paragraph in the same
+        # §, so first-chunk-only produced answers such as “栈是什么” without
+        # LIFO.
         scoped_by_id = {chunk.chunk_id: chunk for chunk in scoped_chunks}
-        preferred = [
-            scoped_by_id[chunk_id] for chunk_id in (preferred_chunk_ids or [])
-            if chunk_id in scoped_by_id
-        ]
-        if preferred:
-            hits = [
+        preferred_ids = list(dict.fromkeys(
+            chunk_id for chunk_id in (preferred_chunk_ids or []) if chunk_id in scoped_by_id
+        ))
+        selected_ids = list(dict.fromkeys(
+            chunk_id for chunk_id in (selected_chunk_ids or []) if chunk_id in scoped_by_id
+        ))
+        if preferred_ids:
+            preferred_set = set(preferred_ids)
+            by_hit_id = {hit.chunk.chunk_id: hit for hit in hits}
+            ranked_preferred = [hit for hit in hits if hit.chunk.chunk_id in preferred_set]
+            missing_preferred = [
                 RetrievalHit(
-                    chunk=chunk, bm25_rank=1, final_score=1.0,
-                    confidence=0.99, confidence_label="HIGH",
+                    chunk=scoped_by_id[chunk_id], bm25_rank=None,
+                    final_score=0.92, confidence=0.92, confidence_label="HIGH",
                 )
-                for chunk in preferred[:context_budget]
+                for chunk_id in preferred_ids if chunk_id not in by_hit_id
             ]
+            # A verified selected excerpt is an explicit user anchor, so it
+            # precedes otherwise relevant section chunks while remaining fully
+            # server-scoped and citation-validated.
+            selected_hits = [
+                by_hit_id.get(chunk_id) or RetrievalHit(
+                    chunk=scoped_by_id[chunk_id], bm25_rank=None,
+                    final_score=1.0, confidence=0.99, confidence_label="HIGH",
+                )
+                for chunk_id in selected_ids
+            ]
+            used = {hit.chunk.chunk_id for hit in selected_hits}
+            preferred_hits = [
+                hit for hit in ranked_preferred + missing_preferred
+                if hit.chunk.chunk_id not in used
+            ]
+            used.update(hit.chunk.chunk_id for hit in preferred_hits)
+            # The learning unit anchors mastery, but an answer may need a
+            # nearby applied subsection: “队列有什么用” legitimately reaches
+            # §4.6 after §4.5. Keep only high-ranked supplements from the
+            # same source chapter; this prevents a lexical cousin such as
+            # “优先级队列” in a distant chapter from hijacking the context.
+            preferred_chapters = {
+                (chunk.section_path[0] if chunk.section_path else "")
+                for chunk_id in preferred_ids
+                if (chunk := scoped_by_id.get(chunk_id)) is not None
+            }
+            supplemental_hits = [
+                hit for hit in hits
+                if hit.chunk.chunk_id not in used
+                and hit.bm25_rank is not None
+                and hit.chunk.book_id in {
+                    scoped_by_id[chunk_id].book_id for chunk_id in preferred_ids
+                    if chunk_id in scoped_by_id
+                }
+                and (hit.chunk.section_path[0] if hit.chunk.section_path else "") in preferred_chapters
+            ][:3]
+            hits = (selected_hits + preferred_hits + supplemental_hits)[:context_budget]
         if not hits:
             return AskResult("", [], False, [], "no relevant chunks found")
         if physical_page is not None:
@@ -178,10 +258,14 @@ class BookQAService:
         # the exact supporting chunk before any of them can appear in an answer.
         answer_hits = hits
         # Build context (mode-agnostic for a plain question → Reading/Proactive).
-        ctx = self.context_builder.build(ContextRequest(
+        base_context = context_request or ContextRequest(
             activity_mode=ActivityMode.READING,
             intervention_policy=InterventionPolicy.PROACTIVE,
-            retrieved_chunks=[h.chunk for h in answer_hits],
+        )
+        # Callers may contribute only non-source guidance. The actual cited
+        # source pack is always decided here after server-side retrieval.
+        ctx = self.context_builder.build(replace(
+            base_context, retrieved_chunks=[h.chunk for h in answer_hits],
         ))
         validator = CitationValidator(
             {c.chunk_id: c for c in scoped_chunks},
@@ -193,7 +277,9 @@ class BookQAService:
         # ceiling prevents false empty-content fallbacks; the prompt still asks
         # for a concise learner-facing response.
         ans = tutor.answer(
-            question, answer_hits, max_attempts=2, max_tokens=4096,
+            question, answer_hits,
+            guidance_context=ctx.render_model_guidance(),
+            max_attempts=2, max_tokens=4096,
         )
         supported_ids = set(ans.chunk_ids) if ans.grounded else set()
         supported_hits = [
@@ -415,3 +501,11 @@ def _new_retriever(router: ModelRouter) -> HybridRetriever:
     from ..retrieval.vector import VectorStore
     return HybridRetriever(bm25_index=BM25Index(), vector_store=VectorStore(),
                            router=router, rerank_enabled=False)
+
+
+def question_requests_code(question: str) -> bool:
+    """Whether the general layer must return code, not merely mention it."""
+    folded = re.sub(r"\s+", "", question or "").casefold()
+    return any(marker in folded for marker in (
+        "代码", "实现", "python", "c语言", "c++", "java", "javascript", "伪代码",
+    ))

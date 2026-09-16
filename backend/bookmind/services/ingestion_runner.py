@@ -374,8 +374,10 @@ class IngestionRunner:
             job.book_id != "demo_java_core"
             and any(c.source == "GOLD" for c in existing)
         )
-        if existing and not contaminated:
+        if existing and not contaminated and not job.force_reparse:
             return  # already mapped by the real-book pipeline
+        if job.force_reparse:
+            log.info("force-rebuilding graph for %s", job.book_id)
         if contaminated:
             log.warning(
                 "rebuilding legacy demo-contaminated graph for real book %s",

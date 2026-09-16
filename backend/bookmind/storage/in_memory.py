@@ -102,6 +102,12 @@ class InMemoryRepository:
             reverse=True,
         )
 
+    def project_ids_for_book(self, book_id: str) -> list[str]:
+        return [
+            project_id for project_id, links in self.project_books.items()
+            if any(link.book_id == book_id for link in links)
+        ]
+
     def assert_project_owned_by(self, project_id: str, learner_id: str) -> LearningProject:
         proj = self.projects.get(project_id)
         if proj is None:
@@ -361,6 +367,9 @@ class InMemoryRepository:
         if key not in self.states:
             self.states[key] = LearnerConceptState(project_id=project_id, concept_id=concept_id)
         return self.states[key]
+
+    def states_for_project(self, project_id: str) -> list[LearnerConceptState]:
+        return [state for (pid, _), state in self.states.items() if pid == project_id]
 
     def save_state(self, state: LearnerConceptState) -> None:
         self.states[(state.project_id, state.concept_id)] = state

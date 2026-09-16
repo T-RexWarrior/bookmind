@@ -348,6 +348,7 @@ def create_app(repo: Repository | None = None) -> FastAPI:
     # assets directory at /ui/assets, and serve index.html (plus legacy files)
     # via a catch-all that doubles as the SPA fallback — so a refresh on a
     # client route like /ui/projects/:id never 404s.
+    import mimetypes
     import os
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
@@ -356,6 +357,10 @@ def create_app(repo: Repository | None = None) -> FastAPI:
     _serve_root = _dist_dir if os.path.isdir(_dist_dir) else _frontend_dir
     _assets_dir = os.path.join(_serve_root, "assets")
     if os.path.isdir(_assets_dir):
+        # Windows commonly maps ``.mjs`` to text/plain. PDF.js loads its
+        # worker with dynamic import(), which browsers reject unless it is a
+        # JavaScript MIME type even when the file itself returned HTTP 200.
+        mimetypes.add_type("application/javascript", ".mjs")
         app.mount("/ui/assets", StaticFiles(directory=_assets_dir), name="ui-assets")
 
     @app.get("/ui/{full_path:path}")
