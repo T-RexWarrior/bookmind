@@ -312,6 +312,8 @@ def list_books(
     """List a learning space's sources with processing and outline metadata."""
     repo.assert_project_owned_by(project_id, user.user_id)
     book_ids = sorted(repo.allowed_book_ids(project_id))
+    from ...services.concept_scope import is_learning_concept
+
     out: list[dict] = []
     for bid in book_ids:
         # One physical PDF can be linked into several learning spaces, but its
@@ -327,7 +329,10 @@ def list_books(
             "page_count": book.page_count if book else 0,
             "section_count": book.section_count if book else 0,
             "outline": book.outline if book else [],
-            "concept_count": len(repo.concepts_for_book(bid)),
+            "concept_count": sum(
+                1 for concept in repo.concepts_for_book(bid)
+                if is_learning_concept(concept)
+            ),
             "job_id": job.job_id if job else None,
             "state": job.state.value if job else "UNKNOWN",
             "stage": user_stage(job)["label"] if job else "",
@@ -355,11 +360,15 @@ def knowledge_graph(
     if book_id is not None and book_id not in allowed:
         raise HTTPException(status_code=403, detail="该资料不属于当前学习空间。")
     selected_books = [book_id] if book_id else sorted(allowed)
+    from ...services.concept_scope import is_learning_concept
+
     concepts = [
         concept
         for selected in selected_books
         for concept in repo.concepts_for_book(selected)
+        if is_learning_concept(concept)
     ]
+    visible_concept_ids = {concept.concept_id for concept in concepts}
     nodes = [{
         "concept_id": c.concept_id,
         "book_id": c.book_id,
@@ -376,6 +385,11 @@ def knowledge_graph(
     edge_map: dict[tuple[str, str, str], dict] = {}
     for selected in selected_books:
         for relation in repo.relations_for_book(selected):
+            if (
+                relation.source_concept_id not in visible_concept_ids
+                or relation.target_concept_id not in visible_concept_ids
+            ):
+                continue
             key = (relation.source_concept_id, relation.target_concept_id, relation.relation.value)
             edge_map[key] = {
                 "source": relation.source_concept_id,
@@ -387,6 +401,8 @@ def knowledge_graph(
     # were persisted: the Concept adjacency remains authoritative.
     for concept in concepts:
         for prerequisite in concept.prerequisites:
+            if prerequisite not in visible_concept_ids:
+                continue
             key = (concept.concept_id, prerequisite, "PREREQUISITE")
             edge_map.setdefault(key, {
                 "source": concept.concept_id,

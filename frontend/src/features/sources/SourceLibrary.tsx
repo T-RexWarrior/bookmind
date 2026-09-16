@@ -5,6 +5,8 @@ import { IngestionCard } from "../ingestion/IngestionCard";
 import * as api from "../../api/client";
 import { toast } from "../../components/ui/primitives";
 
+type GraphConcept = Awaited<ReturnType<typeof api.knowledgeGraph>>["nodes"][number];
+
 export function SourceLibrary({
   onSelect,
 }: {
@@ -14,7 +16,7 @@ export function SourceLibrary({
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<LearningSourceView["outline"]>([]);
-  const [concepts, setConcepts] = useState<Awaited<ReturnType<typeof api.knowledgeGraph>>["nodes"]>([]);
+  const [concepts, setConcepts] = useState<GraphConcept[]>([]);
   const active = state.sources.find((source) => source.source_id === state.reader?.sourceId);
   const sources = useMemo(
     () => state.sources.filter((source) => source.title.toLowerCase().includes(filter.toLowerCase())),
@@ -38,6 +40,10 @@ export function SourceLibrary({
   }, [state.activeProject?.project_id, active?.source_id, state.summary]);
 
   const manuallyLearned = new Set((state.summary?.concepts || []).filter((item) => item.manual_learned).map((item) => item.concept_id));
+  const conceptsByOutline = useMemo(
+    () => matchConceptsToOutline(draft, concepts),
+    [draft, concepts],
+  );
   const markConcept = async (conceptId: string, learned: boolean) => {
     const projectId = state.activeProject?.project_id;
     if (!projectId) return;
@@ -103,7 +109,7 @@ export function SourceLibrary({
         <div className="source-outline">
           <div className="section-title-row">
             <span>资料目录</span>
-            <small>{active.section_count ? `${active.section_count} 节` : "解析后生成"}</small>
+            <small>{active.section_count ? `${active.section_count} 节 · ${concepts.length} 个有效知识点` : "解析后生成"}</small>
           </div>
           {active.warnings?.length ? (
             <p className="outline-placeholder" style={{ color: "var(--warning)" }}>{active.warnings[0]}</p>
@@ -150,13 +156,29 @@ export function SourceLibrary({
               </div>
             </div>
           ) : draft.length ? (
-            <div className="outline-list">
-              {draft.slice(0, 80).map((item, index) => (
-                <button key={`${item.page}-${index}`} onClick={() => onSelect(active, item.page)}>
-                  <span>{item.title}</span>
-                  <small>{item.page}</small>
-                </button>
-              ))}
+            <div className="outline-list outline-learning-list">
+              {draft.slice(0, 80).map((item, index) => {
+                const linkedConcepts = conceptsByOutline.get(index) || [];
+                const depth = Math.max(0, Math.min(3, (item.path?.length || 1) - 1));
+                return <div className="outline-learning-row" key={`${item.page}-${index}`} style={{ paddingLeft: depth * 10 }}>
+                  <button className="outline-learning-row__nav" onClick={() => onSelect(active, item.page)}>
+                    <span>{item.title}</span>
+                    <small>{item.page}</small>
+                  </button>
+                  {linkedConcepts.length ? <div className="outline-learning-row__concepts">
+                    {linkedConcepts.map((concept) => {
+                      const learned = manuallyLearned.has(concept.concept_id);
+                      const showName = normaliseOutlineLabel(concept.name) !== normaliseOutlineLabel(item.title);
+                      return <div className="outline-concept-control" key={concept.concept_id} title={concept.description || concept.name}>
+                        {showName ? <span>{concept.name}</span> : null}
+                        <button className={learned ? "is-learned" : ""} onClick={() => void markConcept(concept.concept_id, !learned)}>
+                          {learned ? "已学（待验证）" : "标记已学"}
+                        </button>
+                      </div>;
+                    })}
+                  </div> : null}
+                </div>;
+              })}
               {draft.length > 80 ? <p className="c-muted" style={{ fontSize: 12 }}>目录共 {draft.length} 项；当前为便于阅读显示前 80 项，可搜索或编辑目录查看完整内容。</p> : null}
             </div>
           ) : (
@@ -164,25 +186,75 @@ export function SourceLibrary({
               {active.state === "SUCCEEDED" ? "没有认出清晰的目录，但仍然可以阅读和提问。" : "我正在读目录和内容，再等一小会儿…"}
             </p>
           )}
-          {concepts.length ? (
-            <section className="source-concept-status" aria-label="知识点学习状态">
-              <div className="section-title-row"><span>知识点学习状态</span><small>默认未学；标记不等于验证通过</small></div>
-              {concepts.slice(0, 80).map((concept) => {
-                const learned = manuallyLearned.has(concept.concept_id);
-                return <div className="source-concept-status__row" key={concept.concept_id}>
-                  <span title={concept.description}>{concept.name}</span>
-                  <button className={learned ? "is-learned" : ""} onClick={() => void markConcept(concept.concept_id, !learned)}>
-                    {learned ? "已学（待验证）" : "标记已学"}
-                  </button>
-                </div>;
-              })}
-              {concepts.length > 80 ? <p className="c-muted" style={{ fontSize: 12 }}>该资料共有 {concepts.length} 个知识点；完整列表可在“学习状态”的全部知识点中查看。</p> : null}
-            </section>
-          ) : null}
         </div>
       )}
     </aside>
   );
+}
+
+function normaliseOutlineLabel(value: string): string {
+  return (value || "")
+    .toLocaleLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/^第[一二三四五六七八九十百\d]+章/, "")
+    .replace(/^[§*]?\d+(?:\.\d+)*[、.．]?/, "")
+    .replace(/^[*·•]+/, "")
+    .replace(/[：:，,。.!！?？·•—–_\-]+$/g, "");
+}
+
+function normaliseOutlineKey(value: string): string {
+  return (value || "")
+    .toLocaleLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/^[*·•]+/, "")
+    .replace(/[：:，,。.!！?？·•—–_\-]+$/g, "");
+}
+
+function matchConceptsToOutline(
+  outline: LearningSourceView["outline"],
+  concepts: GraphConcept[],
+): Map<number, GraphConcept[]> {
+  const matches = new Map<number, GraphConcept[]>();
+  const matchScores = new Map<number, number>();
+  for (const concept of concepts) {
+    const exactKeys = new Set([
+      normaliseOutlineKey(concept.name),
+      normaliseOutlineKey(concept.section?.split("·").at(-1) || ""),
+    ].filter(Boolean));
+    const topicLabels = new Set([
+      normaliseOutlineLabel(concept.name),
+      normaliseOutlineLabel(concept.section?.split("·").at(-1) || ""),
+    ].filter(Boolean));
+    const page = concept.source_refs.find((ref) => Number(ref.physical_page) > 0)?.physical_page || 0;
+    let bestIndex = -1;
+    let bestScore = 0;
+    outline.forEach((item, index) => {
+      const itemKey = normaliseOutlineKey(item.title);
+      const itemTopic = normaliseOutlineLabel(item.title);
+      // Full numbered heading and physical location outrank a repeated topic
+      // name.  Textbooks commonly contain “接口” or “抽象数据类型” in several
+      // chapters; stripping §2.2/§3.2 must never merge those rows.
+      let score = exactKeys.has(itemKey) ? 120 : 0;
+      if (page && page === item.page) score = Math.max(score, 110);
+      if (page && page >= item.page && page <= (item.page_end || item.page)) score = Math.max(score, 100);
+      if (topicLabels.has(itemTopic)) score = Math.max(score, 40);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+    if (bestIndex >= 0 && bestScore >= 100) {
+      // A directory entry owns one status control.  If a section also has
+      // finer concepts extracted from its prose, keep those in the learning
+      // profile but prefer the canonical heading concept for this row.
+      const currentScore = matchScores.get(bestIndex) || 0;
+      if (bestScore > currentScore) {
+        matches.set(bestIndex, [concept]);
+        matchScores.set(bestIndex, bestScore);
+      }
+    }
+  }
+  return matches;
 }
 
 function sourceStatus(source: LearningSourceView): string {

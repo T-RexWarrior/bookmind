@@ -198,9 +198,13 @@ def project_state_views(
         as_of = utcnow()
     if policy is None:
         policy = ReviewPolicy()
+    from .concept_scope import is_learning_concept
+
     out: list[LearnerStateView] = []
     for bid in repo.allowed_book_ids(project_id):
         for c in repo.concepts_for_book(bid):
+            if not is_learning_concept(c):
+                continue
             state = repo.get_state(project_id, c.concept_id)
             ev = repo.evidence_for(project_id, c.concept_id)
             out.append(build_state_view(c, state, ev, as_of=as_of, policy=policy))

@@ -340,10 +340,13 @@ def learning_summary(
     repo.assert_project_owned_by(project_id, user.user_id)
     views = project_state_views(repo, project_id, policy=ReviewPolicy())
     manual_learned = manually_learned_ids(repo, project_id)
+    from ...services.concept_scope import is_learning_concept
+
     concepts_by_id = {
         concept.concept_id: concept
         for book_id in repo.allowed_book_ids(project_id)
         for concept in repo.concepts_for_book(book_id)
+        if is_learning_concept(concept)
     }
     groups: dict[str, int] = {}
     concept_rows: list[dict] = []

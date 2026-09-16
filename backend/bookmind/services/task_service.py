@@ -57,6 +57,7 @@ from ..engine.task.validator import validate
 from ..llm.router import ModelRouter
 from ..services.remediation import RemediationService
 from ..storage.protocols import Repository
+from .concept_scope import is_learning_concept
 
 HINT_NOTICE = "本次可以继续练习，但不会作为独立掌握证据"
 
@@ -1102,40 +1103,9 @@ class TaskService:
 
 # --- helpers ----------------------------------------------------------------
 
-_NON_LEARNING_SECTIONS = {
-    "序", "丛书序", "前言", "第1版前言", "第2版说明", "第3版说明",
-    "致谢", "简要目录", "详细目录", "教学计划编排方案建议",
-    "参考文献", "算法索引", "代码索引", "关键词索引",
-}
-
-
-def _normalise_section_name(value: str) -> str:
-    return "".join((value or "").split()).lstrip("§*")
-
-
 def _is_practice_worthy(concept) -> bool:
-    """Keep real textbook practice focused on teachable leaf sections."""
-    if concept.book_id == "demo_java_core":
-        return True
-    name = (concept.name or "").strip()
-    normalised_name = _normalise_section_name(name)
-    excluded = {_normalise_section_name(item) for item in _NON_LEARNING_SECTIONS}
-    if (
-        not normalised_name
-        or normalised_name in excluded
-        or "目录" in normalised_name
-        or normalised_name.endswith("索引")
-        or _normalise_section_name(concept.chapter or "").startswith("附录")
-    ):
-        return False
-    # A book/chapter heading can inherit references from all descendants. It
-    # is practice-worthy only when it is itself the leaf of a real subsection.
-    paths = [tuple(ref.section_path) for ref in concept.source_refs if ref.section_path]
-    return any(
-        len(path) >= 2
-        and _normalise_section_name(path[-1]) == normalised_name
-        for path in paths
-    )
+    """Backward-compatible name for the shared learner-concept policy."""
+    return is_learning_concept(concept)
 
 
 def _clarification_for(answer_text: str) -> str:

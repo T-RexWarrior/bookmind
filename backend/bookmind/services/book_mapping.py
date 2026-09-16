@@ -33,6 +33,7 @@ from ..llm.router import ModelRouter
 from ..retrieval.chunk import DocumentChunk
 from ..retrieval.parsed_document import ParsedDocument, Section
 from ..storage.protocols import Repository, ScopeError
+from .concept_scope import is_learning_section
 
 
 @dataclass
@@ -93,6 +94,17 @@ class BookMappingService:
         # Gather chunks for this book (prefer explicit arg, else the repo).
         book_chunks = chunks if chunks is not None else self.repo.chunks_for_book(book_id)
         sections = self._sections_with_chunks(parsed_document, book_chunks)
+        source = self.repo.get_source(book_id)
+        has_nested_outline = any(len(section.section_path) >= 2 for section in sections)
+        sections = [
+            section for section in sections
+            if is_learning_section(
+                section.title,
+                section.section_path,
+                book_title=source.title if source else "",
+                require_leaf=has_nested_outline,
+            )
+        ]
 
         # The hand-authored Java skeleton belongs only to the bundled demo.
         # Real uploads must be mapped from their own text, never contaminated

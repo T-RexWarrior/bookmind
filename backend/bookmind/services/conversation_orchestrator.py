@@ -819,10 +819,14 @@ class ConversationOrchestrator:
         # the current-page retrieval succeeding.  “KMP 是什么” while reading
         # vectors should still record KMP as a QUESTION signal, while the
         # answer itself remains correctly restricted to the selected page.
+        from .concept_scope import is_learning_concept
+
         for book_id in sorted(self.repo.allowed_book_ids(project_id)):
             book_chunks = [chunk for chunk in retrieved if chunk.book_id == book_id]
             retrieved_ids = {chunk.chunk_id for chunk in book_chunks}
             for concept in self.repo.concepts_for_book(book_id):
+                if not is_learning_concept(concept):
+                    continue
                 anchored = [
                     ref.chunk_id for ref in concept.source_refs
                     if ref.chunk_id and ref.chunk_id in retrieved_ids

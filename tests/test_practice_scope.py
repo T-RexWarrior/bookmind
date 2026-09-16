@@ -41,3 +41,26 @@ def test_real_leaf_section_is_practice_worthy():
 def test_front_matter_is_excluded_even_with_spacing():
     concept = _concept("致    谢", ("数据结构", "致    谢"))
     assert not _is_practice_worthy(concept)
+
+
+def test_definition_extracted_inside_learning_section_is_kept():
+    concept = _concept(
+        "渐进复杂度",
+        ("第1章 绪论", "§1.2 复杂度度量"),
+        chapter="第1章 绪论",
+    )
+    assert _is_practice_worthy(concept)
+
+
+def test_chapter_heading_without_leaf_section_is_not_learning_concept():
+    concept = _concept("向量", ("第2章 向量",), chapter="第2章 向量")
+    assert not _is_practice_worthy(concept)
+
+
+def test_chapter_heading_with_inherited_child_reference_is_still_excluded():
+    concept = _concept(
+        "向量",
+        ("第2章 向量", "§2.1 从数组到向量"),
+        chapter="第2章 向量",
+    )
+    assert not _is_practice_worthy(concept)
