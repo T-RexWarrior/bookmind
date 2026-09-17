@@ -207,6 +207,27 @@ def test_live_invented_bug_id_on_fail_recovers_known_bug():
     assert j.misconception_signals[0].bug_id == "bug_ref_vs_object"
 
 
+
+def test_imported_queue_task_recovers_fifo_lifo_bug_from_task_catalogue():
+    """Imported books use arbitrary ids, so the task catalogue is the bridge.
+
+    A clear FIFO/LIFO error must become a diagnosable fact even when the
+    model emits an invented label and the target is not a legacy demo id.
+    """
+    parsed = {
+        "judgment_status": "DECIDED", "result": "FAIL",
+        "misconception_signals": [{"bug_id": "made_up_queue_bug", "direction": "FOR", "strength": "MEDIUM"}],
+    }
+    task = TrustedTaskContext(
+        task_id="queue-real-book", task_version=1, target_concept_ids=["sec_4_5_queue"],
+        evidence_for_levels=[Level.L1], rubric=["FIFO", "enqueue rear", "dequeue front"],
+        discriminated_bug_ids=["bug_queue_fifo_lifo"],
+    )
+    j = DiagnosticianAgent(_CapturingRouter(parsed=parsed)).judge(task, "从队尾出队")
+    assert j.result == EvidenceResult.FAIL
+    assert [item.bug_id for item in j.misconception_signals] == ["bug_queue_fifo_lifo"]
+
+
 def test_live_probe_does_not_synthesise_signals():
     """A probe never gets synthesised quiz-style signals: its own
     discriminated_bug_ids + the probe_classifier handle classification."""

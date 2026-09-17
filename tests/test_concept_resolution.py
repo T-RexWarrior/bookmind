@@ -107,6 +107,27 @@ def test_contextual_followup_returns_resolved_concepts_not_candidate_objects(mon
     assert [item.concept_id for item in result.subjects] == ["queue"]
 
 
+def test_contextual_new_topic_remains_explicit_and_unresolved(monkeypatch):
+    """A semantic NEW_TOPIC is not silently rewritten as the old subject."""
+    queue = _concept("queue", "队列", "§4.5 队列", 127)
+    monkeypatch.setenv("TEST_TRACE_KEY", "test-key")
+
+    def fake_http(_url, _payload, _key, _timeout):
+        body = {"choices": [{"message": {"content": json.dumps({
+            "relation": "NEW_TOPIC", "concept_ids": [], "confidence": 0.97,
+        })}}], "usage": {"total_tokens": 12}}
+        return 200, json.dumps(body)
+
+    resolver = ConceptResolver(
+        _Repo([queue]), ModelRouter(RouterConfig(live=True, api_key_env="TEST_TRACE_KEY"), http=fake_http),
+    )
+    result = resolver.resolve_contextual_followup(
+        project_id="p", question="它和图有什么关系？", conversation_context="学习者：队列有什么用？",
+    )
+    assert result.relation == "NEW_TOPIC"
+    assert result.subjects == ()
+
+
 def test_legacy_cross_section_topic_never_becomes_a_retrieval_or_state_unit():
     broad_tree = Concept(
         concept_id="legacy-tree", book_id="book", name="二叉树",

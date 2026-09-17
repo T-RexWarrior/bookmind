@@ -113,6 +113,7 @@ def generate_quiz(
     source_context: str = "",
     previous_prompts: list[str] | None = None,
     learner_profile_context: str = "",
+    discriminated_bug_ids: list[str] | None = None,
 ) -> TaskDraft:
     """Build an ordinary grounded quiz/review draft (Tutor side).
 
@@ -163,6 +164,10 @@ def generate_quiz(
         rubric=rubric or generated_rubric,
         prompt_text=prompt_text or generated_prompt,
         expected_answer=generated_answer,
+        # An ordinary quiz may carry a *candidate* misconception catalogue for
+        # diagnosis.  It is not itself a probe; only a later dedicated probe is
+        # high-discrimination evidence.
+        discriminated_bug_ids=discriminated_bug_ids or [],
         generation_mode=generation_mode,
         generation_notice=generation_notice,
     )

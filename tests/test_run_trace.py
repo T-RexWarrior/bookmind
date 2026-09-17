@@ -27,7 +27,8 @@ def test_trace_is_ordered_redacted_and_presentation_ready():
         _event(2, "concept_resolved", {
             "query_kind": "definition",
             "concepts": [{"concept_id": "sec_stack", "name": "栈", "confidence": 0.96, "rationale": "术语命中"}],
-            "scope": "ALL_SOURCES", "explicit_followup": False,
+            "scope": "ALL_SOURCES", "explicit_followup": True,
+            "followup_relation": "FOLLOW_UP", "followup_confidence": 0.96,
             "raw_user_question": "栈是什么",  # must not leak even if an upstream event is malformed
         }, started + timedelta(seconds=1)),
         _event(4, "citation_validated", {
@@ -49,6 +50,9 @@ def test_trace_is_ordered_redacted_and_presentation_ready():
     assert "栈是什么" not in serialized
     assert "不应导出" not in serialized
     assert trace["timeline"][-1]["data"] == {"transition_count": 1}
+    resolved = trace["timeline"][1]
+    assert resolved["data"]["followup_relation"] == "FOLLOW_UP"
+    assert "按上一轮对象继续" in resolved["summary"]
 
     markdown = render_trace_markdown(trace)
     assert "# BookMind 决策 Trace" in markdown

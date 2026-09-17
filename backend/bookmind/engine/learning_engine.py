@@ -244,7 +244,15 @@ def submit_answer(
                 # REMEDIATE/VERIFY by `concept_id in mis.related_concepts`).
                 from ..agents.bug_library import BUG_LIBRARY
                 bug = BUG_LIBRARY.get(bug_id)
-                related = list(bug.related_concepts) if bug is not None else []
+                # Bug-library ids describe a reusable misconception family;
+                # imported textbooks use different concept ids. Retain both
+                # the canonical family anchor and this task's actual target so
+                # the next-action engine can return to the same textbook unit
+                # for diagnosis, remediation and re-verification.
+                related = list(dict.fromkeys([
+                    *(bug.related_concepts if bug is not None else []),
+                    *task.target_concept_ids,
+                ]))
                 existing = MisconceptionHypothesis(
                     project_id=project_id, bug_id=bug_id, status="SUSPECTED",
                     related_concepts=related,

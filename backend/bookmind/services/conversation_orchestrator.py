@@ -438,7 +438,11 @@ class ConversationOrchestrator:
                 blocks, seq = self._ask_book(
                     project_id=state["project_id"], learner_id=state["learner_id"],
                     conversation_id=conversation.conversation_id,
-                    question=_rewrite_followup(state["user_text"], state["history"]),
+                    # Keep the learner's utterance intact for concept parsing.
+                    # _ask_book adds bounded history only to the model-facing
+                    # retrieval question after it has decided whether this is a
+                    # follow-up, a new topic, or genuinely ambiguous.
+                    question=state["user_text"],
                     history=state["history"],
                     run_id=state["run_id"], seq=seq, events=events,
                     source_context=state.get("source_context", {}),
@@ -538,7 +542,7 @@ class ConversationOrchestrator:
                     blocks, seq = self._ask_book(
                         project_id=state["project_id"], learner_id=state["learner_id"],
                         conversation_id=conversation.conversation_id,
-                        question=_rewrite_followup(state["user_text"], state["history"]),
+                        question=state["user_text"],
                         history=state["history"],
                         run_id=state["run_id"], seq=seq, events=events,
                         source_context=state.get("source_context", {}),
@@ -635,7 +639,13 @@ class ConversationOrchestrator:
                 for item in resolved
             ],
             "scope": scope,
-            "explicit_followup": "本轮追问：" in question,
+            "explicit_followup": _has_contextual_deixis(question),
+            # The semantic resolver is deliberately independent of retrieval.
+            # Export this decision so a Trace can distinguish “new topic” from
+            # “no reliable concept”, rather than hiding both behind an empty
+            # concept list.
+            "followup_relation": followup.relation if followup is not None else "DIRECT_OR_NONE",
+            "followup_confidence": round(followup.confidence, 3) if followup is not None else None,
         })
         events.append(resolved_event)
         if event_sink:
@@ -704,9 +714,17 @@ class ConversationOrchestrator:
             # has no chunk anchor yet, its canonical name still expands the
             # retrieval query, but no unrelated section is made preferred.
             concept_prefix = "、".join(item.name for item in resolved)
+            # The model may use history to understand a confirmed pronoun, but
+            # the raw utterance remains the only input to concept resolution.
+            # A NEW_TOPIC must never inherit the preceding question here.
+            model_question = (
+                _rewrite_followup(question, history or [])
+                if followup is not None and followup.relation == "FOLLOW_UP"
+                else question
+            )
             constrained_question = (
-                f"学习单元：{concept_prefix}\n问题：{question}"
-                if concept_prefix else question
+                f"学习单元：{concept_prefix}\n问题：{model_question}"
+                if concept_prefix else model_question
             )
             if analysis.selection_chunk_ids:
                 constrained_question += "\n任务背景：用户选中了本次资料片段；请解释该片段，并说明它与当前学习单元的关系。"

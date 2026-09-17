@@ -708,6 +708,7 @@ class TaskService:
                 learner_profile_context=render_profile_context(
                     self.repo, project_id, [concept.concept_id],
                 ),
+                discriminated_bug_ids=self._candidate_bug_ids_for_concept(concept),
             )
         mis = self.repo.all_misconceptions(project_id)
 
@@ -767,6 +768,7 @@ class TaskService:
             learner_profile_context=render_profile_context(
                 self.repo, project_id, [concept.concept_id],
             ),
+            discriminated_bug_ids=self._candidate_bug_ids_for_concept(concept),
         )
 
     def _next_quiz_level(self, project_id: str, concept_id: str) -> Level:
@@ -799,6 +801,26 @@ class TaskService:
             if self.repo.get_state(project_id, concept.concept_id).current_verified_level != Level.L4:
                 return concept.concept_id
         return ""
+
+    @staticmethod
+    def _candidate_bug_ids_for_concept(concept) -> list[str]:
+        """Attach only semantically relevant diagnostic catalogues to a quiz.
+
+        A BugEntry is a reusable misconception description, not a database
+        concept id.  Imported books create fresh ids, so association is made
+        from the stable leaf heading (for example ``§4.5 队列``), never from
+        the graph's incidental insertion order.  This only gives the
+        Diagnostician candidates; an ordinary quiz still requires an observed
+        wrong answer before a misconception can be written.
+        """
+        leaf = str(getattr(concept, "section", "") or "").split("·")[-1]
+        labels = f"{getattr(concept, 'name', '')} {leaf}".casefold()
+        # Priority queues have a different removal contract; do not attach a
+        # FIFO diagnostic catalogue merely because their heading contains
+        # “队列/queue”.
+        if ("队列" in labels or "queue" in labels) and "优先级" not in labels and "priority queue" not in labels:
+            return ["bug_queue_fifo_lifo"]
+        return []
 
     def _source_context_for_concept(self, project_id: str, concept) -> str:
         """Pick compact source passages anchored to a concept for quiz writing."""

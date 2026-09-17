@@ -304,6 +304,67 @@ BUG_COLLECTION_PREREQ = BugEntry(
 )
 
 
+# --------------------------------------------------------------------------
+# Bug 6: queue FIFO vs stack LIFO confusion
+# --------------------------------------------------------------------------
+# ``c_queue`` is only a semantic anchor.  On imported textbooks TaskService
+# maps this entry to the actual in-scope Queue section, so no book-specific
+# concept id is hard-coded into a learner's state.
+BUG_QUEUE_FIFO_LIFO = BugEntry(
+    bug_id="bug_queue_fifo_lifo",
+    description=(
+        "Learner confuses a queue's first-in-first-out discipline with a "
+        "stack's last-in-first-out discipline, commonly deleting from the "
+        "tail after enqueueing at the tail."
+    ),
+    related_concepts=["c_queue"],
+    prerequisite_concepts=[],
+    observable_error_pattern=(
+        "After A, B, C are enqueued in that order, the learner says dequeue "
+        "returns C or removes the rear element."
+    ),
+    likely_wrong_answers=[
+        "出队从队尾删除最后入队的元素。",
+        "先入队 A、B、C 后，出队得到 C。",
+        "队列和栈一样都是后进先出。",
+        "从队尾出队。",
+    ],
+    competing_hypotheses=[
+        "h_lifo_transfer: learner transfers the stack's LIFO rule to a queue.",
+        "h_end_role_confusion: learner knows FIFO verbally but swaps front and rear operations.",
+    ],
+    probe_templates=[
+        "空队列依次入队 A、B、C 后，连续两次出队分别得到什么？请标出队首、队尾，并解释每次删除发生在哪一端。",
+    ],
+    expected_patterns={
+        "h_lifo_transfer": "Answers C then B, or explicitly says the newest item leaves first.",
+        "h_end_role_confusion": "Answers A then B but says dequeue removes from the rear or labels front/rear backwards.",
+    },
+    remediation=Remediation(
+        explanation_goal=(
+            "队列把两端职责分开：enqueue 在队尾加入新元素，dequeue 从队首取出最早到达的元素。"
+            "用排队取号的时间顺序核对，而不是把栈顶操作迁移过来。"
+        ),
+        positive_example=(
+            "依次入队 A、B、C：队首为 A、队尾为 C；出队两次依次得到 A、B，剩下 C。"
+        ),
+        counterexample=(
+            "若从队尾取 C，就变成后进先出；这描述的是栈，不是普通队列。"
+        ),
+    ),
+    changed_task_templates=[
+        "医院叫号队列当前依次为 101、102、103。新来 104 后叫号两次；写出两次被服务者、剩余队列，并说明新来者插入的位置。",
+        "BFS 从顶点 S 开始，按发现顺序将 A、B、C 入队。若每次从队首取出一个顶点，前三次取出的顶点是什么？为什么不能先处理 C？",
+    ],
+    rubric=[
+        "明确队列遵循先进先出（FIFO），而不是栈的后进先出。",
+        "正确说明入队发生在队尾、出队发生在队首。",
+        "能按操作先后顺序给出正确的出队结果或解释其原因。",
+    ],
+    source_notes="数据结构教材：队列 ADT 与 FIFO 操作语义。",
+)
+
+
 BUG_LIBRARY: dict[str, BugEntry] = {
     b.bug_id: b for b in [
         BUG_REF_VS_OBJECT,
@@ -311,6 +372,7 @@ BUG_LIBRARY: dict[str, BugEntry] = {
         BUG_EQUALS_HASHCODE,
         BUG_POLYMORPHISM_DISPATCH,
         BUG_COLLECTION_PREREQ,
+        BUG_QUEUE_FIFO_LIFO,
     ]
 }
 

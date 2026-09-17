@@ -254,6 +254,7 @@ def finish_consolidation(
     user: User = Depends(get_current_user),
     repo: Repository = Depends(get_repo),
     runs: RunService = Depends(get_run_service),
+    tasks: TaskService = Depends(get_task_service),
 ) -> dict:
     """Persist a compact summary for attempts since the previous finish."""
     conv = runs.get_conversation(conversation_id)
@@ -288,17 +289,24 @@ def finish_consolidation(
         f"未通过 {counts['FAIL']}。学习状态只依据实际作答证据更新。"
         if total else "本次还没有完成题目。可以从左侧候选知识点开始一道练习或检测。"
     )
+    # This has no model call, but it is a learner-visible state exit and must
+    # remain traceable alongside the model-backed exercise buttons.
+    _, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=conversation_id, action="FINISH_CONSOLIDATION",
+        operation=lambda _trace_run_id: {"total": total, "counts": counts},
+    )
     message = Message(
         message_id=f"msg_{uuid.uuid4().hex[:12]}",
         conversation_id=conversation_id,
         role="assistant",
+        run_id=run_id,
         content_blocks=[ContentBlock(
             type="status", text=text,
             data={"kind": "consolidation_summary", "total": total, "counts": counts},
         )],
     )
     runs.add_message(message)
-    return {"message_id": message.message_id, "total": total, "counts": counts, "text": text}
+    return {"message_id": message.message_id, "total": total, "counts": counts, "text": text, "run_id": run_id}
 
 
 @router.post("/conversations/{conversation_id}/tasks/{task_id}/explanation")
@@ -418,7 +426,11 @@ def start_task_followup(
     task = _load_owned_task(repo, task_id, user)
     if task["project_id"] != conv.project_id or task.get("conversation_id") != conversation_id:
         raise AppError("TASK_NOT_IN_CONVERSATION", "题目不属于当前对话", status_code=404)
-    return tasks.start_followup(task_id)
+    result, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=conversation_id, action="START_TASK_FOLLOWUP",
+        operation=lambda _trace_run_id: tasks.start_followup(task_id),
+    )
+    return {**result, "run_id": run_id}
 
 
 @router.post("/conversations/{conversation_id}/tasks/{task_id}/followup/close")
@@ -437,7 +449,11 @@ def close_task_followup(
     task = _load_owned_task(repo, task_id, user)
     if task["project_id"] != conv.project_id or task.get("conversation_id") != conversation_id:
         raise AppError("TASK_NOT_IN_CONVERSATION", "题目不属于当前对话", status_code=404)
-    return tasks.end_followup(task_id)
+    result, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=conversation_id, action="END_TASK_FOLLOWUP",
+        operation=lambda _trace_run_id: tasks.end_followup(task_id),
+    )
+    return {**result, "run_id": run_id}
 
 
 @router.get("/tasks/{task_id}")

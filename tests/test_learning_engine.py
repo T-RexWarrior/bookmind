@@ -182,6 +182,25 @@ def test_one_error_does_not_confirm_misconception():
     assert mis.evidence_score == 3  # one STRONG +3
 
 
+def test_imported_queue_bug_is_linked_back_to_actual_learning_unit():
+    """A reusable bug family must not strand remediation on a demo-only id."""
+    repo = _repo_with_project(concept_id="sec_4_5_queue")
+    sig = [MisconceptionSignal(
+        bug_id="bug_queue_fifo_lifo", direction=SignalDirection.FOR, strength=SignalStrength.STRONG,
+    )]
+    task = _task(
+        concept_id="sec_4_5_queue", task_id="queue-quiz",
+        discriminated_bug_ids=["bug_queue_fifo_lifo"],
+    )
+    _submit(
+        repo, concept_id="sec_4_5_queue", task=task,
+        judgment=_decided(EvidenceResult.FAIL, signals=sig), answer="从队尾出队", submission_id="queue-s1",
+    )
+    mis = repo.get_misconception("p1", "bug_queue_fifo_lifo")
+    assert mis is not None
+    assert "sec_4_5_queue" in mis.related_concepts
+
+
 # --- Acceptance: highest_ever never decremented --------------------------
 
 def test_highest_ever_not_deleted_on_fail():

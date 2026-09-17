@@ -401,11 +401,17 @@ def test_every_terminal_task_path_exposes_the_same_followup_exit(client):
 
     # A terminal task can open a read-only follow-up, and that phase is the
     # only state that blocks creating the next task.
-    assert client.post(f"/api/conversations/{cid}/tasks/{task_id}/followup/start").status_code == 200
+    started = client.post(f"/api/conversations/{cid}/tasks/{task_id}/followup/start")
+    assert started.status_code == 200
+    start_trace = client.get(f"/api/runs/{started.json()['run_id']}/trace").json()
+    assert start_trace["run"]["intent"] == "START_TASK_FOLLOWUP"
     assert client.post(
         f"/api/conversations/{cid}/tasks", json={"mode": "PRACTICE", "selection": "RANDOM"},
     ).status_code == 409
-    assert client.post(f"/api/conversations/{cid}/tasks/{task_id}/followup/close").status_code == 200
+    closed = client.post(f"/api/conversations/{cid}/tasks/{task_id}/followup/close")
+    assert closed.status_code == 200
+    close_trace = client.get(f"/api/runs/{closed.json()['run_id']}/trace").json()
+    assert close_trace["run"]["intent"] == "END_TASK_FOLLOWUP"
 
 
 def test_mode_command_and_start_learning_are_real_handlers(client):

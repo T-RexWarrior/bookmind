@@ -242,6 +242,13 @@ def _answer_hits_wrong_phrase(bug, answer: str) -> bool:
         phrase = wa.lower()
         if len(phrase) >= 12 and phrase in low:
             return True
+        # Chinese diagnostic examples are often written as one uninterrupted
+        # phrase, and learners normally omit its final punctuation. Compare a
+        # compact form as well, without turning short generic words into cues.
+        compact_phrase = "".join(ch for ch in phrase if ch.isalnum())
+        compact_answer = "".join(ch for ch in low if ch.isalnum())
+        if len(compact_phrase) >= 4 and compact_phrase in compact_answer:
+            return True
         distinctive = [w.strip(".,;:!?") for w in phrase.split()
                        if len(w) >= 4 and w.strip(".,;:!?") not in _WRONG_PHRASE_STOP]
         if distinctive and sum(1 for w in distinctive if w in low) >= 2:
@@ -335,12 +342,26 @@ def _normalise_signals(
     answer = (answer_text or "").strip()
     if not answer:
         return judgment.model_copy(update={"misconception_signals": []})
+    candidates = []
+    seen_bug_ids = set()
+    # Imported textbooks have their own concept ids.  A task may therefore
+    # carry a semantically matched BugEntry even though its target id is not a
+    # legacy demo id such as c_queue.
+    for bid in task.discriminated_bug_ids or []:
+        bug = BUG_LIBRARY.get(bid)
+        if bug is not None and bid not in seen_bug_ids:
+            candidates.append(bug)
+            seen_bug_ids.add(bid)
     for cid in task.target_concept_ids or []:
         for bug in _bugs_for_concept(cid):
-            if _looks_wrong(bug, answer):
-                sig = _signal(bug.bug_id, SignalDirection.FOR, SignalStrength.WEAK,
-                              "diagnostician: model signal remapped to known bug")
-                return judgment.model_copy(update={"misconception_signals": [sig]})
+            if bug.bug_id not in seen_bug_ids:
+                candidates.append(bug)
+                seen_bug_ids.add(bug.bug_id)
+    for bug in candidates:
+        if _looks_wrong(bug, answer):
+            sig = _signal(bug.bug_id, SignalDirection.FOR, SignalStrength.WEAK,
+                          "diagnostician: model signal remapped to known bug")
+            return judgment.model_copy(update={"misconception_signals": [sig]})
     return judgment.model_copy(update={"misconception_signals": []})
 
 

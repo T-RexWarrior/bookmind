@@ -126,7 +126,14 @@ def _summary(event_type: str, payload: dict, fallback: str) -> str:
         return f"意图：{payload.get('intent') or '未识别'}"
     if event_type == "concept_resolved":
         names = "、".join(item.get("name", "") for item in payload.get("concepts", []) if item.get("name"))
-        return f"识别到：{names or '未可靠归类'}"
+        relation = payload.get("followup_relation")
+        suffix = (
+            "；按上一轮对象继续" if relation == "FOLLOW_UP"
+            else "；判定为新话题" if relation == "NEW_TOPIC"
+            else "；需要澄清指代" if relation == "AMBIGUOUS"
+            else ""
+        )
+        return f"识别到：{names or '未可靠归类'}{suffix}"
     if event_type == "citation_validated":
         return "教材依据校验通过" if payload.get("grounded") else "教材依据不足或校验未通过"
     if event_type == "llm_call":
@@ -146,6 +153,8 @@ def _safe_payload(event_type: str, payload: dict, *, include_sensitive: bool = F
             "query_kind": payload.get("query_kind"),
             "scope": payload.get("scope"),
             "explicit_followup": bool(payload.get("explicit_followup")),
+            "followup_relation": payload.get("followup_relation"),
+            "followup_confidence": payload.get("followup_confidence"),
             "concepts": [
                 {key: item.get(key) for key in ("concept_id", "name", "confidence", "rationale")}
                 for item in payload.get("concepts", []) if isinstance(item, dict)
