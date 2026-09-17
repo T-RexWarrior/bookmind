@@ -312,21 +312,26 @@ class ConversationOrchestrator:
         # Existing services remain the business-logic nodes, so the migration
         # does not weaken BookMind's deterministic learning/evidence rules.
         blocks: list[ContentBlock] = []
+        model_calls: list[dict] = []
         try:
-            graph_result = self.workflow.invoke({
-                "conversation": conversation,
-                "user_text": user_text,
-                "learner_id": learner_id,
-                "project_id": project_id,
-                "run_id": run_id,
-                "history": history or [],
-                "source_context": source_context or {},
-                "seq": seq,
-                "events": events,
-                "blocks": [],
-                "error": "",
-                "event_sink": event_sink,
-            })
+            from ..config import get_settings
+            with self.router.trace_capture(
+                run_id, capture_content=get_settings().trace_capture_content,
+            ) as model_calls:
+                graph_result = self.workflow.invoke({
+                    "conversation": conversation,
+                    "user_text": user_text,
+                    "learner_id": learner_id,
+                    "project_id": project_id,
+                    "run_id": run_id,
+                    "history": history or [],
+                    "source_context": source_context or {},
+                    "seq": seq,
+                    "events": events,
+                    "blocks": [],
+                    "error": "",
+                    "event_sink": event_sink,
+                })
             run.intent = graph_result["intent"]
             blocks = graph_result.get("blocks", [])
             events = graph_result.get("events", events)
@@ -341,6 +346,13 @@ class ConversationOrchestrator:
             run.error = str(e)
             events.append(_evt(run_id, seq, EventType.RUN_FAILED, {"error": _public_turn_error()}))
             blocks = [ContentBlock(type="error", text=_public_turn_error())]
+
+        # Keep provider usage attached to the same append-only run. Full
+        # messages/responses appear only when the explicit local setting is on;
+        # the normal JSON/Markdown trace projection never exports them.
+        for call in model_calls:
+            events.append(_evt(run_id, seq, EventType.LLM_CALL, call))
+            seq += 1
 
         # 6. assistant message
         assistant_msg = Message(
@@ -603,6 +615,29 @@ class ConversationOrchestrator:
             selection_text=selection_text,
         )
         resolved = list(analysis.subjects)
+        # A direct topic always wins.  Only an unresolved utterance containing
+        # a genuine deictic/ellipsis is allowed to consult bounded dialogue
+        # context, and the model may select only persisted graph units.
+        if not resolved and _has_contextual_deixis(question):
+            resolved = self.concept_resolver.resolve_contextual_followup(
+                project_id=project_id,
+                question=question,
+                conversation_context=_bounded_conversation_context(history or []),
+            )
+        resolved_event = _evt(run_id, seq, EventType.CONCEPT_RESOLVED, {
+            "query_kind": analysis.kind,
+            "concepts": [
+                {"concept_id": item.concept_id, "name": item.name,
+                 "confidence": round(item.confidence, 3), "rationale": item.rationale}
+                for item in resolved
+            ],
+            "scope": scope,
+            "explicit_followup": "本轮追问：" in question,
+        })
+        events.append(resolved_event)
+        if event_sink:
+            event_sink(resolved_event)
+        seq += 1
         preferred_chunk_ids = self.concept_resolver.evidence_chunk_ids(
             project_id=project_id, subjects=resolved,
         )
@@ -625,6 +660,16 @@ class ConversationOrchestrator:
         if target_outside_current_page:
             target = resolved[0]
             page_text = "、".join(str(page) for page in resolved_pages[:3])
+            retrieval_scope_event = _evt(run_id, seq, EventType.RETRIEVAL_SCOPED, {
+                "scope": scope, "source_id": selected_source, "page": selected_page,
+                "preferred_chunk_count": len(preferred_chunk_ids),
+                "concept_ids": [item.concept_id for item in resolved],
+                "blocked_by_page_scope": True,
+            })
+            events.append(retrieval_scope_event)
+            if event_sink:
+                event_sink(retrieval_scope_event)
+            seq += 1
             locations_ready([], 0.0, False)
             ans = AskResult(
                 answer_text=(
@@ -656,6 +701,18 @@ class ConversationOrchestrator:
                 selected_page=selected_page,
                 selection_text=selection_text,
             )
+            retrieval_scope_event = _evt(run_id, seq, EventType.RETRIEVAL_SCOPED, {
+                "scope": scope,
+                "source_id": selected_source,
+                "page": selected_page,
+                "preferred_chunk_count": len(preferred_chunk_ids),
+                "selection_anchor_count": len(analysis.selection_chunk_ids),
+                "concept_ids": [item.concept_id for item in resolved],
+            })
+            events.append(retrieval_scope_event)
+            if event_sink:
+                event_sink(retrieval_scope_event)
+            seq += 1
             ans = self.qa_service.ask(
                 project_id=project_id, learner_id=learner_id, question=constrained_question,
                 source_ids=source_ids, physical_page=physical_page,
@@ -664,6 +721,17 @@ class ConversationOrchestrator:
                 context_request=context_request,
                 on_retrieval=locations_ready,
             )
+
+        citation_event = _evt(run_id, seq, EventType.CITATION_VALIDATED, {
+            "grounded": ans.grounded,
+            "citation_count": len(ans.citations),
+            "fallback": ans.fallback,
+            "reason_code": _trace_reason_code(ans.reason),
+        })
+        events.append(citation_event)
+        if event_sink:
+            event_sink(citation_event)
+        seq += 1
 
         # QUESTION is exposure-only. Its concept identity comes from the
         # independent resolver above, so answer/retrieval failure cannot erase
@@ -765,6 +833,8 @@ class ConversationOrchestrator:
         )
         events.append(_evt(run_id, seq, terminal_answer_event, {
             "fallback": ans.fallback, "grounded": ans.grounded,
+            "model": self.router.cfg.chat_primary.model,
+            "live_model": bool(self.router.cfg.live),
         }))
         seq += 1
 
@@ -1309,25 +1379,10 @@ def _rewrite_followup(text: str, history: list[Message]) -> str:
     explicit referent. The old short-text fallback leaked stale topics into
     perfectly ordinary textbook questions.
     """
-    import re
-
     cleaned = text.strip()
     if not cleaned:
         return cleaned
-    # “那栈呢” names 栈 and is therefore a new, explicit subject. Only a
-    # genuine pronoun/deictic reference may carry prior context.
-    deictic_only = re.compile(
-        r"^(?:那(?:它|这个|那个|上述|前面|刚才|上面)|它|他|她|它们|他们|她们|这个|那个|上述(?:内容|问题|概念)?|前面(?:那个|的)?|刚才(?:那个|的)?|上面(?:那个|的)?|前一个|这一点)(?:[，,、:：\s]|是什么|为什么|怎么|如何|有何|的|跟|和|与)?"
-    )
-    # Natural questions often prefix the reference with a polite clause:
-    # “告诉我他跟栈的区别”。The pronoun plus a comparison connector is a
-    # sufficiently explicit referent; bare topical nouns remain independent.
-    embedded_reference = re.search(
-        r"(?:告诉我|请|能否|帮我|说说|解释(?:一下)?)(?:它|他|她|它们|他们|她们|这个|那个)(?:跟|和|与)",
-        cleaned,
-    )
-    should_rewrite = bool(deictic_only.match(cleaned) or embedded_reference)
-    if not should_rewrite:
+    if not _has_contextual_deixis(cleaned):
         return cleaned
     previous = ""
     for message in reversed(history):
@@ -1342,6 +1397,21 @@ def _rewrite_followup(text: str, history: list[Message]) -> str:
     if not previous:
         return cleaned
     return f"上一轮问题：{previous}\n本轮追问：{cleaned}"
+
+
+def _has_contextual_deixis(text: str) -> bool:
+    """Cheap linguistic gate; semantic follow-up resolution remains model-led."""
+    import re
+    compact = "".join((text or "").split())
+    # A named technical noun is a new topic, even if prefixed by “那”.
+    if re.search(r"(?:那|这个|那个)(?:栈|队列|列表|树|图|向量|算法|递归)", compact):
+        return False
+    return bool(re.search(
+        r"^(?:那)?(?:它|他|她|它们|他们|她们|这个|那个|上述|前面|刚才|上面|前一个|这一点)"
+        r"|(?:告诉我|请|能否|帮我|说说|解释(?:一下)?)(?:它|他|她|它们|他们|她们|这个|那个)"
+        r"|关于(?:它|他|她|这个|那个)|(?:它|他|她|这个|那个)的(?:代码|实现|用法|区别|复杂度|例子)",
+        compact,
+    ))
 
 
 def _mode_from_text(text: str) -> UIPreset | None:
@@ -1373,6 +1443,20 @@ def _is_source_limit_only(answer_text: str) -> bool:
         "依据不足。给定教材片段",
     )
     return len(compact) <= 420 and any(marker in compact for marker in markers)
+
+
+def _trace_reason_code(reason: str) -> str:
+    """Export-safe classification; never persist gateway text in the trace."""
+    folded = (reason or "").casefold()
+    if "timeout" in folded or "超时" in folded:
+        return "MODEL_TIMEOUT"
+    if "fallback" in folded or "model" in folded:
+        return "MODEL_UNAVAILABLE"
+    if "citation" in folded or "依据" in folded:
+        return "CITATION_REJECTED"
+    if "no relevant" in folded or "no content" in folded:
+        return "NO_RETRIEVAL_EVIDENCE"
+    return "OK" if folded == "ok" else "OTHER"
 
 
 def _mode_label(mode: UIPreset) -> str:

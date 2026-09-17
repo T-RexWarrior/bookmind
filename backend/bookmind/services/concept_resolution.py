@@ -100,6 +100,63 @@ class ConceptResolver:
         """Compatibility wrapper for callers that only need subjects."""
         return list(self.analyse(project_id=project_id, question=question).subjects)
 
+    def resolve_contextual_followup(
+        self, *, project_id: str, question: str, conversation_context: str,
+    ) -> list[ResolvedConcept]:
+        """Resolve an ellipsis/pronoun against known units, never retrieval rank.
+
+        This is deliberately called only after direct resolution failed and a
+        conversational deictic was detected by the caller.  The model may
+        select only graph units supplied here, or select none when the
+        reference is ambiguous; it cannot invent a topic from a retrieved
+        chunk.
+        """
+        if not conversation_context.strip() or not getattr(self.router.cfg, "live", False):
+            return []
+        candidates = [item for item in self._all_candidates(project_id, "") if item is not None]
+        # _all_candidates("" ) contains no lexical matches; enumerate the
+        # eligible stable units directly for this small, project-local choice.
+        candidates = [
+            _Candidate(concept, _aliases_for(concept), 0, ())
+            for book_id in sorted(self.repo.allowed_book_ids(project_id))
+            for concept in self.repo.concepts_for_book(book_id)
+            if _eligible_learning_unit(concept)
+        ][:96]
+        if not candidates:
+            return []
+        cards = "\n".join(
+            f"- id={item.concept.concept_id}; 单元={item.concept.name}; 位置={item.concept.section or item.concept.chapter}"
+            for item in candidates
+        )
+        try:
+            result = self.router.complete(
+                "followup_concept_resolution",
+                [{"role": "system", "content": (
+                    "你判断当前学习者的话是否指向对话中刚刚讨论的教材学习单元。"
+                    "只能从候选单元选择，或选择空数组；不要凭相邻章节猜测。"
+                    "relation 只能是 FOLLOW_UP、NEW_TOPIC、AMBIGUOUS。"
+                    "只有确实指代前文时才返回 FOLLOW_UP 和 concept_ids。"
+                    "输出严格 JSON：{\"relation\":\"...\",\"concept_ids\":[\"...\"],\"confidence\":0到1}。"
+                )}, {"role": "user", "content": (
+                    f"最近对话：\n{conversation_context[:1800]}\n\n当前问题：{question[:700]}\n\n候选单元：\n{cards}"
+                )}],
+                output_schema={"type": "object"}, temperature=0.0, max_tokens=320,
+            )
+            parsed = result.parsed_json if result.ok else None
+            confidence = float((parsed or {}).get("confidence") or 0)
+            relation = str((parsed or {}).get("relation") or "")
+            raw_ids = (parsed or {}).get("concept_ids") or []
+        except (TypeError, ValueError, AttributeError):
+            return []
+        if relation != "FOLLOW_UP" or confidence < 0.80:
+            return []
+        allowed = {item.concept.concept_id: item for item in candidates}
+        selected = [allowed[str(value)] for value in raw_ids if str(value) in allowed]
+        return [
+            ResolvedConcept(**{**self._resolved(item, confidence=confidence, rationale="llm_followup_resolution").__dict__})
+            for item in self._select_direct(selected)
+        ]
+
     def evidence_chunk_ids(
         self, *, project_id: str, subjects: tuple[ResolvedConcept, ...] | list[ResolvedConcept],
     ) -> list[str]:

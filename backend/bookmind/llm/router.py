@@ -31,6 +31,8 @@ import time
 import urllib.error
 import urllib.request
 import threading
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -148,6 +150,37 @@ class ModelRouter:
         self._call_log: list[dict[str, Any]] = []
         self._breaker: dict[str, tuple[int, float, float]] = {}
         self._breaker_lock = threading.Lock()
+        self._trace_capture: ContextVar[dict[str, Any] | None] = ContextVar(
+            "bookmind_llm_trace", default=None,
+        )
+
+    @contextmanager
+    def trace_capture(self, run_id: str, *, capture_content: bool = False):
+        """Associate router telemetry with one run without exposing it by default."""
+        session: dict[str, Any] = {"run_id": run_id, "capture_content": capture_content, "calls": []}
+        token = self._trace_capture.set(session)
+        try:
+            yield session["calls"]
+        finally:
+            self._trace_capture.reset(token)
+
+    def _record_call(
+        self, task: str, model: str, latency: float, ok: bool, usage: dict,
+        error: str, *, messages: list[dict[str, str]] | None = None, response: str | None = None,
+    ) -> None:
+        entry = self._log_entry(task, model, latency, ok, usage, error)
+        self._call_log.append(entry)
+        session = self._trace_capture.get()
+        if session is None:
+            return
+        trace_entry = {**entry, "latency_ms": round(latency * 1000)}
+        # Raw error details can leak provider internals; expose a status only.
+        trace_entry.pop("error", None)
+        trace_entry["error_code"] = "OK" if ok else "CALL_FAILED"
+        if session["capture_content"]:
+            trace_entry["messages"] = messages or []
+            trace_entry["response"] = response or ""
+        session["calls"].append(trace_entry)
 
     # --- chat ---------------------------------------------------------------
 
@@ -270,7 +303,7 @@ class ModelRouter:
                 # and fall through to the next model in the chain (ARCHITECTURE
                 # §8: "所有模型均失败时返回可理解的降级状态，不让程序崩溃").
                 latency = time.perf_counter() - t0
-                self._call_log.append(self._log_entry(task, cfg.model, latency, False, {}, f"transport: {e}"))
+                self._record_call(task, cfg.model, latency, False, {}, f"transport: {e}", messages=messages)
                 last_error = _transport_error_message(e)
                 continue
             latency = time.perf_counter() - t0
@@ -283,7 +316,7 @@ class ModelRouter:
                     # in reasoning_content; treat that as a fallback signal.
                     usage = parsed.get("usage", {})
                     if content:
-                        self._call_log.append(self._log_entry(task, cfg.model, latency, True, usage, ""))
+                        self._record_call(task, cfg.model, latency, True, usage, "", messages=messages, response=content)
                         # Some gateways/models do not support response_format
                         # reliably, but still follow the JSON-only prompt. Parse
                         # JSON whenever the caller supplied a schema, regardless
@@ -295,21 +328,19 @@ class ModelRouter:
                             prompt_version=self.cfg.prompt_version,
                             latency=latency, tokens=usage,
                         )
-                    self._call_log.append(self._log_entry(
-                        task, cfg.model, latency, False, usage,
-                        "empty content (reasoning-only model)",
-                    ))
+                    self._record_call(task, cfg.model, latency, False, usage,
+                                      "empty content (reasoning-only model)", messages=messages)
                     return ModelResult(
                         ok=False, task=task, model=cfg.model, content=None,
                         raw=parsed, prompt_version=self.cfg.prompt_version,
                         error="empty content (reasoning-only model)", fallback=True,
                     )
                 except (json.JSONDecodeError, KeyError, IndexError) as e:
-                    self._call_log.append(self._log_entry(task, cfg.model, latency, False, {}, f"parse: {e}"))
+                    self._record_call(task, cfg.model, latency, False, {}, f"parse: {e}", messages=messages)
                     last_error = f"parse: {e}"
                     continue
             else:
-                self._call_log.append(self._log_entry(task, cfg.model, latency, False, {}, f"http {status}"))
+                self._record_call(task, cfg.model, latency, False, {}, f"http {status}", messages=messages)
                 last_error = f"http {status}: {body[:200]}"
                 # 4xx (except 429) is unlikely to succeed on retry.
                 if 400 <= status < 500 and status != 429:

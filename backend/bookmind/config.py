@@ -133,6 +133,10 @@ class Settings(BaseSettings):
     chat_model: str = ""
     embedding_model: str = ""
     rerank_model: str = ""
+    # Full prompts/responses can contain learner text and textbook excerpts.
+    # Keep them off by default; this local-development switch is never meant
+    # for the presentation-safe Trace export.
+    trace_capture_content: bool = False
 
     @field_validator("database_url", mode="before")
     @classmethod
