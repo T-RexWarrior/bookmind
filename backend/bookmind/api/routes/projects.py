@@ -16,6 +16,7 @@ from ...domain.enums import BookRole, EvidenceType, UIPreset
 from ...domain.models import Book, LearningProject, ProjectBook, ReviewPolicy, User
 from ...services.learner_state_view import project_state_views
 from ...services.learning_memory import manually_learned_ids, set_manual_learned
+from ...services.learner_profile import profile_for, profiles_for_project
 from ...storage.protocols import Repository
 from ..dependencies import get_current_user, get_repo
 from ..errors import AppError
@@ -242,6 +243,9 @@ def concept_learning_record(
         },
         "question_count": len(questions),
         "attempt_count": len(attempts),
+        # This is an LLM-generated projection of the immutable timeline below.
+        # It never overrides the verified level in status.
+        "learner_profile": profile_for(repo, project_id, concept_id),
         "source_refs": refs,
         "timeline": [
             {
@@ -340,6 +344,7 @@ def learning_summary(
     repo.assert_project_owned_by(project_id, user.user_id)
     views = project_state_views(repo, project_id, policy=ReviewPolicy())
     manual_learned = manually_learned_ids(repo, project_id)
+    profiles = profiles_for_project(repo, project_id)
     from ...services.concept_scope import is_learning_concept
 
     concepts_by_id = {
@@ -375,6 +380,8 @@ def learning_summary(
             # evidence result is a string rather than an enum.
             "latest_attempt_result": latest_attempt.result if latest_attempt and latest_attempt.result else None,
             "manual_learned": v.concept_id in manual_learned,
+            "profile_summary": profiles.get(v.concept_id, {}).get("summary", ""),
+            "next_practice_goal": profiles.get(v.concept_id, {}).get("next_practice_goal", ""),
             # The profile is a navigation surface as well as a state summary;
             # keep chapter/section metadata so the browser can show the whole
             # graph in book order instead of silently cutting a flat list.
@@ -387,6 +394,76 @@ def learning_summary(
         "groups": groups,
         "questioned_count": questioned_count,
         "concepts": concept_rows,
+    }
+
+
+@router.get("/projects/{project_id}/learning-profile")
+def learning_profile(
+    project_id: str,
+    user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
+) -> dict:
+    """Return the explainable learner-profile projection for the whole space.
+
+    This endpoint deliberately returns both the model's natural-language
+    interpretation and the immutable evidence counts / verified level beside
+    it. A client therefore cannot present an LLM suggestion as if it were the
+    engine's official mastery result.
+    """
+    repo.assert_project_owned_by(project_id, user.user_id)
+    views = {item.concept_id: item for item in project_state_views(
+        repo, project_id, policy=ReviewPolicy(),
+    )}
+    profiles = profiles_for_project(repo, project_id)
+    concepts = {
+        concept.concept_id: concept
+        for book_id in repo.allowed_book_ids(project_id)
+        for concept in repo.concepts_for_book(book_id)
+    }
+    records: list[dict] = []
+    for concept_id, profile in profiles.items():
+        view = views.get(concept_id)
+        concept = concepts.get(concept_id)
+        if view is None or concept is None:
+            continue
+        evidence = view.evidence
+        records.append({
+            "concept_id": concept_id,
+            "name": concept.name,
+            "chapter": concept.chapter,
+            "section": concept.section,
+            "engine_state": {
+                "group": view.group,
+                "current_verified_level": view.current_verified_level,
+                "highest_ever_level": view.highest_ever_level,
+                "exposure": view.exposure,
+            },
+            "evidence_counts": {
+                "total": len(evidence),
+                "independent_answers": sum(
+                    1 for item in evidence
+                    if item.evidence_type in {"VERIFY", "PROBE", "CHANGED_TASK", "CORRECTION"}
+                    and item.independent and item.result is not None
+                ),
+                "assisted_or_process_events": sum(
+                    1 for item in evidence
+                    if item.evidence_type in {"HINT", "SKIP", "EXPLANATION"}
+                    or (item.evidence_type in {"VERIFY", "PROBE", "CHANGED_TASK", "CORRECTION"}
+                        and (not item.independent or item.hint_level > 0))
+                ),
+                "unresolved_attempts": sum(
+                    1 for item in evidence
+                    if item.evidence_type == "VERIFY" and item.result is None
+                ),
+            },
+            "profile": profile,
+        })
+    records.sort(key=lambda item: (item["chapter"], item["section"], item["name"]))
+    return {
+        "project_id": project_id,
+        "profile_prompt_version": "learner_profile_v1",
+        "records": records,
+        "notice": "画像由模型根据证据生成；已验证等级仅由学习引擎的独立作答证据决定。",
     }
 
 

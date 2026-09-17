@@ -1,5 +1,7 @@
 """Question-topic resolution must not inherit document retrieval mistakes."""
 
+import json
+
 from bookmind.domain.models import Concept
 from bookmind.domain.source_ref import SourceRef
 from bookmind.llm.router import ModelRouter, RouterConfig
@@ -77,6 +79,32 @@ def test_unrelated_question_is_not_assigned_from_nearby_concepts():
     stack = _concept("stack", "栈与队列", "§4.1 栈", 108)
     listing = _concept("list", "列表", "§3.1 列表", 87)
     assert _resolver(stack, listing).resolve(project_id="p", question="二叉树如何遍历") == []
+
+
+def test_queue_operations_are_aliases_of_the_queue_learning_unit():
+    queue = _concept("queue", "队列", "§4.5 队列", 127)
+    assert [item.concept_id for item in _resolver(queue).resolve(project_id="p", question="入队怎么入？")] == ["queue"]
+    assert [item.concept_id for item in _resolver(queue).resolve(project_id="p", question="出队怎么出？")] == ["queue"]
+
+
+def test_contextual_followup_returns_resolved_concepts_not_candidate_objects(monkeypatch):
+    queue = _concept("queue", "队列", "§4.5 队列", 127)
+    monkeypatch.setenv("TEST_TRACE_KEY", "test-key")
+
+    def fake_http(_url, _payload, _key, _timeout):
+        body = {"choices": [{"message": {"content": json.dumps({
+            "relation": "FOLLOW_UP", "concept_ids": ["queue"], "confidence": 0.95,
+        })}}], "usage": {"total_tokens": 12}}
+        return 200, json.dumps(body)
+
+    resolver = ConceptResolver(
+        _Repo([queue]), ModelRouter(RouterConfig(live=True, api_key_env="TEST_TRACE_KEY"), http=fake_http),
+    )
+    result = resolver.resolve_contextual_followup(
+        project_id="p", question="给个关于它的代码示例", conversation_context="学习者：队列有什么用？",
+    )
+    assert result.relation == "FOLLOW_UP"
+    assert [item.concept_id for item in result.subjects] == ["queue"]
 
 
 def test_legacy_cross_section_topic_never_becomes_a_retrieval_or_state_unit():

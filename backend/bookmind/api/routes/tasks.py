@@ -10,18 +10,20 @@ Diagnostician judges; the Learning Engine writes state.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
 
-from ...domain.enums import UIPreset
-from ...domain.models import ContentBlock, Message, User
+from ...domain.enums import EventType, UIPreset
+from ...domain.models import ContentBlock, Message, Run, RunEvent, User
 from ...storage.protocols import Repository
 from ..dependencies import get_current_user, get_repo, get_run_service, get_task_service
 from ..errors import AppError
 from ...services.run_service import RunService
 from ...services.task_service import TaskService
+from ...config import get_settings
 
 router = APIRouter(prefix="/api", tags=["tasks"])
 
@@ -74,6 +76,59 @@ def _load_owned_task(repo: Repository, task_id: str, user: User) -> dict:
         raise AppError("TASK_NOT_FOUND", "任务不存在", status_code=404)
     repo.assert_project_owned_by(t["project_id"], user.user_id)
     return t
+
+
+def _trace_task_operation(runs: RunService, tasks: TaskService, *, conversation_id: str, action: str, operation):
+    """Give every exercise-button operation an auditable run boundary."""
+    now = datetime.now(timezone.utc)
+    run_id = f"run_{uuid.uuid4().hex[:12]}"
+    run = Run(
+        run_id=run_id, conversation_id=conversation_id, message_id=f"taskop_{uuid.uuid4().hex[:12]}",
+        status="RUNNING", intent=action, started_at=now,
+    )
+    events = [
+        RunEvent(run_id=run_id, sequence=0, event_type=EventType.RUN_STARTED.value,
+                 payload={"run_status": "RUNNING"}, created_at=now),
+        RunEvent(run_id=run_id, sequence=1, event_type=EventType.ACTION_SELECTED.value,
+                 payload={"intent": action, "workflow": "task_button"}, created_at=now),
+    ]
+    runs.save_run(run)
+    runs.save_events(events)
+    try:
+        with tasks.router.trace_capture(
+            run_id, capture_content=get_settings().trace_capture_content,
+        ) as calls:
+            result = operation(run_id)
+        sequence = 2
+        for call in calls:
+            events.append(RunEvent(run_id=run_id, sequence=sequence, event_type=EventType.LLM_CALL.value,
+                                   payload=call, created_at=datetime.now(timezone.utc)))
+            sequence += 1
+        events.append(RunEvent(
+            run_id=run_id, sequence=sequence, event_type=EventType.TOOL_COMPLETED.value,
+            payload={"tool": action.lower(), "result": "completed"}, created_at=datetime.now(timezone.utc),
+        ))
+        sequence += 1
+        state_delta = result.get("state_delta", {}) if isinstance(result, dict) else {}
+        if state_delta.get("mastery_transitions") or state_delta.get("misconception_transitions"):
+            events.append(RunEvent(
+                run_id=run_id, sequence=sequence, event_type=EventType.STATE_UPDATED.value,
+                payload=state_delta, created_at=datetime.now(timezone.utc),
+            ))
+            sequence += 1
+        completed = run.model_copy(update={"status": "COMPLETED", "completed_at": datetime.now(timezone.utc)})
+        events.append(RunEvent(run_id=run_id, sequence=sequence, event_type=EventType.RUN_COMPLETED.value,
+                               payload={"run_status": "COMPLETED"}, created_at=datetime.now(timezone.utc)))
+        runs.save_events(events[2:])
+        runs.save_run(completed)
+        return result, run_id
+    except Exception:
+        failed = run.model_copy(update={"status": "FAILED", "completed_at": datetime.now(timezone.utc),
+                                        "error": "task button operation failed"})
+        runs.save_events([RunEvent(run_id=run_id, sequence=2, event_type=EventType.RUN_FAILED.value,
+                                   payload={"status": "failed"}, created_at=datetime.now(timezone.utc))])
+        runs.save_run(failed)
+        raise
 
 
 @router.get("/projects/{project_id}/consolidation-candidates")
@@ -147,12 +202,12 @@ def create_task(
         conv.project_id,
         default_mode=UIPreset.REVIEW if body.mode == "PRACTICE" else UIPreset.ASSESSMENT,
     )
-    payload = tasks.request_task(
-        project_id=conv.project_id,
-        learner_id=user.user_id,
-        conversation_id=conversation_id,
-        concept_id=selected_concept_id,
-        selection=body.selection,
+    payload, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=conversation_id, action="REQUEST_TASK",
+        operation=lambda _trace_run_id: tasks.request_task(
+            project_id=conv.project_id, learner_id=user.user_id,
+            conversation_id=conversation_id, concept_id=selected_concept_id, selection=body.selection,
+        ),
     )
     safe_fields = (
         "kind", "task_id", "prompt_text", "is_probe", "is_changed_task",
@@ -161,7 +216,7 @@ def create_task(
     )
     payload = {key: payload[key] for key in safe_fields if key in payload}
     if pending is not None:
-        return {"task": payload, "message_id": None, "existing": True}
+        return {"task": payload, "message_id": None, "existing": True, "run_id": run_id}
 
     if payload.get("task_id"):
         block = ContentBlock(type="task", data=payload)
@@ -170,7 +225,7 @@ def create_task(
     message = Message(
         message_id=f"msg_{uuid.uuid4().hex[:12]}",
         conversation_id=conversation_id,
-        role="assistant",
+        role="assistant", run_id=run_id,
         content_blocks=[block],
     )
     runs.add_message(message)
@@ -189,6 +244,7 @@ def create_task(
             "created_at": message.created_at.isoformat(),
         },
         "existing": False,
+        "run_id": run_id,
     }
 
 
@@ -262,7 +318,10 @@ def explain_task(
     task = _load_owned_task(repo, task_id, user)
     if task["project_id"] != conv.project_id:
         raise AppError("TASK_NOT_IN_PROJECT", "题目不属于当前学习空间", status_code=404)
-    explanation = tasks.explain_task(task_id)
+    explanation, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=conversation_id, action="REQUEST_EXPLANATION",
+        operation=lambda _trace_run_id: tasks.explain_task(task_id),
+    )
     blocks: list[ContentBlock] = []
     source_scope = explanation.get("source_scope") or []
     if source_scope:
@@ -288,12 +347,13 @@ def explain_task(
     }))
     message = Message(
         message_id=f"msg_{uuid.uuid4().hex[:12]}", conversation_id=conversation_id,
-        role="assistant", content_blocks=blocks,
+        role="assistant", content_blocks=blocks, run_id=run_id,
     )
     runs.add_message(message)
     return {
         "message_id": message.message_id,
         "revealed_while_pending": explanation["revealed_while_pending"],
+        "run_id": run_id,
     }
 
 
@@ -321,7 +381,10 @@ def follow_up_task(
     # first follow-up directly, while the current UI explicitly opens the
     # phase as soon as the learner clicks “追问本题”.
     tasks.start_followup(task_id)
-    answer = tasks.answer_followup(task_id, body.question)
+    answer, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=conversation_id, action="TASK_FOLLOWUP",
+        operation=lambda _trace_run_id: tasks.answer_followup(task_id, body.question),
+    )
     from ...services.learning_memory import remember_task_followup
     remember_task_followup(
         repo, project_id=conv.project_id, conversation_id=conversation_id,
@@ -329,13 +392,13 @@ def follow_up_task(
     )
     message = Message(
         message_id=f"msg_{uuid.uuid4().hex[:12]}", conversation_id=conversation_id,
-        role="assistant", content_blocks=[
+        role="assistant", run_id=run_id, content_blocks=[
             ContentBlock(type="status", text="题后追问不会影响学习状态。"),
             ContentBlock(type="text", text=answer),
         ],
     )
     runs.add_message(message)
-    return {"message_id": message.message_id, "text": answer, "read_only": True}
+    return {"message_id": message.message_id, "text": answer, "read_only": True, "run_id": run_id}
 
 
 @router.post("/conversations/{conversation_id}/tasks/{task_id}/followup/start")
@@ -397,14 +460,18 @@ def submit_answer(
     body: AnswerBody,
     user: User = Depends(get_current_user),
     repo: Repository = Depends(get_repo),
+    runs: RunService = Depends(get_run_service),
     tasks: TaskService = Depends(get_task_service),
 ) -> dict:
-    _load_owned_task(repo, task_id, user)
-    return tasks.submit_answer(
-        task_id=task_id, answer_text=body.answer_text,
-        idempotency_key=body.idempotency_key or "",
-        learner_id=user.user_id,
+    task = _load_owned_task(repo, task_id, user)
+    result, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=task["conversation_id"], action="SUBMIT_ANSWER",
+        operation=lambda trace_run_id: tasks.submit_answer(
+            task_id=task_id, answer_text=body.answer_text,
+            idempotency_key=body.idempotency_key or "", learner_id=user.user_id, run_id=trace_run_id,
+        ),
     )
+    return {**result, "run_id": run_id}
 
 
 @router.post("/tasks/{task_id}/hint")
@@ -412,10 +479,15 @@ def request_hint(
     task_id: str,
     user: User = Depends(get_current_user),
     repo: Repository = Depends(get_repo),
+    runs: RunService = Depends(get_run_service),
     tasks: TaskService = Depends(get_task_service),
 ) -> dict:
-    _load_owned_task(repo, task_id, user)
-    return tasks.request_hint(task_id)
+    task = _load_owned_task(repo, task_id, user)
+    result, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=task["conversation_id"], action="REQUEST_HINT",
+        operation=lambda _trace_run_id: tasks.request_hint(task_id),
+    )
+    return {**result, "run_id": run_id}
 
 
 @router.post("/tasks/{task_id}/skip")
@@ -427,11 +499,14 @@ def skip_task(
     tasks: TaskService = Depends(get_task_service),
 ) -> dict:
     task = _load_owned_task(repo, task_id, user)
-    result = tasks.skip_task(task_id)
+    result, run_id = _trace_task_operation(
+        runs, tasks, conversation_id=task["conversation_id"], action="SKIP_TASK",
+        operation=lambda _trace_run_id: tasks.skip_task(task_id),
+    )
     source_scope = tasks.source_scope_for_task(task_id)
     message = Message(
         message_id=f"msg_{uuid.uuid4().hex[:12]}", conversation_id=task["conversation_id"],
-        role="assistant", content_blocks=[
+        role="assistant", run_id=run_id, content_blocks=[
             ContentBlock(type="text", text="已跳过这道题，不会把它记为错误答案。"),
             ContentBlock(type="task", data={
                 "kind": "task_complete", "task_id": task_id,
@@ -440,4 +515,4 @@ def skip_task(
         ],
     )
     runs.add_message(message)
-    return {**result, "message_id": message.message_id}
+    return {**result, "message_id": message.message_id, "run_id": run_id}

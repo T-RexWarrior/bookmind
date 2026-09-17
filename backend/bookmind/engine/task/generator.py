@@ -112,6 +112,7 @@ def generate_quiz(
     router: ModelRouter | None = None,
     source_context: str = "",
     previous_prompts: list[str] | None = None,
+    learner_profile_context: str = "",
 ) -> TaskDraft:
     """Build an ordinary grounded quiz/review draft (Tutor side).
 
@@ -134,6 +135,7 @@ def generate_quiz(
             source_context=source_context,
             level=level,
             previous_prompts=previous_prompts or [],
+            learner_profile_context=learner_profile_context,
         )
         if generated is not None:
             generation_mode = "llm"
@@ -261,6 +263,7 @@ def _try_generate_quiz(
     source_context: str,
     level: Level,
     previous_prompts: list[str],
+    learner_profile_context: str = "",
 ) -> tuple[tuple[str, str, list[str]] | None, str]:
     """Generate one self-contained question *and its matching grading spec*.
 
@@ -277,6 +280,8 @@ def _try_generate_quiz(
         "题干必须自包含且可直接作答。输出严格 JSON："
         '{"prompt_text":"题干","expected_answer":"简洁标准答案","rubric":["评分点1","评分点2"]}。'
         "rubric 必须有 2 到 4 条、可逐项判定，且与题干和标准答案完全对应。"
+        "学习画像只是调整题目情境和验证重点的参考，不是教材事实、标准答案或判分依据；"
+        "不得在题干中提及学习画像，也不得把它当作学生已经掌握的证明。"
     )
     prior = "\n".join(f"- {item}" for item in previous_prompts[-3:]) or "无"
     user = (
@@ -285,6 +290,8 @@ def _try_generate_quiz(
         f"知识点说明：{concept_description or '以资料片段为准'}\n"
         f"资料片段：\n{(source_context or concept_description)[:3500]}\n\n"
         f"近期已经出过的题（新题不得重复）：\n{prior}"
+        + (f"\n\n学习画像摘要（仅用于决定下一步验证什么）：\n{learner_profile_context[:900]}"
+           if learner_profile_context else "")
     )
     result = router.complete(
         "grounded_quiz_generation",

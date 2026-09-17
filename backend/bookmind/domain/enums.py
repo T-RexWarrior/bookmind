@@ -102,6 +102,8 @@ class EvidenceType(StrEnum):
     READ = "READ"
     QUESTION = "QUESTION"
     EXPLANATION = "EXPLANATION"
+    HINT = "HINT"
+    SKIP = "SKIP"
     VERIFY = "VERIFY"
     PROBE = "PROBE"
     CHANGED_TASK = "CHANGED_TASK"
@@ -114,6 +116,9 @@ class MemoryKind(StrEnum):
     MANUAL_LEARNED = "MANUAL_LEARNED"
     QUESTION_CONTEXT = "QUESTION_CONTEXT"
     TASK_FOLLOWUP = "TASK_FOLLOWUP"
+    # A replaceable LLM interpretation of immutable Evidence. It is never a
+    # substitute for the ledger or a direct source of L1-L4 verification.
+    LEARNER_PROFILE = "LEARNER_PROFILE"
 
 
 class EvidenceResult(StrEnum):

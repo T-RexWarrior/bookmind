@@ -615,15 +615,18 @@ class ConversationOrchestrator:
             selection_text=selection_text,
         )
         resolved = list(analysis.subjects)
+        followup = None
         # A direct topic always wins.  Only an unresolved utterance containing
         # a genuine deictic/ellipsis is allowed to consult bounded dialogue
         # context, and the model may select only persisted graph units.
         if not resolved and _has_contextual_deixis(question):
-            resolved = self.concept_resolver.resolve_contextual_followup(
+            followup = self.concept_resolver.resolve_contextual_followup(
                 project_id=project_id,
                 question=question,
                 conversation_context=_bounded_conversation_context(history or []),
             )
+            if followup.relation == "FOLLOW_UP":
+                resolved = list(followup.subjects)
         resolved_event = _evt(run_id, seq, EventType.CONCEPT_RESOLVED, {
             "query_kind": analysis.kind,
             "concepts": [
@@ -638,6 +641,23 @@ class ConversationOrchestrator:
         if event_sink:
             event_sink(resolved_event)
         seq += 1
+        if followup is not None and followup.relation == "AMBIGUOUS":
+            choices = "、".join(followup.candidate_names)
+            hint = f"（例如：{choices}）" if choices else ""
+            clarification = (
+                f"我不确定“它/他”指的是哪一个刚讨论的概念{hint}。"
+                "请直接说出对象，例如“给队列一个代码示例”。"
+            )
+            event = _evt(run_id, seq, EventType.RETRIEVAL_SCOPED, {
+                "scope": scope, "source_id": selected_source, "page": selected_page,
+                "preferred_chunk_count": 0, "concept_ids": [], "blocked_by_page_scope": True,
+                "reason_code": "FOLLOWUP_AMBIGUOUS",
+            })
+            events.append(event)
+            if event_sink:
+                event_sink(event)
+            return [ContentBlock(type="status", text="需要澄清指代后再检索；本轮不会写入学习状态。"),
+                    ContentBlock(type="text", text=clarification)], seq + 1
         preferred_chunk_ids = self.concept_resolver.evidence_chunk_ids(
             project_id=project_id, subjects=resolved,
         )
@@ -946,6 +966,15 @@ class ConversationOrchestrator:
 
         explicit_followup = "本轮追问：" in question
         memory_lines: list[str] = []
+        # A learner profile is an LLM-generated interpretation of prior facts,
+        # not a source of textbook truth. It helps the Tutor choose depth and
+        # examples, while citations still come only from retrieved chunks.
+        from ..services.learner_profile import render_profile_context
+        profile_context = render_profile_context(
+            self.repo, project_id, list(names), limit=3,
+        )
+        if profile_context:
+            memory_lines.append(f"学习画像（仅调整讲解方式，不作为教材依据）：{profile_context}")
         for item in self.repo.memories_for_project(project_id):
             if item.kind == MemoryKind.MANUAL_LEARNED and item.concept_id in names:
                 memory_lines.append(f"{names[item.concept_id]}：学习者标记为已学，仍待独立验证。")

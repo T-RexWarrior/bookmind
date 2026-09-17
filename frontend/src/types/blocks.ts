@@ -187,6 +187,8 @@ export interface LearningSummary {
     attempt_count?: number;
     latest_attempt_result?: "PASS" | "PARTIAL" | "FAIL" | null;
     manual_learned?: boolean;
+    profile_summary?: string;
+    next_practice_goal?: string;
     book_id?: string | null;
     chapter?: string | null;
     section?: string | null;
@@ -234,6 +236,15 @@ export interface ConceptLearningRecord {
   status: { group: string; current_level: string; highest_level: string; exposure: string; manual_learned?: boolean };
   question_count: number;
   attempt_count: number;
+  learner_profile?: {
+    summary?: string;
+    observed_understanding?: string[];
+    needs_attention?: string[];
+    next_practice_goal?: string;
+    confidence?: number;
+    evidence_basis?: string[];
+    updated_at?: string;
+  } | null;
   source_refs: { source_id: string; source_title: string; page: number; chunk_id?: string; label: string }[];
   timeline: {
     evidence_id: string;

@@ -31,6 +31,7 @@ from ..agents.diagnostician import DiagnosticianAgent
 from ..errors import AppError
 from ..domain.enums import (
     Action,
+    EvidenceType,
     EvidenceResult,
     JudgmentStatus,
     Level,
@@ -55,6 +56,12 @@ from ..engine.task.generator import (
 )
 from ..engine.task.validator import validate
 from ..llm.router import ModelRouter
+from ..services.learner_profile import (
+    LearnerProfileService,
+    record_task_interaction_fact,
+    record_unresolved_submission_fact,
+    render_profile_context,
+)
 from ..services.remediation import RemediationService
 from ..storage.protocols import Repository
 from .concept_scope import is_learning_concept
@@ -335,6 +342,10 @@ class TaskService:
             raise AppError("TASK_NOT_PENDING", "该任务已结束，无法再请求提示",
                            status_code=409)
         n = self.repo.increment_task_hints(task_id)
+        record_task_interaction_fact(
+            self.repo, task_data=t, evidence_type=EvidenceType.HINT,
+            detail=f"hint_number={n}",
+        )
         rubric = list(t.get("rubric") or [])
         # Hints are an interaction control and must return immediately. A live
         # model call here used to block for up to a minute, inviting repeated
@@ -363,6 +374,10 @@ class TaskService:
             raise AppError("TASK_NOT_FOUND", "任务不存在", status_code=404)
         if t["status"] != "PENDING":
             raise AppError("TASK_NOT_PENDING", "该任务已经结束", status_code=409)
+        record_task_interaction_fact(
+            self.repo, task_data=t, evidence_type=EvidenceType.SKIP,
+            detail="learner_skipped_pending_task",
+        )
         self.repo.update_task_status(task_id, "SKIPPED")
         return {"task_id": task_id, "status": "SKIPPED"}
 
@@ -384,6 +399,10 @@ class TaskService:
         was_pending = task["status"] == "PENDING"
         if was_pending:
             self.repo.update_task_status(task_id, "EXPLAINED")
+            record_task_interaction_fact(
+                self.repo, task_data=task, evidence_type=EvidenceType.EXPLANATION,
+                detail="explanation_revealed_while_pending",
+            )
 
         prompt = _bounded_text(str(task.get("prompt_text") or ""), 1800)
         expected = _bounded_text(str(task.get("expected_answer") or ""), 1800)
@@ -532,6 +551,12 @@ class TaskService:
 
         clarification = _clarification_for(answer_text)
         if clarification:
+            record_unresolved_submission_fact(
+                self.repo, task_data=t, answer_text=answer_text,
+                hints_issued=int(t.get("hints_issued", 0)),
+                reason="learner did not provide a gradable answer",
+                marker=f"clarification:{idempotency_key}",
+            )
             return {
                 "task_id": task_id,
                 "judgment": {
@@ -590,6 +615,14 @@ class TaskService:
                 evidence_id=evidence_id, source_book_id=source_book_id,
             )
 
+            if result.needs_review:
+                record_unresolved_submission_fact(
+                    self.repo, task_data=t, answer_text=answer_text,
+                    hints_issued=interaction.hints_issued,
+                    reason=judgment.reason or "judgment needs review",
+                    marker=f"needs-review:{submission_id}",
+                )
+
             self.repo.save_submission({
                 "submission_id": submission_id, "task_id": task_id,
                 "project_id": project_id, "learner_id": learner_id,
@@ -603,7 +636,28 @@ class TaskService:
             if not result.needs_review:
                 self.repo.update_task_status(task_id, "ANSWERED", last_submission_id=submission_id)
 
-        return self._answer_result(task_id, judgment, result, project_id)
+        profiles: list[dict] = []
+        if result.written and result.evidence is not None:
+            # The profile is a best-effort semantic projection. It runs after
+            # the answer transaction, so a timeout or malformed model response
+            # cannot roll back a real submission, Evidence row or L1-L4 state.
+            try:
+                profiles = LearnerProfileService(self.repo, self.router).update_after_submission(
+                    project_id=project_id,
+                    task=trusted,
+                    interaction=interaction,
+                    judgment=judgment,
+                    answer_text=answer_text,
+                    evidence=result.evidence,
+                )
+            except Exception:
+                import logging
+                logging.getLogger("bookmind").exception("Learner profile update failed")
+        response = self._answer_result(task_id, judgment, result, project_id)
+        # Extra response data is backward compatible. The browser may render
+        # it immediately; the durable source is the concept record endpoint.
+        response["learning_profiles"] = profiles
+        return response
 
     # --- internals --------------------------------------------------------
 
@@ -651,6 +705,9 @@ class TaskService:
                 target_concept_ids=[concept.concept_id],
                 router=self.router,
                 source_context=self._source_context_for_concept(project_id, concept),
+                learner_profile_context=render_profile_context(
+                    self.repo, project_id, [concept.concept_id],
+                ),
             )
         mis = self.repo.all_misconceptions(project_id)
 
@@ -707,6 +764,9 @@ class TaskService:
             target_concept_ids=[concept.concept_id],
             router=self.router,
             source_context=self._source_context_for_concept(project_id, concept),
+            learner_profile_context=render_profile_context(
+                self.repo, project_id, [concept.concept_id],
+            ),
         )
 
     def _next_quiz_level(self, project_id: str, concept_id: str) -> Level:

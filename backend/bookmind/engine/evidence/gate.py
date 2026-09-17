@@ -42,9 +42,17 @@ def can_verify_mastery(
     """Return which (if any) levels this evidence verifies and why not."""
     blocks: list[str] = []
 
-    # READ / QUESTION / EXPLANATION only affect exposure — never mastery.
+    # The ledger also retains non-answer facts such as HINT, SKIP and
+    # EXPLANATION. They help an LLM explain the learner profile but can never
+    # impersonate an independently judged answer.
     if evidence.evidence_type in (EvidenceType.READ, EvidenceType.QUESTION, EvidenceType.EXPLANATION):
         blocks.append("exposure-only evidence type")
+        return GateDecision(verified_levels=[], passed_gate=False, blocks=blocks)
+    if evidence.evidence_type not in (
+        EvidenceType.VERIFY, EvidenceType.PROBE,
+        EvidenceType.CHANGED_TASK, EvidenceType.CORRECTION,
+    ):
+        blocks.append("non-verifying evidence type")
         return GateDecision(verified_levels=[], passed_gate=False, blocks=blocks)
 
     if judgment is not None and judgment.judgment_status != JudgmentStatus.DECIDED:

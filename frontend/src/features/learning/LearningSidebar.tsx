@@ -55,7 +55,9 @@ export function LearningSidebar() {
     return matchesFilter && matchesQuery;
   }).sort((a, b) =>
     `${a.book_id || ""}/${a.chapter || ""}/${a.section || ""}/${a.name}`.localeCompare(
-      `${b.book_id || ""}/${b.chapter || ""}/${b.section || ""}/${b.name}`, "zh-CN",
+      `${b.book_id || ""}/${b.chapter || ""}/${b.section || ""}/${b.name}`,
+      "zh-CN",
+      { numeric: true, sensitivity: "base" },
     )
   ), [summary, filter, query]);
 
@@ -126,7 +128,10 @@ export function LearningSidebar() {
                 <summary>{chapter} <small>{chapterConcepts.length} 个知识点</small></summary>
                 {chapterConcepts.map((concept) => (
                   <button key={concept.concept_id} className={selectedId === concept.concept_id ? "is-active" : ""} onClick={() => setSelectedId(concept.concept_id)}>
-                    <span><strong>{concept.name}</strong><small>{concept.section || (concept.manual_learned ? "已学（待验证）" : (GROUP_LABELS[concept.group] || concept.group))}</small></span>
+                    <span>
+                      <strong>{concept.name}</strong>
+                      <small>{concept.profile_summary || concept.section || (concept.manual_learned ? "已学（待验证）" : (GROUP_LABELS[concept.group] || concept.group))}</small>
+                    </span>
                     {(concept.attempt_count || 0) > 0
                       ? <em>作答 {concept.attempt_count} 次</em>
                       : (concept.question_count || 0) > 0 ? <em>问过 {concept.question_count} 次</em> : <span>›</span>}
@@ -157,6 +162,7 @@ export function LearningSidebar() {
                 <button className="btn primary" onClick={() => void actions.startTask({ conceptId: record.concept_id })}>练习这个知识点</button>
                 {record.source_refs[0] ? <button className="btn ghost" onClick={() => void openSource(record.source_refs[0].source_id, record.source_refs[0].page)}>回到原文</button> : null}
               </div>
+              {record.learner_profile ? <ProfilePanel profile={record.learner_profile} /> : null}
               <div className="concept-timeline">
                 <strong>最近记录</strong>
                 {record.timeline.slice(0, 8).map((item) => (
@@ -194,8 +200,30 @@ function FilterButton({ active, onClick, children }: { active: boolean; onClick:
 function evidenceLabel(type: string, result?: string | null): string {
   if (type === "QUESTION") return "提出疑问";
   if (type === "READ") return "阅读接触";
+  if (type === "HINT") return "查看提示（辅助）";
+  if (type === "SKIP") return "跳过本题";
+  if (type === "EXPLANATION") return "查看讲解（辅助）";
   const resultLabel = result === "PASS" ? "通过" : result === "PARTIAL" ? "部分通过" : result === "FAIL" ? "未通过" : "已记录";
   return `${type === "PROBE" ? "诊断题" : type === "CHANGED_TASK" ? "迁移题" : "检测题"} · ${resultLabel}`;
+}
+
+function ProfilePanel({ profile }: { profile: NonNullable<ConceptLearningRecord["learner_profile"]> }) {
+  const hasContent = profile.summary || profile.observed_understanding?.length
+    || profile.needs_attention?.length || profile.next_practice_goal;
+  if (!hasContent) return null;
+  return <section className="learner-profile-panel">
+    <strong>基于证据的学习画像</strong>
+    {profile.summary ? <p>{profile.summary}</p> : null}
+    {profile.observed_understanding?.length ? <ProfileList label="已观察到" items={profile.observed_understanding} /> : null}
+    {profile.needs_attention?.length ? <ProfileList label="待关注" items={profile.needs_attention} tone="attention" /> : null}
+    {profile.next_practice_goal ? <div className="profile-goal"><span>下一步验证</span>{profile.next_practice_goal}</div> : null}
+    {profile.evidence_basis?.length ? <small>依据：{profile.evidence_basis.join("；")}</small> : null}
+    <small className="profile-disclaimer">由模型解释已有学习事实；“已验证”仍仅来自独立作答。</small>
+  </section>;
+}
+
+function ProfileList({ label, items, tone = "" }: { label: string; items: string[]; tone?: string }) {
+  return <div className={`profile-list ${tone}`}><span>{label}</span><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></div>;
 }
 
 function formatRecordTime(value: string): string {

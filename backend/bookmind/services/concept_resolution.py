@@ -17,6 +17,7 @@ from .concept_scope import is_learning_concept, is_learning_section, normalise_s
 
 
 QueryKind = Literal["DIRECT", "COMPARE", "RECOMMEND", "CROSS_DOMAIN", "SELECTION"]
+FollowupRelation = Literal["FOLLOW_UP", "NEW_TOPIC", "AMBIGUOUS"]
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,14 @@ class QuestionAnalysis:
     kind: QueryKind
     needs_general_supplement: bool = False
     selection_chunk_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class FollowupResolution:
+    relation: FollowupRelation
+    subjects: tuple[ResolvedConcept, ...] = ()
+    confidence: float = 0.0
+    candidate_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -102,7 +111,7 @@ class ConceptResolver:
 
     def resolve_contextual_followup(
         self, *, project_id: str, question: str, conversation_context: str,
-    ) -> list[ResolvedConcept]:
+    ) -> FollowupResolution:
         """Resolve an ellipsis/pronoun against known units, never retrieval rank.
 
         This is deliberately called only after direct resolution failed and a
@@ -112,8 +121,7 @@ class ConceptResolver:
         chunk.
         """
         if not conversation_context.strip() or not getattr(self.router.cfg, "live", False):
-            return []
-        candidates = [item for item in self._all_candidates(project_id, "") if item is not None]
+            return FollowupResolution(relation="AMBIGUOUS")
         # _all_candidates("" ) contains no lexical matches; enumerate the
         # eligible stable units directly for this small, project-local choice.
         candidates = [
@@ -123,7 +131,7 @@ class ConceptResolver:
             if _eligible_learning_unit(concept)
         ][:96]
         if not candidates:
-            return []
+            return FollowupResolution(relation="AMBIGUOUS")
         cards = "\n".join(
             f"- id={item.concept.concept_id}; 单元={item.concept.name}; 位置={item.concept.section or item.concept.chapter}"
             for item in candidates
@@ -136,7 +144,8 @@ class ConceptResolver:
                     "只能从候选单元选择，或选择空数组；不要凭相邻章节猜测。"
                     "relation 只能是 FOLLOW_UP、NEW_TOPIC、AMBIGUOUS。"
                     "只有确实指代前文时才返回 FOLLOW_UP 和 concept_ids。"
-                    "输出严格 JSON：{\"relation\":\"...\",\"concept_ids\":[\"...\"],\"confidence\":0到1}。"
+                    "AMBIGUOUS 时可返回最可能的 candidate_ids 供用户澄清。"
+                    "输出严格 JSON：{\"relation\":\"...\",\"concept_ids\":[\"...\"],\"candidate_ids\":[\"...\"],\"confidence\":0到1}。"
                 )}, {"role": "user", "content": (
                     f"最近对话：\n{conversation_context[:1800]}\n\n当前问题：{question[:700]}\n\n候选单元：\n{cards}"
                 )}],
@@ -146,16 +155,32 @@ class ConceptResolver:
             confidence = float((parsed or {}).get("confidence") or 0)
             relation = str((parsed or {}).get("relation") or "")
             raw_ids = (parsed or {}).get("concept_ids") or []
+            raw_candidate_ids = (parsed or {}).get("candidate_ids") or []
         except (TypeError, ValueError, AttributeError):
-            return []
-        if relation != "FOLLOW_UP" or confidence < 0.80:
-            return []
+            return FollowupResolution(relation="AMBIGUOUS")
         allowed = {item.concept.concept_id: item for item in candidates}
+        candidate_names = tuple(
+            allowed[str(value)].concept.name for value in raw_candidate_ids
+            if str(value) in allowed
+        )[:3]
+        if relation not in {"FOLLOW_UP", "NEW_TOPIC", "AMBIGUOUS"}:
+            relation = "AMBIGUOUS"
+        if relation != "FOLLOW_UP" or confidence < 0.80:
+            return FollowupResolution(
+                relation=relation if relation != "FOLLOW_UP" else "AMBIGUOUS",
+                confidence=confidence, candidate_names=candidate_names,
+            )
         selected = [allowed[str(value)] for value in raw_ids if str(value) in allowed]
-        return [
-            ResolvedConcept(**{**self._resolved(item, confidence=confidence, rationale="llm_followup_resolution").__dict__})
+        # _select_direct already returns ResolvedConcept. Only adjust the
+        # provenance/confidence; never feed that result back into _resolved.
+        resolved = tuple(
+            ResolvedConcept(**{**item.__dict__, "confidence": confidence, "rationale": "llm_followup_resolution"})
             for item in self._select_direct(selected)
-        ]
+        )
+        return FollowupResolution(
+            relation="FOLLOW_UP" if resolved else "AMBIGUOUS",
+            subjects=resolved, confidence=confidence, candidate_names=candidate_names,
+        )
 
     def evidence_chunk_ids(
         self, *, project_id: str, subjects: tuple[ResolvedConcept, ...] | list[ResolvedConcept],
@@ -366,6 +391,12 @@ def _aliases_for(concept) -> tuple[str, ...]:
             # into the one-character alias “栈” makes every sibling-looking
             # section claim a basic Stack question. Keep the complete phrase;
             # the actual §4.1 栈 unit supplies the precise short alias.
+    # These are textbook-operation aliases, not separate mastery nodes. They
+    # make “入队/出队怎么做” reliably resolve to the queue section while
+    # retaining one state record for Queue.
+    canonical = " ".join(labels)
+    if "队列" in canonical:
+        aliases.update({"入队", "出队", "enqueue", "dequeue"})
     return tuple(sorted(aliases, key=lambda value: (-len(value), value)))
 
 

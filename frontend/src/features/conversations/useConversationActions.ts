@@ -325,17 +325,22 @@ export function useConversationActions() {
 
   const explainTask = useCallback(async (taskId: string) => {
     const conversation = state.activeConversation;
+    const project = state.activeProject;
     if (!conversation) return;
     try {
       dispatch({ type: "SET_SENDING", sending: true });
       await api.explainTask(conversation.conversation_id, taskId);
       await reloadConversation(conversation.conversation_id);
+      // Showing an explanation is durable non-verifying learning evidence.
+      // Keep an already-open learning sidebar in sync instead of requiring a
+      // page refresh before the learner can see that interaction.
+      if (project) await refreshSidebars(project.project_id);
     } catch (error) {
       toast((error as Error).message || "暂时无法生成讲解");
     } finally {
       dispatch({ type: "SET_SENDING", sending: false });
     }
-  }, [state.activeConversation, state.activeFollowupTaskId, dispatch, reloadConversation]);
+  }, [state.activeConversation, state.activeProject, dispatch, reloadConversation, refreshSidebars]);
 
   const followupTask = useCallback(async (taskId: string, question: string) => {
     const conversation = state.activeConversation;
@@ -350,7 +355,7 @@ export function useConversationActions() {
     } finally {
       dispatch({ type: "SET_SENDING", sending: false });
     }
-  }, [state.activeConversation, dispatch, reloadConversation]);
+  }, [state.activeConversation, state.activeFollowupTaskId, dispatch, reloadConversation]);
 
   const startTaskFollowup = useCallback(async (taskId: string) => {
     const conversation = state.activeConversation;
@@ -431,13 +436,16 @@ export function useConversationActions() {
             created_at: new Date().toISOString(),
           } as ApiMessage,
         });
+        // A hint is recorded as non-verifying evidence.  Refresh the visible
+        // profile/timeline if the learner already has it open.
+        if (state.activeProject) await refreshSidebars(state.activeProject.project_id);
       } catch (e) {
         toast((e as Error).message || "无法获取提示");
       } finally {
         hintRequestsRef.current.delete(taskId);
       }
     },
-    [dispatch],
+    [dispatch, refreshSidebars, state.activeProject],
   );
 
   const skipTask = useCallback(
@@ -446,12 +454,13 @@ export function useConversationActions() {
         await api.skipTask(taskId);
         dispatch({ type: "SET_PENDING_TASK", pendingTask: null });
         if (state.activeConversation) await reloadConversation(state.activeConversation.conversation_id);
+        if (state.activeProject) await refreshSidebars(state.activeProject.project_id);
         toast("已跳过本题，不会记为错误；现在可以开始下一题。");
       } catch (e) {
         toast((e as Error).message || "跳过失败");
       }
     },
-    [dispatch, state.activeConversation, reloadConversation],
+    [dispatch, state.activeConversation, state.activeProject, reloadConversation, refreshSidebars],
   );
 
   const uploadFile = useCallback(
