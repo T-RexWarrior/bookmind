@@ -139,6 +139,7 @@ def classify_intent(text: str, *, has_pending_task: bool = False) -> Intent:
 
 def interpret_intent(
     router: ModelRouter, text: str, *, has_pending_task: bool, task_prompt: str = "",
+    conversation_context: str = "",
 ) -> Intent:
     """Classify natural task actions with DeepSeek, with an offline-safe floor."""
     fallback = classify_intent(text, has_pending_task=has_pending_task)
@@ -154,12 +155,18 @@ def interpret_intent(
         "有待完成题时：明确要求提示→REQUEST_HINT；明确跳过/换题→SKIP_TASK；"
         "明确要讲解→REQUEST_EXPLANATION；仅表示不会、没思路、我不知道→UNSURE_OR_GIVE_UP；"
         "给出解答或推理→SUBMIT_ANSWER。"
+        "没有待完成题时，涉及教材概念、资料、解释、比较、代码、应用或对前文对象的追问，"
+        "都属于 ASK_BOOK 或 REQUEST_EXPLANATION；GENERAL_CHAT 只用于寒暄或明确的非学习闲聊。"
     )
     res = router.complete(
         "action_interpretation",
         [{"role": "system", "content": system}, {
             "role": "user",
-            "content": f"当前是否有待完成题：{has_pending_task}\n题目：{prompt}\n用户输入：{text[:600]}",
+            "content": (
+                f"当前是否有待完成题：{has_pending_task}\n题目：{prompt}\n"
+                f"最近对话（仅用于理解指代）：{conversation_context[:1200] or '无'}\n"
+                f"用户输入：{text[:600]}"
+            ),
         }],
         output_schema={"type": "object", "required": ["intent", "confidence"]},
         temperature=0.0,
@@ -183,8 +190,8 @@ def interpret_intent(
     # Ordinary prose with no pending exercise is textbook Q&A by default.
     # The action model may help with explicit commands above, but it must not
     # downgrade a concrete learner question into an acknowledgement.
-    if fallback == "ASK_BOOK":
-        return "ASK_BOOK"
+    if not has_pending_task and fallback in {"ASK_BOOK", "REQUEST_EXPLANATION"}:
+        return fallback
     if intent in _INTENT_VALUES and confidence >= 0.72:
         return intent  # type: ignore[return-value]
     return fallback
@@ -415,6 +422,7 @@ class ConversationOrchestrator:
             state["user_text"],
             has_pending_task=pending is not None,
             task_prompt=str((pending or {}).get("prompt_text") or ""),
+            conversation_context=_bounded_conversation_context(state.get("history", [])),
         )
         events = [*state["events"], _evt(
             state["run_id"], state["seq"], EventType.ACTION_SELECTED,
@@ -620,10 +628,12 @@ class ConversationOrchestrator:
         )
         resolved = list(analysis.subjects)
         followup = None
-        # A direct topic always wins.  Only an unresolved utterance containing
-        # a genuine deictic/ellipsis is allowed to consult bounded dialogue
-        # context, and the model may select only persisted graph units.
-        if not resolved and _has_contextual_deixis(question):
+        # A direct topic always wins.  For an unresolved utterance, let the
+        # semantic follow-up resolver inspect bounded dialogue context rather
+        # than trying to enumerate every pronoun/ellipsis form in a regex.  It
+        # may select only persisted graph units, return NEW_TOPIC, or ask for
+        # clarification; retrieval rank never decides this relation.
+        if not resolved and history:
             followup = self.concept_resolver.resolve_contextual_followup(
                 project_id=project_id,
                 question=question,
@@ -639,7 +649,7 @@ class ConversationOrchestrator:
                 for item in resolved
             ],
             "scope": scope,
-            "explicit_followup": _has_contextual_deixis(question),
+            "explicit_followup": bool(followup and followup.relation == "FOLLOW_UP"),
             # The semantic resolver is deliberately independent of retrieval.
             # Export this decision so a Trace can distinguish “new topic” from
             # “no reliable concept”, rather than hiding both behind an empty
@@ -687,78 +697,70 @@ class ConversationOrchestrator:
             scope == "CURRENT_PAGE" and selected_page and resolved_pages
             and selected_page not in resolved_pages
         )
-        if target_outside_current_page:
-            target = resolved[0]
-            page_text = "、".join(str(page) for page in resolved_pages[:3])
-            retrieval_scope_event = _evt(run_id, seq, EventType.RETRIEVAL_SCOPED, {
-                "scope": scope, "source_id": selected_source, "page": selected_page,
-                "preferred_chunk_count": len(preferred_chunk_ids),
-                "concept_ids": [item.concept_id for item in resolved],
-                "blocked_by_page_scope": True,
-            })
-            events.append(retrieval_scope_event)
-            if event_sink:
-                event_sink(retrieval_scope_event)
-            seq += 1
-            locations_ready([], 0.0, False)
-            ans = AskResult(
-                answer_text=(
-                    f"当前第 {selected_page} 页不包含“{target.name}”的正文；"
-                    f"它位于第 {page_text} 页附近。请切换到对应章节后再查看讲解。"
-                ),
-                citations=[], grounded=False, chunk_ids=[],
-                reason="resolved concept is outside current page",
+        # "Current page" is the learner's starting point, not a blindfold.
+        # Once we know that the requested unit is elsewhere (or the learner
+        # explicitly requests code), continue searching the same permitted
+        # book.  Code implementations are often deliberately separated from
+        # a definition section (e.g. §5.1 vs §5.3), so refusing at the
+        # definition page made a perfectly reasonable question look broken.
+        # The UI will disclose this widening below; it never crosses project
+        # or selected-source boundaries.
+        expanded_from_current_page = bool(
+            scope == "CURRENT_PAGE" and selected_page and (
+                target_outside_current_page or question_requests_code(question)
             )
-        else:
-            # Explicit concept anchors outrank broad BM25.  If a graph node
-            # has no chunk anchor yet, its canonical name still expands the
-            # retrieval query, but no unrelated section is made preferred.
-            concept_prefix = "、".join(item.name for item in resolved)
-            # The model may use history to understand a confirmed pronoun, but
-            # the raw utterance remains the only input to concept resolution.
-            # A NEW_TOPIC must never inherit the preceding question here.
-            model_question = (
-                _rewrite_followup(question, history or [])
-                if followup is not None and followup.relation == "FOLLOW_UP"
-                else question
-            )
-            constrained_question = (
-                f"学习单元：{concept_prefix}\n问题：{model_question}"
-                if concept_prefix else model_question
-            )
-            if analysis.selection_chunk_ids:
-                constrained_question += "\n任务背景：用户选中了本次资料片段；请解释该片段，并说明它与当前学习单元的关系。"
-            context_request = self._build_book_qa_context(
-                project_id=project_id,
-                conversation_id=conversation_id,
-                question=question,
-                history=history or [],
-                resolved=resolved,
-                scope=scope,
-                selected_source=selected_source,
-                selected_page=selected_page,
-                selection_text=selection_text,
-            )
-            retrieval_scope_event = _evt(run_id, seq, EventType.RETRIEVAL_SCOPED, {
-                "scope": scope,
-                "source_id": selected_source,
-                "page": selected_page,
-                "preferred_chunk_count": len(preferred_chunk_ids),
-                "selection_anchor_count": len(analysis.selection_chunk_ids),
-                "concept_ids": [item.concept_id for item in resolved],
-            })
-            events.append(retrieval_scope_event)
-            if event_sink:
-                event_sink(retrieval_scope_event)
-            seq += 1
-            ans = self.qa_service.ask(
-                project_id=project_id, learner_id=learner_id, question=constrained_question,
-                source_ids=source_ids, physical_page=physical_page,
-                preferred_chunk_ids=preferred_chunk_ids or None,
-                selected_chunk_ids=list(analysis.selection_chunk_ids) or None,
-                context_request=context_request,
-                on_retrieval=locations_ready,
-            )
+        )
+        if expanded_from_current_page:
+            physical_page = None
+        # Explicit concept anchors outrank broad BM25.  If a graph node has
+        # no chunk anchor yet, its canonical name still expands the retrieval
+        # query, but no unrelated section is made preferred.
+        concept_prefix = "、".join(item.name for item in resolved)
+        # The model may use history to understand a confirmed pronoun, but the
+        # raw utterance remains the only input to concept resolution.
+        model_question = (
+            _rewrite_followup(question, history or [])
+            if followup is not None and followup.relation == "FOLLOW_UP"
+            else question
+        )
+        constrained_question = (
+            f"学习单元：{concept_prefix}\n问题：{model_question}"
+            if concept_prefix else model_question
+        )
+        if analysis.selection_chunk_ids:
+            constrained_question += "\n任务背景：用户选中了本次资料片段；请解释该片段，并说明它与当前学习单元的关系。"
+        context_request = self._build_book_qa_context(
+            project_id=project_id,
+            conversation_id=conversation_id,
+            question=question,
+            history=history or [],
+            resolved=resolved,
+            scope=scope,
+            selected_source=selected_source,
+            selected_page=selected_page,
+            selection_text=selection_text,
+        )
+        retrieval_scope_event = _evt(run_id, seq, EventType.RETRIEVAL_SCOPED, {
+            "scope": scope,
+            "source_id": selected_source,
+            "page": selected_page,
+            "preferred_chunk_count": len(preferred_chunk_ids),
+            "selection_anchor_count": len(analysis.selection_chunk_ids),
+            "concept_ids": [item.concept_id for item in resolved],
+            "expanded_from_current_page": expanded_from_current_page,
+        })
+        events.append(retrieval_scope_event)
+        if event_sink:
+            event_sink(retrieval_scope_event)
+        seq += 1
+        ans = self.qa_service.ask(
+            project_id=project_id, learner_id=learner_id, question=constrained_question,
+            source_ids=source_ids, physical_page=physical_page,
+            preferred_chunk_ids=preferred_chunk_ids or None,
+            selected_chunk_ids=list(analysis.selection_chunk_ids) or None,
+            context_request=context_request,
+            on_retrieval=locations_ready,
+        )
 
         citation_event = _evt(run_id, seq, EventType.CITATION_VALIDATED, {
             "grounded": ans.grounded,
@@ -800,16 +802,66 @@ class ConversationOrchestrator:
         # supplement. It never gains citations and never affects evidence.
         supplement = ""
         if analysis.needs_general_supplement:
+            # The general route has no textbook citations, but it must see the
+            # same bounded learner snapshot as the Tutor. Otherwise a request
+            # such as “我还缺什么，给个代码例子” silently became generic advice.
+            learner_guidance = self.qa_service.context_builder.build(
+                context_request
+            ).render_model_guidance()
             supplement = self.qa_service.general_supplement(
                 question=question,
                 subject_names=[item.name for item in resolved],
                 require_code=question_requests_code(question),
+                learner_context=learner_guidance,
             )
 
         # Streaming-ish: emit the answer text as one agent_delta (the offline
         # path returns the full text at once; a live model could chunk it).
         blocks: list[ContentBlock] = []
+        if expanded_from_current_page:
+            blocks.append(ContentBlock(
+                type="status",
+                text=(
+                    f"当前第 {selected_page} 页未覆盖本题所需的全部内容；"
+                    "已在当前资料的相关章节继续检索。"
+                ),
+            ))
+        answer_context_block: ContentBlock | None = None
         if ans.chunk_ids:
+            # Textbook chunks are the only factual/citable source.  This
+            # separate, explicit learner basis tells the learner why the
+            # response is personalised and how a phrase such as “这个” was
+            # resolved, without ever turning it into textbook evidence.
+            from ..services.learning_memory import manually_learned_ids
+            learned_ids = manually_learned_ids(self.repo, project_id)
+            state_by_concept = {
+                item.concept_id: item for item in self.repo.states_for_project(project_id)
+            }
+            learner_basis: list[dict[str, str]] = [{"label": "本轮提问", "text": question[:180]}]
+            resolved_names = "、".join(item.name for item in resolved[:3]) or "未可靠归类"
+            if followup is not None and followup.relation == "FOLLOW_UP":
+                learner_basis.append({
+                    "label": "上下文解析",
+                    "text": f"将“这个”解析为上一轮讨论的“{resolved_names}”。",
+                })
+            for concept in resolved[:3]:
+                state = state_by_concept.get(concept.concept_id)
+                decided = [
+                    item for item in self.repo.evidence_for(project_id, concept.concept_id)
+                    if item.result is not None
+                ]
+                if concept.concept_id in learned_ids:
+                    archive_text = "已标记已学；该标记仍需独立作答验证。"
+                elif state is not None:
+                    archive_text = "已有阅读/提问记录；尚未获得独立掌握验证。"
+                else:
+                    archive_text = "本轮已关联到该学习单元。"
+                if decided:
+                    latest = max(decided, key=lambda item: item.occurred_at)
+                    archive_text += f"最近一次{'独立' if latest.independent else '非独立'}作答结果：{latest.result.value}。"
+                else:
+                    archive_text += "目前没有可用于验证掌握程度的独立作答结果。"
+                learner_basis.append({"label": f"学习档案 · {concept.name}", "text": archive_text})
             context_items = []
             seen = set()
             for chunk_id in ans.chunk_ids:
@@ -832,15 +884,19 @@ class ConversationOrchestrator:
                 "CURRENT_SOURCE": "当前资料",
                 "ALL_SOURCES": "全部资料",
             }
-            blocks.append(ContentBlock(type="context", data={
+            answer_context_block = ContentBlock(type="context", data={
                 "kind": "answer_context",
-                "scope": scope_labels.get(scope, "全部资料"),
+                "scope": (
+                    f"当前资料（由第 {selected_page} 页扩展）"
+                    if expanded_from_current_page else scope_labels.get(scope, "全部资料")
+                ),
                 "reason": (
                     "结合你选中的原文，并从当前页面检索相关片段后作答。"
                     if selection_text else "从所选范围中检索与本次问题最相关的原文片段后作答。"
                 ),
                 "items": context_items[:4],
-            }))
+                "learner_basis": learner_basis,
+            })
         source_limit_only = bool(supplement and _is_source_limit_only(ans.answer_text))
         if source_limit_only:
             # Do not make a long model refusal compete with the answer the
@@ -866,6 +922,11 @@ class ConversationOrchestrator:
                 text="以下为通用知识补充，并非教材原文依据；不会写入学习状态。",
             ))
             blocks.append(ContentBlock(type="text", text=supplement))
+        # Put provenance after the learner-facing explanation and before the
+        # learning record. This reads as: personalised conclusion → textbook
+        # basis → what was (and was not) recorded in the learning archive.
+        if answer_context_block is not None:
+            blocks.append(answer_context_block)
         terminal_answer_event = (
             EventType.ANSWER_UNAVAILABLE if ans.fallback else EventType.ANSWER_COMPLETED
         )
@@ -888,15 +949,34 @@ class ConversationOrchestrator:
                     )))
             preview = "、".join(item["name"] for item in questioned_concepts[:3])
             suffix = "等" if len(questioned_concepts) > 3 else ""
+            from ..services.learning_memory import manually_learned_ids
+            learned_ids = manually_learned_ids(self.repo, project_id)
+            learned_names = [
+                item["name"] for item in questioned_concepts
+                if item["concept_id"] in learned_ids
+            ]
+            if learned_names:
+                learned_preview = "、".join(learned_names[:3])
+                learned_suffix = "等" if len(learned_names) > 3 else ""
+                signal_label = "已阅读 · 待验证"
+                signal_message = (
+                    f"已记录：你已阅读“{learned_preview}{learned_suffix}”，"
+                    "但目前尚无独立作答证据来验证掌握程度。"
+                    "接下来可通过一次不查看提示的练习，验证你是否能解释并应用该知识点。"
+                )
+            else:
+                signal_label = "有过疑问 · 待验证"
+                signal_message = (
+                    f"已记录你对“{preview}{suffix}”有过疑问。"
+                    "这只会进入待验证队列，不代表你不会，也不会改变掌握状态。"
+                )
             blocks.append(ContentBlock(
                 type="question_signal",
                 data={
                     "signal_id": f"question_{run_id}",
                     "concepts": questioned_concepts,
-                    "message": (
-                        f"已记录你对“{preview}{suffix}”有过疑问。"
-                        "这只会进入待验证队列，不代表你不会，也不会改变掌握状态。"
-                    ),
+                    "record_label": signal_label,
+                    "message": signal_message,
                 },
             ))
         elif ans.grounded:
@@ -976,10 +1056,15 @@ class ConversationOrchestrator:
                 if evidence.result is not None
             ]
             if not decided:
+                evidence_lines.append(
+                    f"{name}：尚无可用于验证掌握程度的独立作答结果；"
+                    "已阅读或标记已学不等于已验证掌握。"
+                )
                 continue
             latest = max(decided, key=lambda evidence: evidence.occurred_at)
             evidence_lines.append(
-                f"{name}：最近一次独立作答结果为 {latest.result.value}（仅用于调整讲解，不是本题依据）。"
+                f"{name}：最近一次{'独立' if latest.independent else '非独立'}作答结果为 "
+                f"{latest.result.value}（仅用于解释学习档案，不是本题教材依据）。"
             )
 
         explicit_followup = "本轮追问：" in question
@@ -1429,8 +1514,6 @@ def _rewrite_followup(text: str, history: list[Message]) -> str:
     cleaned = text.strip()
     if not cleaned:
         return cleaned
-    if not _has_contextual_deixis(cleaned):
-        return cleaned
     previous = ""
     for message in reversed(history):
         if message.role != "user":
@@ -1444,21 +1527,6 @@ def _rewrite_followup(text: str, history: list[Message]) -> str:
     if not previous:
         return cleaned
     return f"上一轮问题：{previous}\n本轮追问：{cleaned}"
-
-
-def _has_contextual_deixis(text: str) -> bool:
-    """Cheap linguistic gate; semantic follow-up resolution remains model-led."""
-    import re
-    compact = "".join((text or "").split())
-    # A named technical noun is a new topic, even if prefixed by “那”.
-    if re.search(r"(?:那|这个|那个)(?:栈|队列|列表|树|图|向量|算法|递归)", compact):
-        return False
-    return bool(re.search(
-        r"^(?:那)?(?:它|他|她|它们|他们|她们|这个|那个|上述|前面|刚才|上面|前一个|这一点)"
-        r"|(?:告诉我|请|能否|帮我|说说|解释(?:一下)?)(?:它|他|她|它们|他们|她们|这个|那个)"
-        r"|关于(?:它|他|她|这个|那个)|(?:它|他|她|这个|那个)的(?:代码|实现|用法|区别|复杂度|例子)",
-        compact,
-    ))
 
 
 def _mode_from_text(text: str) -> UIPreset | None:

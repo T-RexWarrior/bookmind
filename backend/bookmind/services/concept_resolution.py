@@ -82,9 +82,16 @@ class ConceptResolver:
         folded = _normalise(question)
         kind = _query_kind(folded, bool(selection_text))
         direct = [item for item in self._all_candidates(project_id, folded) if item is not None]
-        subjects = self._select_direct(direct) if direct else self._llm_arbitrate(
-            question, self._semantic_candidates(project_id, folded),
-        )
+        # Lexical overlap is a useful recall hint, not a semantic verdict.
+        # In particular, a learner can ask about an operation ("入队") without
+        # naming its unit ("队列"), or use a new expression not anticipated by
+        # the book mapper.  When a model is available, let it select among the
+        # project graph's units; retain exact matching only as an offline/error
+        # fallback.  The model still cannot invent a learning-state target.
+        semantic_pool = self._semantic_candidates(project_id, folded, direct)
+        subjects = self._llm_arbitrate(question, semantic_pool) if getattr(self.router.cfg, "live", False) else []
+        if not subjects:
+            subjects = self._select_direct(direct)
 
         # Page-local selection may become a subject only after its characters
         # are verified against server-side chunks. Browser text alone never
@@ -275,20 +282,41 @@ class ConceptResolver:
             selected.append(item)
         return [self._resolved(item, confidence=1.0, rationale="explicit_alias") for item in selected]
 
-    def _semantic_candidates(self, project_id: str, question_folded: str) -> list[_Candidate]:
+    def _semantic_candidates(
+        self, project_id: str, question_folded: str, direct: list[_Candidate] | None = None,
+    ) -> list[_Candidate]:
+        """Give semantic resolution a broad graph view, lexically ranked only for cost.
+
+        The rank here never selects a concept.  It merely keeps the LLM prompt
+        tractable for unusually large books while preserving direct matches and
+        a representative project-local tail for terminology the mapper did not
+        anticipate.
+        """
         query_terms = _terms(question_folded)
         ranked: list[_Candidate] = []
         for book_id in sorted(self.repo.allowed_book_ids(project_id)):
             for concept in self.repo.concepts_for_book(book_id):
-                if not is_learning_concept(concept):
+                if not _eligible_learning_unit(concept):
                     continue
                 aliases = _aliases_for(concept)
                 card_terms = set().union(*(_terms(alias) for alias in aliases)) if aliases else set()
                 overlap = query_terms & card_terms
-                if overlap:
-                    ranked.append(_Candidate(concept, aliases, sum(map(len, overlap)), tuple(sorted(overlap))))
+                ranked.append(_Candidate(
+                    concept, aliases, sum(map(len, overlap)), tuple(sorted(overlap)),
+                ))
         ranked.sort(key=lambda item: (-item.score, -getattr(item.concept, "importance", 0.0), item.concept.name))
-        return ranked[:12]
+        by_id = {item.concept.concept_id: item for item in ranked}
+        ordered = list(direct or []) + ranked
+        chosen: list[_Candidate] = []
+        seen: set[str] = set()
+        for item in ordered:
+            if item.concept.concept_id in seen:
+                continue
+            seen.add(item.concept.concept_id)
+            chosen.append(by_id.get(item.concept.concept_id, item))
+            if len(chosen) >= 96:  # prompt-size guard, never a subject-count rule
+                break
+        return chosen
 
     def _llm_arbitrate(self, question: str, candidates: list[_Candidate]) -> list[ResolvedConcept]:
         if not candidates or not getattr(self.router.cfg, "live", False):
@@ -303,7 +331,12 @@ class ConceptResolver:
                 "question_concept_resolution",
                 [{"role": "system", "content": (
                     "你是教材问题的知识点解析器。只能从候选学习单元中选择与问题直接相关的0个、1个或多个单元；"
-                    "不要因章节相邻而猜测。没有可靠对应时 concept_ids 必须为空。"
+                    "结合问题语义判断，而不要把关键词重合或章节相邻当作充分理由。操作、应用、比较、代码和自然语言别称"
+                    "都可能指向一个学习单元；没有可靠对应时 concept_ids 必须为空。"
+                    "当学习者询问‘我还缺什么/我学到哪里/下一步’这类个人学习反思时，选择的是用户明确提到、"
+                    "声称已阅读或正在询问的学习单元；绝不能因为某个更窄的小节适合作为未来练习，就把它当作当前主题。"
+                    "若用户只说一个上位概念而没有点名具体操作，优先选择名称或别名直接包含该概念的概览/定义单元；"
+                    "只有用户明确提及某项操作、性质或算法时，才选择对应的窄小节。"
                     "输出严格 JSON：{\"concept_ids\":[\"...\"],\"confidence\":0到1}。"
                 )}, {"role": "user", "content": f"问题：{question[:700]}\n候选：\n{cards}"}],
                 output_schema={"type": "object"}, temperature=0.0, max_tokens=240,
@@ -391,12 +424,6 @@ def _aliases_for(concept) -> tuple[str, ...]:
             # into the one-character alias “栈” makes every sibling-looking
             # section claim a basic Stack question. Keep the complete phrase;
             # the actual §4.1 栈 unit supplies the precise short alias.
-    # These are textbook-operation aliases, not separate mastery nodes. They
-    # make “入队/出队怎么做” reliably resolve to the queue section while
-    # retaining one state record for Queue.
-    canonical = " ".join(labels)
-    if "队列" in canonical:
-        aliases.update({"入队", "出队", "enqueue", "dequeue"})
     return tuple(sorted(aliases, key=lambda value: (-len(value), value)))
 
 
@@ -506,9 +533,13 @@ def _query_kind(value: str, has_selection: bool) -> QueryKind:
 
 
 def _needs_general_supplement(value: str) -> bool:
+    # This is only the offline/error fallback.  It must recognise the broad
+    # intent "show me code", rather than require one exact phrasing such as
+    # "代码怎么写".  The answer route itself still clearly labels this as
+    # general knowledge and never turns it into textbook evidence.
     return any(marker in value for marker in (
         "汇编", "操作系统", "浏览器", "数据库", "网络", "c语言", "c++", "python",
-        "代码怎么写", "怎么写代码", "实现代码", "示例代码",
+        "代码", "实现", "示例", "应用", "怎么用", "怎么描述",
     ))
 
 

@@ -105,8 +105,17 @@ class ConversationWorker:
             self.runs.save_run(failed)
 
     def _persist_live_event(self, event: RunEvent) -> None:
-        if not self.is_cancelled(event.run_id):
-            self.runs.save_events([event])
+        if self.is_cancelled(event.run_id):
+            return
+        # The browser treats run_completed as the signal to reload the
+        # authoritative conversation.  Persisting that event while the worker
+        # is still about to write the assistant Message creates a race: the
+        # reload can observe only streamed text and miss context / learning
+        # record cards.  All other events remain live; the terminal event is
+        # saved immediately after add_message() in _execute above.
+        if event.event_type == "run_completed":
+            return
+        self.runs.save_events([event])
 
     def cancel(self, run_id: str) -> Run | None:
         run = self.runs.get_run(run_id)

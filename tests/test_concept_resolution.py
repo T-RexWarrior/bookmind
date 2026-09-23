@@ -81,10 +81,24 @@ def test_unrelated_question_is_not_assigned_from_nearby_concepts():
     assert _resolver(stack, listing).resolve(project_id="p", question="二叉树如何遍历") == []
 
 
-def test_queue_operations_are_aliases_of_the_queue_learning_unit():
+def test_queue_operations_are_resolved_semantically_not_by_hardcoded_aliases(monkeypatch):
+    """Operation wording is interpreted by the model over graph candidates."""
+    monkeypatch.setenv("TEST_TRACE_KEY", "test-key")
+
+    def fake_http(_url, _payload, _key, _timeout):
+        body = {"choices": [{"message": {"content": json.dumps({
+            "concept_ids": ["queue"], "confidence": 0.96,
+        })}}], "usage": {"total_tokens": 12}}
+        return 200, json.dumps(body)
+
     queue = _concept("queue", "队列", "§4.5 队列", 127)
-    assert [item.concept_id for item in _resolver(queue).resolve(project_id="p", question="入队怎么入？")] == ["queue"]
-    assert [item.concept_id for item in _resolver(queue).resolve(project_id="p", question="出队怎么出？")] == ["queue"]
+    priority = _concept("priority", "优先级队列ADT", "§10.1 优先级队列ADT", 305)
+    resolver = ConceptResolver(
+        _Repo([priority, queue]),
+        ModelRouter(RouterConfig(live=True, api_key_env="TEST_TRACE_KEY"), http=fake_http),
+    )
+    assert [item.concept_id for item in resolver.resolve(project_id="p", question="入队怎么入？")] == ["queue"]
+    assert [item.concept_id for item in resolver.resolve(project_id="p", question="出队怎么出？")] == ["queue"]
 
 
 def test_contextual_followup_returns_resolved_concepts_not_candidate_objects(monkeypatch):

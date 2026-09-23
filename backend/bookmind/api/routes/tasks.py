@@ -63,7 +63,9 @@ class CreateTaskBody(BaseModel):
     """
 
     mode: Literal["PRACTICE", "ASSESSMENT"]
-    selection: Literal["RECOMMENDED", "QUESTIONED", "WEAK", "DUE", "UNVERIFIED", "ALL", "RANDOM"] = "RANDOM"
+    # The primary product path is archive-driven recommendation. RANDOM stays
+    # accepted for backwards compatibility and explicit experimentation only.
+    selection: Literal["RECOMMENDED", "QUESTIONED", "WEAK", "DUE", "UNVERIFIED", "ALL", "RANDOM"] = "RECOMMENDED"
     concept_id: str = ""
     from_task_id: str = ""
     idempotency_key: str = ""

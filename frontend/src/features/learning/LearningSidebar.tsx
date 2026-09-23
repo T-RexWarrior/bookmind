@@ -18,6 +18,7 @@ type RecordFilter = "all" | "questioned" | "verified" | "pending" | "weak" | "du
 export function LearningSidebar() {
   const { state, dispatch } = useApp();
   const actions = useConversationActions();
+  const archiveDemo = new URLSearchParams(window.location.search).get("demo") === "binary-tree-archive";
   const summary = state.summary;
   const activeMis = state.misconceptions.filter((item) => item.status !== "DISMISSED");
   const [filter, setFilter] = useState<RecordFilter>("all");
@@ -31,7 +32,7 @@ export function LearningSidebar() {
   // backend was restarted.  Refresh its read model on every open instead of
   // silently retaining the initial null summary as “尚无学习记录”.
   useEffect(() => {
-    if (!projectId || !state.rightDrawerOpen) return;
+    if (archiveDemo || !projectId || !state.rightDrawerOpen) return;
     let active = true;
     Promise.all([
       api.learningSummary(projectId),
@@ -83,6 +84,8 @@ export function LearningSidebar() {
       .finally(() => { if (active) setLoadingRecord(false); });
     return () => { active = false; };
   }, [projectId, selectedId, summary]);
+
+  if (archiveDemo) return <BinaryTreeArchiveDemo />;
 
   async function openSource(sourceId: string, page: number) {
     if (!projectId) return;
@@ -205,6 +208,52 @@ function evidenceLabel(type: string, result?: string | null): string {
   if (type === "EXPLANATION") return "查看讲解（辅助）";
   const resultLabel = result === "PASS" ? "通过" : result === "PARTIAL" ? "部分通过" : result === "FAIL" ? "未通过" : "已记录";
   return `${type === "PROBE" ? "诊断题" : type === "CHANGED_TASK" ? "迁移题" : "检测题"} · ${resultLabel}`;
+}
+
+/** Presentation-only read model. It demonstrates the evidence-led archive
+ * without mixing the learner's real project history into a PPT screenshot. */
+function BinaryTreeArchiveDemo() {
+  return <div className="archive-demo">
+    <span className="eyebrow">学习档案</span>
+    <h2 className="learning-record-title">知识范围与证据</h2>
+    <p className="c-muted learning-record-total">聚焦 1 个知识点 · 2 次独立作答 · 记录事实而非只记录分数</p>
+
+    <section className="archive-demo-overview">
+      <span className="chip pending">当前 L1</span>
+      <strong>§5.1 二叉树及其表示</strong>
+      <p>已具备结点表示的独立作答证据；本次在“表示 → 遍历应用”上部分通过，下一步需要补足递归边界与访问顺序。</p>
+      <div><span>已通过 1</span><span>部分通过 1</span><span>待复验 1</span></div>
+    </section>
+
+    <section className="learner-profile-panel archive-demo-profile">
+      <strong>基于证据的学习画像</strong>
+      <p>学习者能说明 left/right 分别连接左右子树，并能用 None 表示空孩子；但尚未稳定说明空树基线及前序遍历的根→左→右访问时机。</p>
+      <ProfileList label="已观察到" items={["理解二叉树结点的左右孩子引用", "知道空孩子可用 None / 空指针表示"]} />
+      <ProfileList label="待关注" tone="attention" items={["空树与单结点的递归终止条件", "前序遍历的根→左→右访问顺序"]} />
+      <div className="profile-goal"><span>下一步验证</span>针对空树、单结点、仅有左孩子三种边界情境，手写一次前序遍历递归过程。</div>
+      <small>依据：2 次独立作答的题干、作答事实与判分要点。已验证状态不因一次部分正确被简单覆盖。</small>
+    </section>
+
+    <section className="concept-timeline archive-demo-timeline">
+      <strong>证据时间线</strong>
+      <article className="archive-demo-event partial">
+        <div><span>推荐练习 · 部分通过</span><time>刚刚</time></div>
+        <p>已覆盖：left/right 引用、空孩子表示、递归访问子树。</p>
+        <p>待补足：空树终止条件，以及前序遍历“根→左→右”的访问时机。</p>
+        <small>独立作答 · 未查看提示 · 已追加至证据链</small>
+      </article>
+      <article className="archive-demo-event pass">
+        <div><span>学习检测 · 通过</span><time>此前</time></div>
+        <p>能说明结点表示、左右孩子引用与空孩子表示如何支持后续操作。</p>
+        <small>独立作答 · L0 → L1 · 保留为既有通过证据</small>
+      </article>
+    </section>
+
+    <section className="archive-demo-boundary">
+      <strong>学习状态为何保持 L1？</strong>
+      <p>学习档案保留每一次独立作答的事实。一次部分正确会形成新的补救目标，但不会抹去先前已经获得的通过证据；是否升级仍需后续独立验证。</p>
+    </section>
+  </div>;
 }
 
 function ProfilePanel({ profile }: { profile: NonNullable<ConceptLearningRecord["learner_profile"]> }) {

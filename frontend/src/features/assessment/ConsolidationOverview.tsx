@@ -1,11 +1,29 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../../store/appStore";
 import { useConversationActions } from "../conversations/useConversationActions";
 
 export function ConsolidationOverview() {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const actions = useConversationActions();
-  const [entryMode, setEntryMode] = useState<"RANDOM" | "CONCEPT">("RANDOM");
+  const [entryMode, setEntryMode] = useState<"RECOMMENDED" | "CONCEPT">("RECOMMENDED");
+  const clearedDemoConversationRef = useRef("");
+  const demoMode = new URLSearchParams(window.location.search).get("demo");
+  const presentationDemo = demoMode === "practice-binary-tree" || demoMode === "binary-tree-archive";
+
+  useEffect(() => {
+    if (!presentationDemo || !state.activeConversation || !state.messages.length) return;
+    // A review conversation is durable, while the PPT fixture is deliberately
+    // in-memory.  The activity loader can finish after this component mounts
+    // and repopulate an old real chat.  Clear that historical payload once;
+    // never clear messages created by the fixture itself.
+    const hasFixtureMessage = state.messages.some((message) => message.message_id.startsWith("demo_"));
+    const conversationId = state.activeConversation.conversation_id;
+    if (hasFixtureMessage || clearedDemoConversationRef.current === conversationId) return;
+    clearedDemoConversationRef.current = conversationId;
+    dispatch({ type: "SET_MESSAGES", messages: [] });
+    dispatch({ type: "SET_PENDING_TASK", pendingTask: null });
+    dispatch({ type: "SET_FOLLOWUP_TASK", taskId: "" });
+  }, [presentationDemo, state.activeConversation, state.messages, dispatch]);
   const concepts = useMemo(
     () => [...(state.summary?.concepts || [])].sort((a, b) => {
       // Put unverified concepts first, while still allowing a learner to
@@ -21,22 +39,27 @@ export function ConsolidationOverview() {
       <span className="overview-icon">↻</span>
       <span className="eyebrow">PRACTICE</span>
       <h2>练习巩固</h2>
-      <p>可以随机练习，也可以指定一个知识点出题。只有实际作答会影响学习状态。</p>
+      <p>系统会结合学习档案推荐下一题，也可以指定一个知识点出题。只有实际作答会影响学习状态。</p>
 
       <div className="candidate-filters" aria-label="出题方式">
-        <button className={entryMode === "RANDOM" ? "is-active" : ""} onClick={() => setEntryMode("RANDOM")}>随机出题</button>
+        <button className={entryMode === "RECOMMENDED" ? "is-active" : ""} onClick={() => setEntryMode("RECOMMENDED")}>推荐练习</button>
         <button className={entryMode === "CONCEPT" ? "is-active" : ""} onClick={() => setEntryMode("CONCEPT")}>按知识点出题</button>
       </div>
 
-      {entryMode === "RANDOM" ? (
+      {entryMode === "RECOMMENDED" ? (
         <>
-          <p className="c-muted" style={{ fontSize: 12 }}>随机从尚未达到 L4 的知识点中选择。</p>
+          <div className="recommendation-rationale">
+            <strong>推荐依据</strong>
+            <span>① 待复习或尚未稳定的知识点</span>
+            <span>② 已学但尚未独立验证的知识点</span>
+            <span>③ 刚通过当前层级、适合继续确认的知识点</span>
+          </div>
           <button
             className="btn primary consolidation-primary"
             disabled={state.sending || Boolean(state.activeFollowupTaskId) || !concepts.some((concept) => concept.level !== "L4")}
-            onClick={() => void actions.startTask({ selection: "RANDOM" })}
+            onClick={() => void actions.startTask({ selection: "RECOMMENDED" })}
           >
-            {state.sending ? "正在准备题目…" : "开始一道随机练习题"}
+            {state.sending ? "正在分析学习档案…" : "开始一道推荐练习题"}
           </button>
         </>
       ) : (

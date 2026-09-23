@@ -34,7 +34,7 @@ export function QuestionSignalCard({
   return (
     <div className="question-signal-card">
       <div>
-        <span className="chip questioned">有过疑问 · 待验证</span>
+        <span className="chip questioned">{data.record_label || "有过疑问 · 待验证"}</span>
         <p>{data.message}</p>
       </div>
       {data.concepts.map((concept) => (
@@ -329,11 +329,16 @@ export function ContextCard({ data }: { data: Record<string, unknown> }) {
   const scope = String(data.scope || "全部资料");
   const reason = String(data.reason || "");
   const items = (Array.isArray(data.items) ? data.items : []) as { title?: string; locator?: string }[];
+  const learnerBasis = (Array.isArray(data.learner_basis) ? data.learner_basis : []) as { label?: string; text?: string }[];
   return (
     <div className="answer-context">
       <div className="answer-context__head"><span>回答依据</span><strong>{scope}</strong></div>
       {items.length ? <div className="answer-context__items">{items.map((item, index) => <span key={`${item.title}-${index}`}>{item.title || "学习资料"} · {item.locator || "相关内容"}</span>)}</div> : null}
       {reason && <p>{reason}</p>}
+      {learnerBasis.length ? <div className="answer-context__basis">
+        <strong>学习判断依据</strong>
+        {learnerBasis.map((item, index) => <p key={`${item.label}-${index}`}><b>{item.label || "记录"}</b>：{item.text || "—"}</p>)}
+      </div> : null}
     </div>
   );
 }

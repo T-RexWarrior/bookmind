@@ -225,6 +225,7 @@ export interface QuestionSignalData {
   message: string;
   concepts: { concept_id: string; name: string; question_count: number }[];
   unclassified?: boolean;
+  record_label?: string;
 }
 
 export interface ConceptLearningRecord {
