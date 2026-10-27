@@ -17,3 +17,6 @@ playwright-report/
 .DS_Store
 Thumbs.db
 tmp/
+web/.next*/
+web/public/pdfjs/
+*.egg-info/
