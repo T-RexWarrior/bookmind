@@ -1,56 +1,19 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-*.egg
-build/
-# Note: do NOT ignore dist/ globally — frontend/dist (the built React app) is
-# committed for offline demos (PRODUCTIZATION §7.1).
-.eggs/
-
-# Virtual environments
 .venv/
-venv/
-env/
-
-# Test / coverage caches
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.cache
-
-# IDE / editor
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
-
-# OS
-Thumbs.db
-
-# Local logs / temp
-*.log
-*.tmp
-
-# Local environment (keep .env.example)
-.env
-
-# Local runtime data (SQLite db, uploads, parsed artifacts)
+.cache/
+node_modules/
+frontend/dist/
+frontend/public/pdf/
 data/
-
-# Local test and audit runs. Keep curated documentation under source control,
-# but never mix generated databases/uploads/screenshots into the worktree.
-tmp/
-audit_artifacts/
-.integration-*/
-.integration-*.zip
-.pytest-temp-*/
-
-# Frontend build output is committed for offline demos, but node_modules is not.
-frontend/node_modules/
-
-# TypeScript incremental build cache
+__pycache__/
+.pytest_cache/
+*.pyc
+*.log
+test-results/
+playwright-report/
+.env
+.env.*
+!.env.example
 *.tsbuildinfo
+.DS_Store
+Thumbs.db
+tmp/
