@@ -69,10 +69,10 @@ powershell -ExecutionPolicy Bypass -File .\stop.ps1
 ```powershell
 npm.cmd run typecheck
 npm.cmd run build
-npm.cmd run test:unit -- tests/inline-study-diagram.spec.ts tests/reading-session-isolation.spec.tsx tests/mastery-question-card.spec.tsx tests/mastery-question-group.spec.tsx tests/notebook-record-edit-discoverability.spec.tsx tests/reading-quiz-persistence.spec.tsx
+npm.cmd run test:unit -- tests/svg-text-alignment.spec.ts tests/inline-study-diagram.spec.ts tests/reading-session-isolation.spec.tsx tests/mastery-question-card.spec.tsx tests/mastery-question-group.spec.tsx tests/notebook-record-edit-discoverability.spec.tsx tests/reading-quiz-persistence.spec.tsx
 ```
 
-当前相关验证结果为后端 **145 项**、相关前端 **35 项**通过；原文引用另有 **42 项**检查通过，TypeScript 检查和正式构建通过。测试数量会随版本变化。
+当前相关验证结果为后端 **145 项**、相关前端 **43 项**通过；原文引用另有 **42 项**检查通过，TypeScript 检查和正式构建通过。测试数量会随版本变化。
 
 ## 浏览器联调
 

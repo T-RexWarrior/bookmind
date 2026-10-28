@@ -53,12 +53,9 @@
   );
 }
 
-/* Vertical centering is guaranteed by the host so the model never has to
-   emit (and possibly misspell) dominant-baseline itself: every text is
-   centered on its y, and the codegen prompt instructs y = box/row center. */
-.dt-svg-root text {
-  dominant-baseline: central;
-}
+/* Baselines belong to the SVG. Forcing central here double-shifts labels
+   that already use a conventional alphabetic-baseline y offset. The renderer
+   preserves unambiguous legacy center-coordinate node labels individually. */
 
 /* Text roles */
 .dt-svg-root text.t,

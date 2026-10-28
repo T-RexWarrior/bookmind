@@ -36,6 +36,8 @@ class BookMindStudyDiagrams:
 font-size 属性。颜色仍使用主题类。一个图聚焦一个例子，不堆叠未被要求的扩展图。
 树图保持根在上、左右孩子分列、每层间距均匀；可用暖色表示根、蓝色表示内部结点、
 绿色表示叶子，并提供简洁图例。使用 SVG 主题类以适配明暗主题。
+节点文字的 x/y 必须等于节点中心，并显式写 text-anchor="middle"、dominant-baseline="central"；
+不要再额外加 y+6/y+7 或 dy 偏移。深度标签与图例也应使用同一行的中心 y 和显式中心基线。
 
 先完成用户当前的需求。一次简单示意图只需核对相关定义，不要展开成整章讲义，
 不要因上下文有笔记就另讲无关笔记。没有要求复刻教材原图时，基于文字定义绘制自己的
@@ -55,8 +57,12 @@ simple diagrams rather than shrinking an 860/1200-wide canvas. Set label sizes u
 style="font-size:18px" (nodes about 20px, captions at least 16px), not presentation attributes
 that the theme overrides. Keep theme classes for colors. Focus on one requested example.
 For trees, place the root above evenly spaced levels, distinguish root/internal/leaf nodes and
-include a short legend. Draw an original schematic from verified text, not an invented copy of
-unseen textbook pixels. Vision is unavailable here. Stay on the user's requested topic; do not
+include a short legend.
+Centered labels must use the node center for x/y, text-anchor="middle" and explicit
+dominant-baseline="central", without an extra y/dy offset. Use the same explicit baseline
+for legends and depth labels that share a horizontal center line.
+Draw an original schematic from verified text, not an invented copy of unseen textbook pixels.
+Vision is unavailable here. Stay on the user's requested topic; do not
 expand unrelated notes into a lecture. Read only the source needed to verify the explanation;
 stop searching when sufficient. Prefer clickable [p.N] citations over repeated reader_goto calls.
 '''

@@ -175,6 +175,10 @@ Use a transparent background and the host classes t/th/ts, box, arr, leader,
 and c-gray/c-blue/c-teal/c-coral/c-purple/c-green/c-amber/c-red. Do not hardcode
 text colors. Include <title> and <desc>. Calculate positions before drawing;
 no labels, boxes or arrows may overlap or leave the viewBox.
+For centered node labels, set x/y to the node center, text-anchor="middle"
+and dominant-baseline="central" explicitly. Never add a manual y/dy baseline
+offset as well. Other labels use standard SVG baselines; the host does not
+force every text element to the same baseline.
 """,
             ),
             origin="core",
