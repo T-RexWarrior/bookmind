@@ -1,8 +1,7 @@
-BookMind / 学迹, first local prototype, 2026.
-
-This project references the architecture of HKUDS/DeepTutor.
-backend/app/vendor/deeptutor_grounding.py is copied from the local DeepTutor
-repository, deeptutor/reading/_grounding.py. Copyright belongs to the original
-DeepTutor contributors, licensed under Apache License 2.0 (see LICENSE).
-No DeepTutor runtime, private credentials, original user data, or Docker image
-is included. Other application code is newly implemented for this prototype.
+BookMind / 学迹 is a focused derivative of HKUDS/DeepTutor.
+Upstream source baseline: a31d82624c27d75f4e771d4fcb78dce16470b383.
+Reading, Mastery Path, notebooks, session runtime and their Web components are
+copied from DeepTutor and modified under Apache License 2.0. Original copyright
+notices remain in source; see LICENSE and THIRD_PARTY_NOTICES.md.
+BookMind adds textbook identity, cross-module source links and focused navigation.
+Runtime credentials and user materials are not part of the source distribution.

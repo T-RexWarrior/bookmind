@@ -1,127 +1,204 @@
-# BookMind · 学迹
+<p align="center">
+  <img src="web/public/favicon.svg" width="72" alt="BookMind 芽苗图标" />
+</p>
 
-一个围绕**一份资料或一个学习目标**展开的 AI 学习助手。当前为可以本地运行的初版，界面与业务层重新编写，参考 DeepTutor 的阅读上下文、资料溯源、练习与笔记思路。
+<h1 align="center">BookMind · 学迹</h1>
 
-## 直接使用
+<p align="center"><strong>从一份资料或一个目标出发，读懂、练会、记下来。</strong></p>
 
-双击项目中的 **`启动BookMind.cmd`**，浏览器会打开 **http://127.0.0.1:8018**。
+<p align="center">
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/License-Apache%202.0-175b4b" /></a>
+  <img alt="Python 3.11–3.14" src="https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB" />
+  <img alt="Node.js 22+" src="https://img.shields.io/badge/Node.js-22%2B-339933" />
+  <img alt="Next.js + FastAPI" src="https://img.shields.io/badge/Stack-Next.js%20%2B%20FastAPI-333333" />
+</p>
 
-启动脚本会将 Python 环境放在 `.venv`，前端依赖放在 `frontend/node_modules`，下载缓存在 `.cache`。首次启动需要安装 Python 3.11+ 和 Node 22+，并联网安装依赖。
+<p align="center">
+  <a href="#核心功能">核心功能</a> ·
+  <a href="#界面预览">界面预览</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#技术架构">技术架构</a> ·
+  <a href="#开发与文档">开发与文档</a>
+</p>
 
-首次使用时上传自己的资料，或填写一个目标生成学习手册。仓库提供 [二叉树示例资料](frontend/public/demo.md)，上传后即可体验阅读、问答、图解、练习和笔记。
+BookMind 是面向教材自学与目标学习的 AI 学习助手。导入一本教材，或告诉 AI 你想学什么，就可以在同一个学习空间里阅读资料、讨论疑问、接受导学、完成练习，并整理自己的笔记。
 
-进入左下角 **API 设置**，填写 Base URL、Key 和模型 ID，先测试连接，再保存。页面只显示“已保存密钥”，不会回显密钥。GitHub 仓库不包含密钥、学习记录、上传教材和本机依赖。
+项目将 **自主学习、AI 导学、练习巩固、学习笔记** 放在同一本教材、同一组知识点下。学习模式各自保留对话，作答证据与复习安排相互关联，让一次提问、一道错题和一条笔记能够回到具体的学习内容。
 
-这是 BookMind 围绕资料学习重新实现的初版，当前版本替换旧版应用代码，旧版仍可从 Git 提交历史查看。
+BookMind 基于 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 开发，围绕资料学习场景整合 Reading、Mastery Path、Books 与 Notebook 等模块，采用 Next.js + FastAPI，当前主要验证 Windows 本地运行。
 
-## 已实现的功能
+## 两个学习起点
 
-| 页面 | 可以做什么 | 与其他页面的联系 |
+| 你手上有什么 | 如何开始 | 最终进入 |
 | --- | --- | --- |
-| 学习空间 | 上传 PDF / Markdown / TXT，或描述目标并生成四节短学习手册 | 每个空间独立保存资料、对话、练习和笔记 |
-| 学习 | 章节切换、记住阅读位置、PDF 原版与文字视图、原文划选、基于当前页或整份资料提问 | 讲解带来源按钮；可保存笔记、进入本节练习 |
-| 图解 | 文本模型生成 Mermaid 关系图、静态 SVG 或分步过程图；关系图可缩放，步骤可前进、后退、播放 | 图解在原文区域展开；保留来源、可存入笔记 |
-| 练习 | 按范围和知识点生成 3/5 道四选一理解题，提示、提交、判分、解析、错题回顾 | 题目依据要能对应原文；解析可回到原文或存笔记 |
-| 笔记 | 新增、编辑、搜索、删除、Markdown 导出，显示关联图解 | 从讲解、图解或练习保存的笔记会保留来源位置 |
-| API 设置 | OpenAI 格式 Chat Completions 服务、实际回复测试、保存、高级参数 | 一份文字模型配置供所有学习功能使用 |
+| **已有资料** | 导入 PDF、EPUB、Markdown 或 TXT，建立教材空间与学习目标 | 阅读器、AI 导学、专项练习与本书笔记 |
+| **已有目标** | 描述想学什么和已有基础，确认 AI 拟定的方案与目录，逐章生成学习资料 | 将完整资料加入书架，使用同一套学习功能 |
 
-答题记录会区分**独立答对**与**查看提示后答对**。同一道题重复点击或重发请求，不会增加答题次数，也不能覆盖第一次提交。需要再次验证时，可以重新生成一组题。
+目标生成支持精简、标准、深入三种深度。方案和目录可编辑，编写任务支持暂停、继续及未完成章节重试；生成完成后可下载 Markdown，也可直接开始学习。
 
-“学习记录”依据已提交题目显示未测试、待巩固、有通过记录、初步验证；不会把一次答对宣称为全面掌握。
+## 核心功能
 
-## 数据在哪里
+### 自主学习：带着问题读资料
 
-- `data/studytutor.db`：学习空间、提取的原文、对话、题目与提交记录、笔记、生成任务。
-- `data/uploads/`：上传的 PDF 原文件。
-- `data/pdf-pages/`：兼容阅读模式按需生成的原版页面缓存，不调用图像模型。大部头教材默认按页显示，也可在阅读器上方切换显示模式。
-- `data/settings.json`：本机 API 配置，**含密钥，请勿分享**。整个 `data` 已加入 `.gitignore`。
-- `data/server.log`、`data/server-error.log`：启动与访问日志，不记录请求体或密钥。
-- `docs/screenshots/`：浏览器实拍的界面截图。
+- 在阅读器中查看原文、浏览目录、保留阅读位置、划选和标注。
+- 围绕当前内容提问，请 AI 解释概念、补充例子或进行比较。
+- 使用文字模型生成结构图、流程图、思维导图等图解，帮助理解抽象内容。
+- 学习过程中可调用随堂小测；有来源定位的内容可返回原文核对。
 
-阅读位置和学习内容保存在本机，刷新或重启后保留。生成任务由后端执行，切换页面会继续；关闭后端会中断尚未完成的任务，重新打开后会标记中断，可以重试。
+### AI 导学：沿着知识点逐步理解
 
-内部数据库文件名沿用初版的 `studytutor.db`，改名后已有资料和学习记录可继续使用。可用 `BOOKMIND_DATA_DIR` 指定数据目录，也兼容旧的 `STUDYTUTOR_DATA_DIR`。
+- 将教材目录组织成可编辑的学习路径，围绕具体知识点展开教学对话。
+- 通过讲解、追问、随堂测验与反馈，引导学习者说明自己的理解。
+- 使用「随堂测验」「图解说明」「补充示例」继续当前学习。
+- 随时打开教材原文侧栏，核对导学实际查阅的来源。
 
-## 启动、停止和修改
+### 练习巩固：配置一组练习，再针对薄弱处复习
+
+- 选择教材知识点与原文范围，设置 **1–50 道题**、难度、题型及题型数量配比。
+- 支持选择、判断、填空、简答、论述、编程六种题型。
+- 客观题判分，主观题支持 AI 评阅与题目追问。
+- 在同一本书内查看错题与复习计划，作答记录关联到对应知识点。
+
+### 学习笔记：把理解留在教材旁边
+
+- 将学习中的摘录、解释与总结保存到本书笔记本。
+- 保留教材、知识点与原文位置的关联，方便再次查阅。
+- 支持笔记编辑、搜索、总结和 Markdown 导出。
+- 相关笔记可作为后续学习的上下文；文字笔记与图解文件分别保存。
+
+## 界面预览
+
+以下为本地运行界面，使用专用二叉树演示资料与演示作答，不代表真实学生的学习成绩。
+
+**自主学习：原文与讨论并排，边读边问。**
+
+![BookMind 自主学习：教材阅读与原文问答](docs/images/self-directed-learning.png)
+
+**练习巩固：按知识点配置题目，作答后查看反馈。**
+
+![BookMind 练习巩固：出题配置与题目反馈](docs/images/practice.png)
+
+## 一次完整的学习过程
+
+以数据结构中的「二叉树」为例：
+
+1. 导入课程资料，或者输入「我想学懂二叉树」，生成一份学习资料。
+2. 在自主学习中阅读定义，询问「为什么普通二叉树不保证左小右大」，结合原文与图解理解。
+3. 进入 AI 导学，沿知识点接受讲解、回答问题，再根据反馈补充理解。
+4. 在练习巩固中配置不同题型，查看解析，对不理解的题继续追问。
+5. 将关键解释整理成笔记；之后从本书错题与复习计划继续学习。
+
+四个页面共享教材和知识点关联。**自主学习、AI 导学与专项练习的会话彼此独立**，切换页面可继续对应会话；练习生成记录不会混进阅读聊天。
+
+阅读、提问或保存笔记属于学习过程记录，掌握度依据作答证据与评估规则更新，一道题答对不会直接将整章标为掌握。
+
+## 快速开始
+
+### 环境要求
+
+- Windows、Git、Python **3.11–3.14**、Node.js **22+** 与 npm。
+- 首次启动需要网络下载依赖并构建前端。
+- 一个支持工具调用、兼容 Chat Completions 的文字模型服务。主学习流程无需单独配置嵌入模型。
+
+### 下载并启动
+
+在 PowerShell 中运行：
 
 ```powershell
-# 本地启动；已启动时直接复用
+git clone https://github.com/T-RexWarrior/bookmind.git BookMind
+cd BookMind
 powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+也可以双击项目中的 **启动BookMind.cmd**。启动脚本会创建本地 Python 环境、安装依赖、初始化配置并启动服务：
+
+| 服务 | 地址 |
+| --- | --- |
+| BookMind 页面 | http://127.0.0.1:8018 |
+| 后端服务 | http://127.0.0.1:8019 |
+
+在左下角 **API 设置** 中填写服务地址、模型名称与 API Key，保存后测试连接。随后在「我的教材」选择导入资料或从目标生成内容。
+
+```powershell
+# 启动服务，不自动打开浏览器
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -NoBrowser
 
 # 修改前端后重新构建
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -Rebuild
 
-# 停止本项目后台进程
+# 停止本项目服务
 powershell -ExecutionPolicy Bypass -File .\stop.ps1
 ```
 
-开发时开两个终端：
+资料、笔记、学习记录和模型配置保存在本机 `data/`。调用模型时，相关原文与对话会发送至配置的模型服务。`data/`、API 密钥、本地依赖与缓存均不进入源码仓库。
 
-```powershell
-# 后端：先停掉上面的后台服务，避免占用同一端口
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8018 --reload
+## 技术架构
 
-# 前端，另一个终端
-cd frontend
-npm.cmd run dev
+```mermaid
+flowchart TB
+    Import[导入学习资料] --> Book[教材空间与知识点关联]
+    Goal[输入学习目标] --> Books[Books：方案、目录、逐章生成]
+    Books --> Book
+    Book --> Reading[自主学习 · Reading]
+    Book --> Mastery[AI 导学 · Mastery Path]
+    Book --> Practice[练习巩固 · QuestionPipeline]
+    Book --> Notes[学习笔记 · Notebook]
+    Reading --> Evidence[作答证据与评估记录]
+    Mastery --> Evidence
+    Practice --> Evidence
+    Evidence --> Review[掌握状态、错题与复习安排]
+    Reading --> Notes
+    Mastery --> Notes
+    Notes --> Sources[教材来源与知识点上下文]
+    Sources --> Reading
+    Sources --> Mastery
 ```
 
-开发前端地址 http://127.0.0.1:5188；请求会代理到 8018。日常演示只需启动脚本，一个端口同时提供前后端。
+| 层次 | 实现 |
+| --- | --- |
+| 前端 | Next.js、React、TypeScript、Tailwind CSS；PDF.js 阅读与交互式题卡 |
+| API 与会话 | FastAPI、WebSocket、持久化会话与流式执行 |
+| 学习模块 | Reading、Mastery Path、Books、Notebook、QuestionPipeline |
+| 资料与记录 | 本地文件、SQLite、学习目标、作答证据与复习调度 |
+| 模型与图解 | 可配置文字模型；SVG、Chart.js、Mermaid、思维导图与 HTML |
 
-迁移到其他电脑时：需要 Python 3.11+ 和 Node 22+，使用 `backend/requirements.lock.txt` 与 `frontend/package-lock.json` 安装。启动脚本会在缺少环境时尝试安装，缓存仍放在项目内。不要复制本机 `.venv` 或带密钥的 `data/settings.json` 给他人。
+BookMind 的教材关联层维护资料、阅读工作区、学习路径与笔记本之间的对应关系，复用原有评估与存储机制。内部保留 `deeptutor` 包名、导入路径和部分存储键，以兼容所复用的运行时。
 
-## 代码从哪里读
+### 当前范围
+
+- 当前主要支持有可提取文字的资料；扫描件可以显示 PDF，基于原文的问答仍需要可用文本。
+- 初始学习路径主要依据目录建立，可继续编辑与细化，不代表模型已经逐页分析整本教材。
+- 检索主要使用目录、按页读取与文本搜索；专项练习每次选取同一知识点内最多 24 个原文单元。
+- 当前聚焦文字模型与代码图解。联网搜索、论文库、图像生成、语音与视频服务尚未开放。
+
+## 开发与文档
 
 ```text
-BookMind-v2/
-├─ backend/app/
-│  ├─ main.py           # HTTP 接口、上传解析、后台任务、前端文件服务
-│  ├─ learning.py       # 选取原文、模型任务、图解校验、出题、判分与学习记录
-│  ├─ llm.py            # 本机模型配置、流式模型请求、错误处理
-│  ├─ store.py          # SQLite 表和读写、任务状态、资料入库
-│  └─ vendor/           # 复用的 DeepTutor 原文窗口与引文匹配辅助代码
-├─ frontend/src/
-│  ├─ App.tsx           # 首页、导航、学习空间共享状态、任务轮询
-│  ├─ Learn.tsx         # 资料、阅读与助教
-│  ├─ PdfReader.tsx     # PDF 画布与可划选文字层
-│  ├─ Practice.tsx      # 练习生成、答题、解析、错题、学习记录
-│  ├─ Notes.tsx         # 笔记编辑、来源跳转与导出
-│  ├─ Settings.tsx      # API 配置与连接测试
-│  ├─ components.tsx    # Markdown、数学公式、图解与分步播放
-│  ├─ api.ts / types.ts # 请求封装与前后端数据类型
-│  └─ styles.css / readability.css
-├─ tests/               # 后端检查与 PDF 测试文件
-├─ frontend/tests/      # Chrome 浏览器操作验收
-├─ scripts/verify_live.py# 有费用的真实模型全流程验收（不会自动运行）
-├─ docs/                # 架构说明、演示脚本、验证记录、截图
-└─ start.ps1 / 启动BookMind.cmd / stop.ps1
+BookMind/
+├── deeptutor/
+│   ├── bookmind/             教材关联、练习范围、目标资料导入与会话隔离
+│   ├── reading/              资料解析、原文、标注与阅读位置
+│   ├── learning/             知识点、作答证据、掌握规则与复习调度
+│   ├── book/                 学习方案、目录与资料编写
+│   ├── capabilities/         阅读、导学与出题等 Agent 能力
+│   ├── services/             会话、模型配置与笔记服务
+│   └── api/routers/          API 与流式接口
+├── web/                      Next.js 页面、阅读器、题卡与笔记界面
+├── scripts/                  启动、初始化与迁移脚本
+├── tests/                    BookMind 模块集成测试
+└── docs/                     架构、开发与功能说明
 ```
 
-实现主线见 [架构与改造说明](docs/架构与改造说明.md)，比赛演示可以参考 [演示脚本](docs/演示脚本.md)。
+- [开发、数据与迁移](docs/README.native.md)
+- [模块关联与学习记录](docs/原版模块融合说明.md)
+- [自主学习、AI 导学与练习设计](docs/AI导学改版说明.md)
+- [从目标生成学习资料](docs/目标学习说明.md)
+- [早期版本问题快照](docs/当前版本问题清单.md)
 
-PDF 翻页与兼容阅读的更新说明见 [PDF 阅读修复记录](docs/PDF阅读修复记录.md)。
+验证覆盖教材关联、来源范围、会话隔离、练习配置、判分、重复提交、笔记与复习规则。运行命令和浏览器联调方式见开发文档；普通构建与单元测试不调用付费模型，真实模型联调需手动执行。
 
-## 验证
+## 致谢与许可证
 
-```powershell
-# 不调用模型，不消耗 API 费用
-.\.venv\Scripts\python.exe -m pytest -q tests
+BookMind 基于 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的 [a31d826](https://github.com/HKUDS/DeepTutor/commit/a31d82624c27d75f4e771d4fcb78dce16470b383) 源码进行场景整合与修改，复用其阅读、导学、资料生成、练习、笔记和会话运行时，保留原始版权与第三方声明。
 
-cd frontend
-npm.cmd run build
-
-# 服务已启动且已准备示例学习空间后：浏览器操作测试
-# 其中一项会向当前配置的模型发送一次“连接成功”测试请求
-npm.cmd run test:ui
-```
-
-`scripts/verify_live.py` 会调用真实模型并新建演示数据，用于问答、图解、练习和手册的端到端验证；`scripts/verify_visual_formats.py` 另外验证 Mermaid 与 SVG。**不要作为每次启动的步骤**。首次开发验收已执行，结果保存在本机 `data/live-verification.json`。若在新电脑运行完整浏览器验收，需先用这两个脚本准备数据；日常使用不需要运行它们。
-
-## 第一版的边界
-
-- 暂无图像生成、语音、视频和扫描件 OCR。扫描 PDF 可以查看原版，但无法基于其中未提取到的文字问答或出题。
-- “整份资料”采用本地关键词与中文二字片段检索：当前页加最多三个相关页，单次原文窗口最多约 16000 字符。没有宣称每次把整本书交给模型，也未继承 DeepTutor 的完整向量数据库与 Agent 工具系统。
-- 生成的手册是短篇入门资料；图解与题目经过结构、来源校验，但教学内容仍可能出错。当前练习为四选一，没有主观题自动评分。
-- 当前为单用户本地演示版，默认仅监听 `127.0.0.1`。没有多用户账号、班级管理或公开部署功能。
-
-DeepTutor 代码来源与许可证见 [NOTICE](NOTICE)、[LICENSE](LICENSE)。
+本项目使用 [Apache License 2.0](LICENSE)。来源与第三方说明见 [NOTICE](NOTICE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
