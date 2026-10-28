@@ -1,80 +1,90 @@
-# BookMind · 学迹
+# BookMind 开发、数据与迁移
 
-围绕同一本教材、同一组学习目标协作的 AI 学习助手。当前版本从 **DeepTutor 原版源码复制后删减、修改**，保留原版 Reading、Mastery Path、笔记、题卡和复习引擎；BookMind 增加教材关联层、统一导航和聚焦文字模型的 API 设置。
+产品介绍与快速开始见 [项目首页](../README.md)。本页记录本地开发、数据目录、旧版迁移与验证方式。
 
-## 使用
+## 本地开发
 
-双击 `启动BookMind.cmd`，打开 **http://127.0.0.1:8018**。前端使用原版 Next.js，后端在本机 `127.0.0.1:8019` 运行。首次启动需要 Python 3.11+、Node 22+ 和网络；依赖、缓存和数据放在项目目录。
+当前应用从 `deeptutor.bookmind.app:app` 启动后端，启用 BookMind 的功能范围与教材关联接口。前端位于 `web/`，使用 Next.js。
 
-1. 在「API 设置」填写兼容 Chat Completions 的地址、模型和密钥。阅读、图解、练习、笔记整理共用文字模型；测试连接会发送一次简短请求。
-2. 导入 PDF、Markdown、TXT、EPUB 等资料。系统建立一个教材空间，关联原版阅读工作区、学习路径和笔记本。
-3. 在顶部三个页面间切换：**学习、练习、笔记**。页面显示关联的教材和学习目标，笔记及错题可以返回原文。
+推荐先按项目首页完成首次启动，建立 `.venv/`、前端依赖与本机设置。之后可以分别运行：
 
-初始学习目标来自教材目录，作为可编辑的学习骨架。大型 PDF 的完整书签留在阅读器，学习路径按章、节初始化；可通过原版路线编辑器和路径助教进一步细化，初始目录不代表模型已经逐页理解了整本书。
+```powershell
+# 在项目根目录启动后端
+.\.venv\Scripts\python.exe -m uvicorn deeptutor.bookmind.app:app --host 127.0.0.1 --port 8019
 
-## 三个页面如何合作
-
-| 页面 | 保留的原版能力 | BookMind 增加的联系 |
-| --- | --- | --- |
-| 学习 | 原版阅读、目录、划选、标注、原文问答、文字模型图解、随堂小测 | 依据原文位置关联同一学习目标；相关笔记进入阅读上下文 |
-| 练习 | Mastery Path 的路线、题卡、诊断、学习证据和到期复习；原版错题与复练组件 | 小测和路径作答共用原版 assessment 日志；本书错题按路径 ID 筛选 |
-| 笔记 | 原版笔记本、记录编辑、搜索、总结、Markdown 导出 | 默认选择本书笔记本；保留目标与原文位置；路径助教可读取本书笔记 |
-
-阅读、提问、收藏笔记不会直接提高掌握度。小测证据可进入同一知识点的复习安排，概念是否掌握仍遵守原版 Mastery 的验证规则。
-
-## 原版源码在哪里
-
-上游基线：[HKUDS/DeepTutor · a31d826](https://github.com/HKUDS/DeepTutor/commit/a31d82624c27d75f4e771d4fcb78dce16470b383)。许可证与第三方说明保留在 [LICENSE](../LICENSE)、[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) 和 [NOTICE](../NOTICE)。
-
-```text
-deeptutor/
-├─ reading/                    原版资料、页、标注、引用和小测引擎
-├─ learning/                   原版学习目标、证据、掌握规则、复习调度与存储
-├─ capabilities/reading/       原版阅读 Agent 与原文检索工具
-├─ capabilities/mastery/       原版 Mastery Agent 与题卡工具
-├─ services/notebook/          原版笔记服务
-├─ services/session/           原版持久化会话与流式执行
-├─ api/routers/                保留所需接口，删去其他功能的路由注册
-└─ bookmind/                   新增：教材 ID 与以上模块的关联
-web/
-├─ components/reading/         原版阅读界面
-├─ components/space/learning/  原版 Mastery Path 界面
-├─ components/notebook/        原版笔记界面
-├─ components/bookmind/        新增：书架、共同上下文、统一导航与设置
-└─ app/                       Next.js 页面，已删减独立全局功能入口
+# 另一个 PowerShell 窗口：在项目根目录启动前端开发服务
+cd web
+npm.cmd run dev -- --hostname 127.0.0.1 --port 8018
 ```
 
-原版公共运行时与共享组件保留；全局聊天首页、伙伴、看板、协同写作、课程管理、全局空间等页面已从当前应用入口移除。当前学习流程使用文字模型，不配置语音或图像生成服务。
-
-架构及关联说明见 [原版模块融合说明](原版模块融合说明.md)。
-
-## 数据与迁移
-
-- `data/user/workspace/reading/`：原版资料、原文、标注、位置，以及 BookMind 的教材关联数据库。
-- `data/user/workspace/notebook/`：原版笔记。
-- 学习路径与会话由原版 `LearningStore` 和 `SqliteSessionStore` 保存。
-- `data/user/settings/`：本机配置，含 API 密钥；整个 `data/` 已忽略，不应提交。
-- `.venv/`、`web/node_modules/`、`.cache/`：本机依赖和下载缓存，不提交。
-
-本机新版目录是 `BookMind-v3`。`BookMind-v2` 保留原样；迁移脚本只读取旧版，复制资料与笔记。旧版练习不会凭名称猜测对应新目标、转成新的掌握证据。
+先通过 `stop.ps1` 停止已经运行的正式服务，避免占用同一端口。通过启动脚本运行正式构建：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -NoBrowser
-powershell -ExecutionPolicy Bypass -File .\stop.ps1
-# 修改前端后重新构建
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -Rebuild
+powershell -ExecutionPolicy Bypass -File .\stop.ps1
 ```
 
-## 验证
+## 数据目录
+
+| 位置 | 内容 |
+| --- | --- |
+| `data/user/workspace/reading/` | 资料、原文、标注、阅读位置与教材关联数据库 |
+| `data/user/workspace/notebook/` | 学习笔记 |
+| `data/user/` 下的原版存储目录 | `LearningStore`、`SqliteSessionStore` 等保存的路径、会话与学习记录 |
+| `data/user/settings/` | 本机模型与界面设置，包含 API 密钥 |
+| `.venv/`、`web/node_modules/`、`.cache/` | 本机依赖与下载缓存 |
+
+上述运行数据和依赖均由 `.gitignore` 排除。公开演示截图位于 `docs/images/`，仅展示专用演示资料；浏览器联调产生的完整截图、响应与报告留在忽略提交的 `data/` 中。
+
+## 从旧版迁移
+
+初次启动时，若同级 `BookMind-v2/data/studytutor.db` 存在，启动脚本会运行 `scripts/migrate_v2.py`。脚本只读旧数据库，复制资料与笔记，保留旧应用的数据。
+
+旧版练习不会仅凭名称猜测对应新知识点，也不会自动转换为新的掌握证据。迁移后继续使用 Reading、Mastery Path、Notebook 和 Assessment 的原有存储与评估机制。
+
+内部仍保留 `deeptutor` 包名、导入路径、环境变量与部分存储键。调整这些标识需要同步核对依赖和数据迁移，不能只替换显示名称。
+
+## 模块与会话
+
+- `deeptutor/bookmind/service.py` 建立 `material_id / workspace_id / path_id / notebook_id` 的稳定关联。
+- `deeptutor/bookmind/practice.py` 绑定专项练习的教材、知识点、原文范围与生成轮次。
+- `deeptutor/bookmind/generated.py` 将完整 Books 结果导入为可学习的资料快照。
+- `deeptutor/bookmind/session_scope.py` 在请求进入执行流程前核对会话归属，阻止阅读、导学与专项练习相互改用会话。
+- 阅读前端先验证会话属于当前教材，再加载聊天记录。旧的串号地址恢复到本书阅读对话；切换路由会取消过时的加载，不取消已在后台执行的模型回复。
+
+更多关联说明见 [原版模块融合说明](原版模块融合说明.md)、[AI 导学改版说明](AI导学改版说明.md) 和 [目标学习说明](目标学习说明.md)。
+
+## 自动化验证
+
+在项目根目录执行后端测试：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install pytest pytest-asyncio
-.\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_native.py
-.\.venv\Scripts\python.exe -m pytest -q deeptutor/learning/tests/test_mastery_state_integrity.py deeptutor/learning/tests/test_mastery_choices.py deeptutor/learning/tests/test_scheduler.py
-cd web
-npm.cmd run typecheck
-npm.cmd run build
-npm.cmd run test:unit -- tests/mastery-question-card.spec.tsx tests/mastery-question-group.spec.tsx tests/notebook-record-edit-discoverability.spec.tsx tests/reading-quiz-persistence.spec.tsx
+.\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_native.py deeptutor/learning/tests/test_mastery_state_integrity.py deeptutor/learning/tests/test_mastery_choices.py deeptutor/learning/tests/test_scheduler.py
 ```
 
-`web/scripts/check-bookmind.mjs` 检查已经启动并已有示例资料的本机界面，截图存入忽略提交的 `data/native-verification/`。真实模型验证另行手动执行，普通构建和上述单元测试不调用模型。
+在 `web/` 中执行前端检查：
+
+```powershell
+npm.cmd run typecheck
+npm.cmd run build
+npm.cmd run test:unit -- tests/reading-session-isolation.spec.tsx tests/mastery-question-card.spec.tsx tests/mastery-question-group.spec.tsx tests/notebook-record-edit-discoverability.spec.tsx tests/reading-quiz-persistence.spec.tsx
+```
+
+本次合并前的验证结果为后端 **133 项**、相关前端 **31 项**通过，TypeScript 检查和正式构建通过。测试数量会随版本变化。
+
+## 浏览器联调
+
+服务已启动、并准备好脚本指定的专用演示资料后，在 `web/` 中执行：
+
+```powershell
+node scripts/check-bookmind.mjs
+node scripts/check-bookmind-modes.mjs
+node scripts/check-bookmind-goals.mjs
+node scripts/check-bookmind-session-isolation.mjs
+```
+
+脚本当前按本机 Chrome 路径启动浏览器；其他环境需要调整 `executablePath`。模式、目标生成和会话隔离脚本提供 `--live`，会使用已配置模型发出真实请求。仅在专用演示教材上运行，避免把联调作答写进实际学习记录。
+
+会话隔离联调覆盖练习切回阅读、导学切回阅读、重复页面切换、旧错误地址恢复，以及实际发送消息后的会话归属。联调报告和截图保存在 `data/`，不随源码提交。

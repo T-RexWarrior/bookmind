@@ -1,90 +1,204 @@
-# BookMind · 学迹
+<p align="center">
+  <img src="web/public/favicon.svg" width="72" alt="BookMind 芽苗图标" />
+</p>
 
-围绕同一份学习资料、同一组学习目标协作的 AI 学习助手。当前版本从 **DeepTutor 原版源码复制后删减、修改**，保留原版 Reading、Mastery Path、Books、笔记、题卡和复习引擎；BookMind 增加教材关联层、统一导航和聚焦文字模型的 API 设置。
+<h1 align="center">BookMind · 学迹</h1>
 
-## 使用
+<p align="center"><strong>从一份资料或一个目标出发，读懂、练会、记下来。</strong></p>
 
-双击 `启动BookMind.cmd`，打开 **http://127.0.0.1:8018**。前端使用原版 Next.js，后端在本机 `127.0.0.1:8019` 运行。首次启动需要 Python 3.11+、Node 22+ 和网络；依赖、缓存和数据放在项目目录。
+<p align="center">
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/License-Apache%202.0-175b4b" /></a>
+  <img alt="Python 3.11–3.14" src="https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB" />
+  <img alt="Node.js 22+" src="https://img.shields.io/badge/Node.js-22%2B-339933" />
+  <img alt="Next.js + FastAPI" src="https://img.shields.io/badge/Stack-Next.js%20%2B%20FastAPI-333333" />
+</p>
 
-1. 在「API 设置」填写兼容 Chat Completions 的地址、模型和密钥。阅读、图解、练习、笔记整理共用文字模型；测试连接会发送一次简短请求。
-2. 在书架选择起点：**已有资料**可导入 PDF、Markdown、TXT、EPUB 等；**已有目标**可说明想学什么，由原版 Books 引擎拟定方案、生成目录和逐章编写资料。方案与目录可编辑，资料生成后点击“加入教材并开始学习”，关联阅读工作区、学习路径和笔记本。
-3. 在顶部四个并列页面间切换：**自主学习、AI 导学、练习巩固、学习笔记**。自主学习按自己的节奏阅读和提问；AI 导学沿原版 Mastery 学习路径讲解、随堂测验并给出反馈。两种模式的会话分别保留，教材、知识点和学习记录互通。
+<p align="center">
+  <a href="#核心功能">核心功能</a> ·
+  <a href="#界面预览">界面预览</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#技术架构">技术架构</a> ·
+  <a href="#开发与文档">开发与文档</a>
+</p>
 
-初始学习目标来自教材目录，作为可编辑的学习骨架。大型 PDF 的完整书签留在阅读器，学习路径按章、节初始化；可通过原版路线编辑器和路径助教进一步细化，初始目录不代表模型已经逐页理解了整本书。
+BookMind 是面向教材自学与目标学习的 AI 学习助手。导入一本教材，或告诉 AI 你想学什么，就可以在同一个学习空间里阅读资料、讨论疑问、接受导学、完成练习，并整理自己的笔记。
 
-目标生成入口是 `/learning/goals`。原版 Books 通过 `IdeationAgent → SourceExplorer / SpineSynthesizer → BookCompiler` 生成内容；此入口只使用文字模型，不需要配置嵌入模型。支持精简、标准、深入三种深度，以及暂停、继续和未完成章节重试。生成方案和目录保存在原版 BookStorage，正文在后台逐章保存；关闭页面后可从书架的生成记录继续。完整流程见 [目标学习说明](docs/目标学习说明.md)。
+项目将 **自主学习、AI 导学、练习巩固、学习笔记** 放在同一本教材、同一组知识点下。学习模式各自保留对话，作答证据与复习安排相互关联，让一次提问、一道错题和一条笔记能够回到具体的学习内容。
 
-## 四个页面如何合作
+BookMind 基于 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 开发，围绕资料学习场景整合 Reading、Mastery Path、Books 与 Notebook 等模块，采用 Next.js + FastAPI，当前主要验证 Windows 本地运行。
 
-| 页面 | 保留的原版能力 | BookMind 增加的联系 |
+## 两个学习起点
+
+| 你手上有什么 | 如何开始 | 最终进入 |
 | --- | --- | --- |
-| 自主学习 | 原版 Reading、对话、图解与阅读小测 | 关联本书目标与笔记，保留阅读位置和独立会话 |
-| AI 导学 | 原版 Mastery 路径、教学会话与题卡 | 随堂测验、图解说明、补充示例；教材原文侧栏和经实际阅读验证的引用定位 |
-| 练习巩固 | 原版完整 QuestionPipeline、QuizConfigPanel、QuizViewer、AI 评阅和题目追问 | 专项练习、错题本、复习计划；题数 1–50、难度、六种题型及配比；服务端校验教材范围并关联统一 assessment 日志 |
-| 学习笔记 | 原版笔记本、记录编辑、搜索、总结、Markdown 导出 | 默认选择本书笔记本；保留目标与原文位置；路径助教可读取本书笔记 |
+| **已有资料** | 导入 PDF、EPUB、Markdown 或 TXT，建立教材空间与学习目标 | 阅读器、AI 导学、专项练习与本书笔记 |
+| **已有目标** | 描述想学什么和已有基础，确认 AI 拟定的方案与目录，逐章生成学习资料 | 将完整资料加入书架，使用同一套学习功能 |
 
-阅读、提问、收藏笔记不会直接提高掌握度。小测证据可进入同一知识点的复习安排，概念是否掌握仍遵守原版 Mastery 的验证规则。
+目标生成支持精简、标准、深入三种深度。方案和目录可编辑，编写任务支持暂停、继续及未完成章节重试；生成完成后可下载 Markdown，也可直接开始学习。
 
-专项练习每次选取同一知识点内最多 24 个原文单元，直接提供给原版出题流程，无需额外嵌入模型。客观题依据服务端保存的题目和答案判分；简答、论述、编程题支持原版 AI 评阅和追问，未判定的作答保留为待评估，不直接提高掌握度。本页聚焦教材出题，暂不提供原版参考试卷仿题入口。
+## 核心功能
 
-## 原版源码在哪里
+### 自主学习：带着问题读资料
 
-上游基线：[HKUDS/DeepTutor · a31d826](https://github.com/HKUDS/DeepTutor/commit/a31d82624c27d75f4e771d4fcb78dce16470b383)。许可证与第三方说明保留在 [LICENSE](LICENSE)、[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 [NOTICE](NOTICE)。
+- 在阅读器中查看原文、浏览目录、保留阅读位置、划选和标注。
+- 围绕当前内容提问，请 AI 解释概念、补充例子或进行比较。
+- 使用文字模型生成结构图、流程图、思维导图等图解，帮助理解抽象内容。
+- 学习过程中可调用随堂小测；有来源定位的内容可返回原文核对。
 
-```text
-deeptutor/
-├─ reading/                    原版资料、页、标注、引用和小测引擎
-├─ learning/                   原版学习目标、证据、掌握规则、复习调度与存储
-├─ book/                       原版 Books 方案、章节目录、编写引擎与 Markdown 导出
-├─ capabilities/reading/       原版阅读 Agent 与原文检索工具
-├─ capabilities/mastery/       原版 Mastery Agent 与题卡工具
-├─ services/notebook/          原版笔记服务
-├─ services/session/           原版持久化会话与流式执行
-├─ api/routers/                保留所需接口，删去其他功能的路由注册
-└─ bookmind/                   新增：教材 ID 与以上模块的关联
-web/
-├─ components/reading/         原版阅读界面
-├─ components/space/learning/  原版 Mastery Path 界面
-├─ components/notebook/        原版笔记界面
-├─ components/bookmind/        新增：书架、共同上下文、统一导航与设置
-└─ app/                       Next.js 页面，已删减独立全局功能入口
-```
+### AI 导学：沿着知识点逐步理解
 
-原版公共运行时与共享组件保留；全局聊天首页、伙伴、看板、协同写作、课程管理、全局空间等页面已从当前应用入口移除。当前学习流程使用文字模型，不配置语音或图像生成服务。
+- 将教材目录组织成可编辑的学习路径，围绕具体知识点展开教学对话。
+- 通过讲解、追问、随堂测验与反馈，引导学习者说明自己的理解。
+- 使用「随堂测验」「图解说明」「补充示例」继续当前学习。
+- 随时打开教材原文侧栏，核对导学实际查阅的来源。
 
-架构及关联说明见 [原版模块融合说明](docs/原版模块融合说明.md)。
+### 练习巩固：配置一组练习，再针对薄弱处复习
 
-改版前的品牌、界面分工、原文引用及检索能力问题保存在 [问题快照](docs/当前版本问题清单.md)，用于对照。文字笔记与图解分开保存按原版设计保留。
+- 选择教材知识点与原文范围，设置 **1–50 道题**、难度、题型及题型数量配比。
+- 支持选择、判断、填空、简答、论述、编程六种题型。
+- 客观题判分，主观题支持 AI 评阅与题目追问。
+- 在同一本书内查看错题与复习计划，作答记录关联到对应知识点。
 
-以上问题清单保留了改版前快照。最新行为与验证见 [自主学习与 AI 导学改版说明](docs/AI导学改版说明.md)。当前仅启用文字模型相关工具及 SVG、图表、Mermaid、思维导图和 HTML 图解；联网、论文库、图像生成、视频及语音外部服务暂未启用，界面不会把它们当作已接通。
+### 学习笔记：把理解留在教材旁边
 
-## 数据与迁移
+- 将学习中的摘录、解释与总结保存到本书笔记本。
+- 保留教材、知识点与原文位置的关联，方便再次查阅。
+- 支持笔记编辑、搜索、总结和 Markdown 导出。
+- 相关笔记可作为后续学习的上下文；文字笔记与图解文件分别保存。
 
-- `data/user/workspace/reading/`：原版资料、原文、标注、位置，以及 BookMind 的教材关联数据库。
-- `data/user/workspace/notebook/`：原版笔记。
-- 学习路径与会话由原版 `LearningStore` 和 `SqliteSessionStore` 保存。
-- `data/user/settings/`：本机配置，含 API 密钥；整个 `data/` 已忽略，不应提交。
-- `.venv/`、`web/node_modules/`、`.cache/`：本机依赖和下载缓存，不提交。
+## 界面预览
 
-本机新版目录是 `BookMind-v3`。`BookMind-v2` 保留原样；迁移脚本只读取旧版，复制资料与笔记。旧版练习不会凭名称猜测对应新目标、转成新的掌握证据。
+以下为本地运行界面，使用专用二叉树演示资料与演示作答，不代表真实学生的学习成绩。
+
+**自主学习：原文与讨论并排，边读边问。**
+
+![BookMind 自主学习：教材阅读与原文问答](docs/images/self-directed-learning.png)
+
+**练习巩固：按知识点配置题目，作答后查看反馈。**
+
+![BookMind 练习巩固：出题配置与题目反馈](docs/images/practice.png)
+
+## 一次完整的学习过程
+
+以数据结构中的「二叉树」为例：
+
+1. 导入课程资料，或者输入「我想学懂二叉树」，生成一份学习资料。
+2. 在自主学习中阅读定义，询问「为什么普通二叉树不保证左小右大」，结合原文与图解理解。
+3. 进入 AI 导学，沿知识点接受讲解、回答问题，再根据反馈补充理解。
+4. 在练习巩固中配置不同题型，查看解析，对不理解的题继续追问。
+5. 将关键解释整理成笔记；之后从本书错题与复习计划继续学习。
+
+四个页面共享教材和知识点关联。**自主学习、AI 导学与专项练习的会话彼此独立**，切换页面可继续对应会话；练习生成记录不会混进阅读聊天。
+
+阅读、提问或保存笔记属于学习过程记录，掌握度依据作答证据与评估规则更新，一道题答对不会直接将整章标为掌握。
+
+## 快速开始
+
+### 环境要求
+
+- Windows、Git、Python **3.11–3.14**、Node.js **22+** 与 npm。
+- 首次启动需要网络下载依赖并构建前端。
+- 一个支持工具调用、兼容 Chat Completions 的文字模型服务。主学习流程无需单独配置嵌入模型。
+
+### 下载并启动
+
+在 PowerShell 中运行：
 
 ```powershell
+git clone https://github.com/T-RexWarrior/bookmind.git BookMind
+cd BookMind
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+也可以双击项目中的 **启动BookMind.cmd**。启动脚本会创建本地 Python 环境、安装依赖、初始化配置并启动服务：
+
+| 服务 | 地址 |
+| --- | --- |
+| BookMind 页面 | http://127.0.0.1:8018 |
+| 后端服务 | http://127.0.0.1:8019 |
+
+在左下角 **API 设置** 中填写服务地址、模型名称与 API Key，保存后测试连接。随后在「我的教材」选择导入资料或从目标生成内容。
+
+```powershell
+# 启动服务，不自动打开浏览器
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -NoBrowser
-powershell -ExecutionPolicy Bypass -File .\stop.ps1
+
 # 修改前端后重新构建
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -Rebuild
+
+# 停止本项目服务
+powershell -ExecutionPolicy Bypass -File .\stop.ps1
 ```
 
-## 验证
+资料、笔记、学习记录和模型配置保存在本机 `data/`。调用模型时，相关原文与对话会发送至配置的模型服务。`data/`、API 密钥、本地依赖与缓存均不进入源码仓库。
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install pytest pytest-asyncio
-.\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_native.py
-.\.venv\Scripts\python.exe -m pytest -q deeptutor/learning/tests/test_mastery_state_integrity.py deeptutor/learning/tests/test_mastery_choices.py deeptutor/learning/tests/test_scheduler.py
-cd web
-npm.cmd run typecheck
-npm.cmd run build
-npm.cmd run test:unit -- tests/mastery-question-card.spec.tsx tests/mastery-question-group.spec.tsx tests/notebook-record-edit-discoverability.spec.tsx tests/reading-quiz-persistence.spec.tsx
+## 技术架构
+
+```mermaid
+flowchart TB
+    Import[导入学习资料] --> Book[教材空间与知识点关联]
+    Goal[输入学习目标] --> Books[Books：方案、目录、逐章生成]
+    Books --> Book
+    Book --> Reading[自主学习 · Reading]
+    Book --> Mastery[AI 导学 · Mastery Path]
+    Book --> Practice[练习巩固 · QuestionPipeline]
+    Book --> Notes[学习笔记 · Notebook]
+    Reading --> Evidence[作答证据与评估记录]
+    Mastery --> Evidence
+    Practice --> Evidence
+    Evidence --> Review[掌握状态、错题与复习安排]
+    Reading --> Notes
+    Mastery --> Notes
+    Notes --> Sources[教材来源与知识点上下文]
+    Sources --> Reading
+    Sources --> Mastery
 ```
 
-`web/scripts/check-bookmind.mjs` 检查已经启动并已有示例资料的本机界面，截图存入忽略提交的 `data/native-verification/`。真实模型验证另行手动执行，普通构建和上述单元测试不调用模型。
+| 层次 | 实现 |
+| --- | --- |
+| 前端 | Next.js、React、TypeScript、Tailwind CSS；PDF.js 阅读与交互式题卡 |
+| API 与会话 | FastAPI、WebSocket、持久化会话与流式执行 |
+| 学习模块 | Reading、Mastery Path、Books、Notebook、QuestionPipeline |
+| 资料与记录 | 本地文件、SQLite、学习目标、作答证据与复习调度 |
+| 模型与图解 | 可配置文字模型；SVG、Chart.js、Mermaid、思维导图与 HTML |
+
+BookMind 的教材关联层维护资料、阅读工作区、学习路径与笔记本之间的对应关系，复用原有评估与存储机制。内部保留 `deeptutor` 包名、导入路径和部分存储键，以兼容所复用的运行时。
+
+### 当前范围
+
+- 当前主要支持有可提取文字的资料；扫描件可以显示 PDF，基于原文的问答仍需要可用文本。
+- 初始学习路径主要依据目录建立，可继续编辑与细化，不代表模型已经逐页分析整本教材。
+- 检索主要使用目录、按页读取与文本搜索；专项练习每次选取同一知识点内最多 24 个原文单元。
+- 当前聚焦文字模型与代码图解。联网搜索、论文库、图像生成、语音与视频服务尚未开放。
+
+## 开发与文档
+
+```text
+BookMind/
+├── deeptutor/
+│   ├── bookmind/             教材关联、练习范围、目标资料导入与会话隔离
+│   ├── reading/              资料解析、原文、标注与阅读位置
+│   ├── learning/             知识点、作答证据、掌握规则与复习调度
+│   ├── book/                 学习方案、目录与资料编写
+│   ├── capabilities/         阅读、导学与出题等 Agent 能力
+│   ├── services/             会话、模型配置与笔记服务
+│   └── api/routers/          API 与流式接口
+├── web/                      Next.js 页面、阅读器、题卡与笔记界面
+├── scripts/                  启动、初始化与迁移脚本
+├── tests/                    BookMind 模块集成测试
+└── docs/                     架构、开发与功能说明
+```
+
+- [开发、数据与迁移](docs/README.native.md)
+- [模块关联与学习记录](docs/原版模块融合说明.md)
+- [自主学习、AI 导学与练习设计](docs/AI导学改版说明.md)
+- [从目标生成学习资料](docs/目标学习说明.md)
+- [早期版本问题快照](docs/当前版本问题清单.md)
+
+验证覆盖教材关联、来源范围、会话隔离、练习配置、判分、重复提交、笔记与复习规则。运行命令和浏览器联调方式见开发文档；普通构建与单元测试不调用付费模型，真实模型联调需手动执行。
+
+## 致谢与许可证
+
+BookMind 基于 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的 [a31d826](https://github.com/HKUDS/DeepTutor/commit/a31d82624c27d75f4e771d4fcb78dce16470b383) 源码进行场景整合与修改，复用其阅读、导学、资料生成、练习、笔记和会话运行时，保留原始版权与第三方声明。
+
+本项目使用 [Apache License 2.0](LICENSE)。来源与第三方说明见 [NOTICE](NOTICE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
