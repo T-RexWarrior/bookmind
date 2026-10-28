@@ -13,6 +13,19 @@ class BindRequest(BaseModel):
     material_id: str
 
 
+@router.post('/generated/{native_book_id}/import')
+async def import_goal_material(native_book_id: str):
+    from deeptutor.api.routers.book import _resolve_book_or_404
+    from .generated import import_generated_book
+    resolved = _resolve_book_or_404(native_book_id)
+    try:
+        return await asyncio.to_thread(import_generated_book, native_book_id, resolved.engine)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @router.get('/books')
 async def list_books():
     return await asyncio.to_thread(lambda: [service.overview(b) for b in service.books()])

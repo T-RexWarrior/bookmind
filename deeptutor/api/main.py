@@ -624,6 +624,8 @@ app.include_router(
     tags=["mastery-path"],
 )
 app.include_router(notebook.router, prefix="/api", tags=["notebooks"], dependencies=_auth)
+app.include_router(book.router, prefix="/api", tags=["books"], dependencies=_auth)
+app.include_router(book.ws_router, prefix="/ws", tags=["books"])
 app.include_router(
     task_board.router, prefix="/api/task-board", tags=["task-board"], dependencies=_auth
 )

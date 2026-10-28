@@ -24,6 +24,8 @@ export type Textbook = {
   path_id: string
   notebook_id: string
   title: string
+  generated_book_id?: string
+  learning_goal?: string
   note_count: number
   objectives: Objective[]
   current_objective_id: string

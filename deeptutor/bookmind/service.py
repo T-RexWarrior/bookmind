@@ -34,6 +34,9 @@ def connection():
             workspace_id TEXT NOT NULL UNIQUE, path_id TEXT NOT NULL UNIQUE,
             notebook_id TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
             ranges_json TEXT NOT NULL, created_at REAL NOT NULL)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS generated_sources (
+            native_book_id TEXT PRIMARY KEY, material_id TEXT NOT NULL,
+            source_revision INTEGER NOT NULL, goal TEXT NOT NULL, created_at REAL NOT NULL)''')
         yield conn
 
 
@@ -188,6 +191,11 @@ def overview(book):
         raise ValueError('Textbook not found')
     from deeptutor.services.notebook import notebook_manager
     result = {key: value for key, value in book.items() if key != 'ranges_json'}
+    with connection() as conn:
+        generated = conn.execute('SELECT native_book_id, goal FROM generated_sources WHERE material_id=?', (book['material_id'],)).fetchone()
+    if generated:
+        result['generated_book_id'] = generated['native_book_id']
+        result['learning_goal'] = generated['goal']
     result['objectives'] = objectives(book)
     notebook = notebook_manager.get_notebook(book['notebook_id']) or {}
     result['note_count'] = len(notebook.get('records', []))

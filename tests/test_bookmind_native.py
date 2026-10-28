@@ -273,3 +273,72 @@ def test_textbook_mistake_reattempt_updates_same_point_once(native_book):
         assert len(progress.learning_evidence) == 2
         assert progress.learning_evidence[-1].result == 'correct'
     asyncio.run(scenario())
+
+
+def _ready_generated_book():
+    from deeptutor.book.engine import BookEngine
+    from deeptutor.book.storage import BookStorage
+    from deeptutor.book.models import Book, BookInputs, BookStatus, Chapter, Spine, Page, PageStatus, Block, BlockStatus, BlockType
+    engine = BookEngine(storage=BookStorage())
+    book = Book(title='从目标理解二叉树', language='zh', status=BookStatus.READY)
+    chapter = Chapter(title='二叉树与中序遍历', learning_objectives=['理解左右孩子', '能解释左根右的访问顺序'])
+    page = Page(book_id=book.id, chapter_id=chapter.id, title=chapter.title, status=PageStatus.READY,
+        blocks=[Block(type=BlockType.SECTION, status=BlockStatus.READY, payload={
+            'intro': '二叉树每个结点至多有两个孩子。',
+            'subsections': [{'heading': '中序遍历', 'body': '先访问左子树，再访问根，最后访问右子树。'}],
+            'key_takeaway': '二叉树的左右位置有区别。'})])
+    chapter.page_ids = [page.id]
+    spine = Spine(book_id=book.id, chapters=[chapter])
+    engine.storage.save_book(book)
+    engine.storage.save_spine(spine)
+    engine.storage.save_page(page)
+    engine.storage.save_inputs(book.id, BookInputs(user_intent='我想学会二叉树和中序遍历', language='zh'))
+    return engine, book, page
+
+
+def test_generated_books_join_same_learning_surfaces_once(native_book):
+    from deeptutor.bookmind.generated import import_generated_book
+    engine, source, page = _ready_generated_book()
+    first = import_generated_book(source.id, engine)
+    assert first['generated_book_id'] == source.id
+    assert first['learning_goal'] == '我想学会二叉树和中序遍历'
+    assert first['objectives']
+    assert set(first['links']) == {'learn', 'guide', 'practice', 'notes'}
+    assert '二叉树' in service.reading_sources(LearningStore().get_topic(first['path_id']).sources[0], 20000)[0].full_text
+    notebook_manager.add_record([first['notebook_id']], 'reading', '我的理解', '摘录', '二叉树左右孩子有区别')
+    second = import_generated_book(source.id, engine)
+    assert second['id'] == first['id'] and second['notebook_id'] == first['notebook_id']
+    assert second['note_count'] == 1
+
+
+@pytest.mark.parametrize('invalid', ['draft', 'partial', 'missing_page', 'unfinished_block'])
+def test_generated_books_require_complete_native_content(native_book, invalid):
+    from deeptutor.bookmind.generated import import_generated_book
+    from deeptutor.book.models import BookStatus, PageStatus, BlockStatus
+    engine, book, page = _ready_generated_book()
+    if invalid == 'draft':
+        book.status = BookStatus.DRAFT
+        engine.storage.save_book(book)
+    elif invalid == 'partial':
+        page.status = PageStatus.PARTIAL
+        engine.storage.save_page(page)
+    elif invalid == 'missing_page':
+        spine = engine.load_spine(book.id)
+        spine.chapters[0].page_ids.append('missing-page')
+        engine.storage.save_spine(spine)
+    else:
+        page.blocks[0].status = BlockStatus.ERROR
+        engine.storage.save_page(page)
+    with pytest.raises(ValueError):
+        import_generated_book(book.id, engine)
+    assert len(service.books()) == 1
+
+
+def test_separate_generated_books_keep_separate_learning_records(native_book):
+    from deeptutor.bookmind.generated import import_generated_book
+    engine, source, _ = _ready_generated_book()
+    first = import_generated_book(source.id, engine)
+    engine2, source2, _ = _ready_generated_book()
+    second = import_generated_book(source2.id, engine2)
+    assert first['material_id'] != second['material_id']
+    assert first['path_id'] != second['path_id'] and first['notebook_id'] != second['notebook_id']

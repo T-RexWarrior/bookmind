@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, BookOpen, FileUp, GraduationCap, Loader2, NotebookPen } from 'lucide-react'
+import { ArrowRight, BookOpen, FileUp, GraduationCap, Loader2, NotebookPen, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/shared/api/client'
 import { uploadMaterial } from '@/lib/reading-api'
 import { Textbook, useBookMind } from './BookMindProvider'
+import GoalDrafts from './GoalDrafts'
 
 export default function Bookshelf() {
   const { books, refresh, error } = useBookMind()
@@ -42,10 +43,15 @@ export default function Bookshelf() {
         <p className="bm-eyebrow">READ · UNDERSTAND · REMEMBER</p>
         <h1>一本教材，一条学习主线。</h1>
         <p>在原文里读懂，在练习里验证，把理解留在自己的笔记里。</p>
+        <div className="bm-start-choices">
+          <section><h2><FileUp size={18} />已有资料</h2><p>导入教材、讲义或文档，围绕同一份资料阅读、讨论和练习。</p>
         <button className="bm-primary" onClick={() => input.current?.click()} disabled={busy}>
           {busy ? <Loader2 className="animate-spin" size={17} /> : <FileUp size={17} />}
           {busy ? '正在导入教材与目录…' : '导入一份学习资料'}
         </button>
+        <small>PDF、Markdown、TXT、EPUB 等</small></section>
+          <section><h2><Sparkles size={18} />已有目标</h2><p>说明想学什么，由 AI 组织学习内容，生成一份可阅读、可讨论、可练习的学习资料。</p><Link className="bm-secondary" href="/learning/goals"><Sparkles size={16} />从目标生成学习资料</Link><small>拟定方案 · 确认目录 · 逐章生成</small></section>
+        </div>
         <input
           hidden
           ref={input}
@@ -53,7 +59,6 @@ export default function Bookshelf() {
           accept=".pdf,.md,.txt,.epub,.docx,.pptx"
           onChange={e => void upload(e.target.files?.[0])}
         />
-        <small>PDF、Markdown、TXT、EPUB 等 · 使用本机文字模型 API</small>
       </div>
       <div className="bm-three-steps">
         {[
@@ -76,6 +81,7 @@ export default function Bookshelf() {
           {failure || error}
         </div>
       )}
+      <GoalDrafts />
       <section>
         <div className="bm-section-heading">
           <h2>继续学习</h2>
@@ -84,7 +90,7 @@ export default function Bookshelf() {
         {books.length === 0 ? (
           <div className="bm-empty">
             <BookOpen size={30} />
-            <p>上传教材后，三个页面会自动关联到同一份资料与学习目标。</p>
+            <p>导入资料或从目标生成资料后，四个学习页面会关联同一份内容与学习目标。</p>
           </div>
         ) : (
           <div className="bm-book-grid">
@@ -99,7 +105,7 @@ export default function Bookshelf() {
                   <p>
                     {book.objectives.length} 个目录学习目标 · {book.note_count} 条笔记
                   </p>
-                  <span className="bm-status">
+                  <span className="bm-status">{book.generated_book_id && 'AI 生成 · '}
                     {book.objectives.reduce((sum, p) => sum + p.evidence_count, 0)} 条作答证据
                   </span>
                   <div>
