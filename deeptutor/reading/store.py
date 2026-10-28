@@ -43,6 +43,7 @@ from typing import Any, Iterator, Literal, Mapping, Sequence
 import uuid
 
 from deeptutor.reading.extract import extract_material, synthesise_outline
+from deeptutor.reading.outline_titles import clean_outline_title
 from deeptutor.reading.models import (
     MAX_TEXT_SELECTOR_CHARS,
     Annotation,
@@ -919,7 +920,11 @@ class ReadingStore:
                 if not isinstance(row, dict):
                     continue
                 try:
-                    entries.append(OutlineEntry.from_dict(row))
+                    # Clean legacy bookmark labels on read too. No re-import,
+                    # source-text rewrite or changes to persisted annotations.
+                    title = clean_outline_title(str(row.get("title") or ""))
+                    if title:
+                        entries.append(OutlineEntry.from_dict({**row, "title": title}))
                 except (KeyError, TypeError, ValueError):
                     continue
             if manifest.render_mode == "epub":

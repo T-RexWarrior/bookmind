@@ -113,7 +113,13 @@ class ReadingCapability:
     """Turn-scoped integration for immersive reading."""
 
     name = "immersive_reading"
-    owned_tools: tuple[str, ...] = READING_TOOL_NAMES
+    @property
+    def owned_tools(self) -> tuple[str, ...]:
+        from deeptutor.bookmind.policy import text_only_app
+
+        if text_only_app():
+            return tuple(name for name in READING_TOOL_NAMES if name != "view_figure")
+        return READING_TOOL_NAMES
 
     def is_active(self, context: UnifiedContext) -> bool:
         """Active with a document open, and also with the mode merely selected.

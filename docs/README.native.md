@@ -61,7 +61,7 @@ powershell -ExecutionPolicy Bypass -File .\stop.ps1
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install pytest pytest-asyncio
-.\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_native.py deeptutor/learning/tests/test_mastery_state_integrity.py deeptutor/learning/tests/test_mastery_choices.py deeptutor/learning/tests/test_scheduler.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_native.py tests/test_bookmind_diagrams_outline.py deeptutor/learning/tests/test_mastery_state_integrity.py deeptutor/learning/tests/test_mastery_choices.py deeptutor/learning/tests/test_scheduler.py
 ```
 
 在 `web/` 中执行前端检查：
@@ -69,10 +69,10 @@ powershell -ExecutionPolicy Bypass -File .\stop.ps1
 ```powershell
 npm.cmd run typecheck
 npm.cmd run build
-npm.cmd run test:unit -- tests/reading-session-isolation.spec.tsx tests/mastery-question-card.spec.tsx tests/mastery-question-group.spec.tsx tests/notebook-record-edit-discoverability.spec.tsx tests/reading-quiz-persistence.spec.tsx
+npm.cmd run test:unit -- tests/inline-study-diagram.spec.ts tests/reading-session-isolation.spec.tsx tests/mastery-question-card.spec.tsx tests/mastery-question-group.spec.tsx tests/notebook-record-edit-discoverability.spec.tsx tests/reading-quiz-persistence.spec.tsx
 ```
 
-本次合并前的验证结果为后端 **133 项**、相关前端 **31 项**通过，TypeScript 检查和正式构建通过。测试数量会随版本变化。
+当前相关验证结果为后端 **145 项**、相关前端 **35 项**通过；原文引用另有 **42 项**检查通过，TypeScript 检查和正式构建通过。测试数量会随版本变化。
 
 ## 浏览器联调
 
@@ -83,8 +83,11 @@ node scripts/check-bookmind.mjs
 node scripts/check-bookmind-modes.mjs
 node scripts/check-bookmind-goals.mjs
 node scripts/check-bookmind-session-isolation.mjs
+node scripts/check-bookmind-diagrams.mjs
 ```
 
 脚本当前按本机 Chrome 路径启动浏览器；其他环境需要调整 `executablePath`。模式、目标生成和会话隔离脚本提供 `--live`，会使用已配置模型发出真实请求。仅在专用演示教材上运行，避免把联调作答写进实际学习记录。
 
 会话隔离联调覆盖练习切回阅读、导学切回阅读、重复页面切换、旧错误地址恢复，以及实际发送消息后的会话归属。联调报告和截图保存在 `data/`，不随源码提交。
+
+图解联调加 `--live` 会在专用演示教材中发送“画个二叉树的示意图我看一下”，检查实际 SVG、刷新恢复与手机布局。已有演示会话可用 `--resume-session=<会话 ID>` 复查显示，不再调用模型。该脚本也只读核对本机已有示例 PDF 的目录清理结果，不重写资料。
