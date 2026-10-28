@@ -22,6 +22,7 @@ import {
 } from "@/components/chat/home/composer-field";
 
 interface VisualizeConfigPanelProps {
+  textbookOnly?: boolean;
   value: VisualizeFormConfig;
   onChange: (next: VisualizeFormConfig) => void;
   /**
@@ -37,6 +38,7 @@ export default memo(function VisualizeConfigPanel({
   onChange,
   collapsed,
   onToggleCollapsed,
+  textbookOnly = false,
 }: VisualizeConfigPanelProps) {
   const { t } = useTranslation();
   const [catalog, setCatalog] = useState<VisualizerCatalogItem[]>([]);
@@ -56,16 +58,23 @@ export default memo(function VisualizeConfigPanel({
 
   const refreshCatalog = useCallback(async () => {
     try {
-      setCatalog(await listVisualizers());
+      const next = await listVisualizers();
+      setCatalog(textbookOnly ? next.filter(item => ['svg', 'chartjs', 'mermaid', 'mindmap', 'html'].includes(item.id)) : next);
       setCatalogError("");
     } catch (error) {
       setCatalogError(error instanceof Error ? error.message : String(error));
     }
-  }, []);
+  }, [textbookOnly]);
 
   useEffect(() => {
     void refreshCatalog();
   }, [refreshCatalog]);
+
+  useEffect(() => {
+    if (textbookOnly && !['auto', 'svg', 'chartjs', 'mermaid', 'mindmap', 'html'].includes(value.render_mode)) {
+      onChange({ ...value, render_mode: 'auto' });
+    }
+  }, [textbookOnly, value, onChange]);
 
   const enabledTypes = useMemo(
     () => catalog.filter((item) => item.installed && item.enabled),
@@ -122,8 +131,8 @@ export default memo(function VisualizeConfigPanel({
               <option value="mermaid">{t("Mermaid")}</option>
               <option value="mindmap">{t("Mind map")}</option>
               <option value="html">{t("HTML")}</option>
-              <option value="manim_video">{t("Animation")}</option>
-              <option value="manim_image">{t("Storyboard")}</option>
+              {!textbookOnly && <option value="manim_video">{t("Animation")}</option>}
+              {!textbookOnly && <option value="manim_image">{t("Storyboard")}</option>}
             </>
           )}
           {value.render_mode !== "auto" &&
@@ -166,7 +175,7 @@ export default memo(function VisualizeConfigPanel({
         </>
       ) : null}
 
-      <Field label={t("Visualizer Types")} width="min-w-[210px] flex-1">
+      {!textbookOnly && <Field label={t("Visualizer Types")} width="min-w-[210px] flex-1">
         <div className="flex min-h-8 flex-wrap items-center gap-1.5">
           {installableTypes.map((item) => (
             <Tooltip key={item.id} label={t(item.display_name)} description={item.description}>
@@ -259,7 +268,7 @@ export default memo(function VisualizeConfigPanel({
         {catalogError ? (
           <p className="mt-1 text-[10px] text-red-500">{catalogError}</p>
         ) : null}
-      </Field>
+      </Field>}
     </>
   );
 

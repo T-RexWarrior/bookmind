@@ -9,7 +9,22 @@ import {
   locatorFromHref,
   locatorLabel,
   verifiedReadingLocators,
+  readingEvidenceMaterial,
 } from "../lib/reading-citations";
+
+test('Mastery evidence identifies its own document independently of the reader', () => {
+  const events = [{ type: 'tool_result', metadata: { tool: 'read_material', tool_metadata: { material_id: 'aabb1122', material_revision: 2, locators: [12] } } }];
+  const material = readingEvidenceMaterial(events);
+  assert.deepEqual(material, { materialId: 'aabb1122', materialRevision: 2 });
+  assert.deepEqual([...verifiedReadingLocators(events, material!.materialId, material!.materialRevision)], [12]);
+  assert.equal(verifiedReadingLocators(events, 'another-book', 2).size, 0);
+  assert.equal(verifiedReadingLocators(events, 'aabb1122', 1).size, 0);
+});
+
+test('ambiguous documents and unrelated tools cannot create source links', () => {
+  assert.equal(readingEvidenceMaterial([{ type: 'tool_result', metadata: { tool: 'brainstorm', material_id: 'aabb1122', locator: 1 } }]), null);
+  assert.equal(readingEvidenceMaterial(['book-a', 'book-b'].map(id => ({ type: 'tool_result', metadata: { tool: 'read_material', material_id: id, locator: 1 } }))), null);
+});
 
 test("parses a single locator citation", () => {
   const found = findLocatorCitations("Attention is all you need [p.12] here.");

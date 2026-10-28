@@ -15,6 +15,8 @@ import {
 import {
   linkifyLocatorCitations,
   verifiedReadingLocators,
+  readingEvidenceMaterial,
+  readingPassageHref,
 } from "@/lib/reading-citations";
 import { linkifyMediaTimestamps } from "@/lib/reading-media-citations";
 import { parseModelThinkingSegments } from "@/lib/think-segments";
@@ -47,6 +49,11 @@ function AssistantResponseImpl({
   events,
   language,
 }: AssistantResponseProps) {
+  // Mastery has no open reader. Its successful tool results still identify
+  // the exact document and revision belonging to this historical turn.
+  const evidenceMaterial = useMemo(() => readingEvidenceMaterial(events), [events]);
+  readingMaterialId = readingMaterialId || evidenceMaterial?.materialId;
+  readingMaterialRevision = readingMaterialRevision || evidenceMaterial?.materialRevision;
   const displayContent = useSmoothStreamText(content, isStreaming);
   // A locator becomes interactive only when this turn's persisted reading-tool
   // events prove it belongs to the material that was open for the turn. The
@@ -150,6 +157,14 @@ function AssistantResponseImpl({
           />
         );
       })}
+      {readingMaterialId && verifiedLocators.size > 0 && !isStreaming && (
+        <div className="bm-response-sources" aria-label="本次回答查阅的原文">
+          <span>查阅原文</span>
+          {[...verifiedLocators].sort((a, b) => a - b).slice(0, 6).map(locator => (
+            <a key={locator} href={readingPassageHref(readingMaterialId!, locator, readingMaterialRevision)}>第 {locator} 页 / 节 ↗</a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

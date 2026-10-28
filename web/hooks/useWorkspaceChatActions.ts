@@ -31,7 +31,7 @@ export function useWorkspaceChatActions(
             (capability) => capability.value === pinnedCapability,
           )
         : catalogCapabilities.filter(
-            (capability) => capability.value !== "course_study",
+            (capability) => ["", "ask_questions", "deep_question", "visualize"].includes(capability.value),
           ),
     [catalogCapabilities, pinnedCapability],
   );

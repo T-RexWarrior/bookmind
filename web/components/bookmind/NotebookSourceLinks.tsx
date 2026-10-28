@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useBookMind } from './BookMindProvider'
+import { useBookMind, textbookUnitLabel } from './BookMindProvider'
 
 export default function NotebookSourceLinks({ metadata }: { metadata?: Record<string, unknown> }) {
   const { books } = useBookMind()
@@ -14,9 +14,9 @@ export default function NotebookSourceLinks({ metadata }: { metadata?: Record<st
     <div className="bm-note-source">
       <span>关联知识点：{point?.name || '教材级笔记'}</span>
       <Link href={book.links.learn + (locator ? `?locator=${locator}` : '')}>
-        返回教材{locator ? ` · 第 ${locator} 页/节` : ''}
+        返回教材{locator ? ` · 第 ${locator} ${textbookUnitLabel(book.unit)}` : ''}
       </Link>
-      <Link href={book.links.practice}>查看学习与复习记录</Link>
+      <Link href={book.links.guide}>查看 AI 导学进度</Link>
     </div>
   )
 }

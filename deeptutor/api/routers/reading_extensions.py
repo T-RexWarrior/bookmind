@@ -55,6 +55,7 @@ class ActionPayload(BaseModel):
     locator: int = Field(ge=1)
     selection: str = Field(default="", max_length=10_000)
     locale: str = Field(default="en", max_length=32)
+    objective_id: str = Field(default="", max_length=160)
 
 
 class ReadAloudAudioPayload(BaseModel):
@@ -219,6 +220,9 @@ async def run_extension_action(
     try:
         unit_text = store.unit_text(material_id, payload.locator)
         position = store.position(material_id)
+        if payload.objective_id:
+            from deeptutor.bookmind.service import verified_practice_objective
+            verified_practice_objective(material_id, payload.objective_id, payload.locator)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     selection = _verified_selection(payload.selection, unit_text)
@@ -275,7 +279,7 @@ async def run_extension_action(
         dumped = result.model_dump()
         quiz_payload = dumped.get("payload")
         if dumped.get("type") == "quiz" and isinstance(quiz_payload, dict):
-            await _persist_reading_quiz_pending(material_id, payload.locator, quiz_payload)
+            await _persist_reading_quiz_pending(material_id, payload.locator, quiz_payload, objective_id=payload.objective_id)
     except TimeoutError as exc:
         logger.warning("Reading extension %s action %s timed out", extension_id, action)
         raise HTTPException(
@@ -345,7 +349,7 @@ def _assert_quiz_extension_allowed() -> None:
 
 
 async def _persist_reading_quiz_pending(
-    material_id: str, locator: int, payload: dict[str, Any]
+    material_id: str, locator: int, payload: dict[str, Any], *, objective_id: str = ''
 ) -> None:
     questions = payload.get("questions")
     if not isinstance(questions, list) or not questions:
@@ -357,6 +361,9 @@ async def _persist_reading_quiz_pending(
     from deeptutor.bookmind.service import find_book, objective_at
     book = await asyncio.to_thread(find_book, material_id=material_id)
     point = await asyncio.to_thread(objective_at, book, locator) if book else None
+    if objective_id:
+        from deeptutor.bookmind.service import verified_practice_objective
+        book, point = await asyncio.to_thread(verified_practice_objective, material_id, objective_id, locator)
     for index, question in enumerate(questions):
         if isinstance(question, dict):
             question["id"] = f"{quiz_id}:{index}"

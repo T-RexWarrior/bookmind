@@ -371,6 +371,7 @@ export async function runReadingExtension(
     locator: number;
     selection?: string;
     locale?: string;
+    objective_id?: string;
   },
 ): Promise<ReadingExtensionResult> {
   return unwrap(

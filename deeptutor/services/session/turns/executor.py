@@ -922,11 +922,12 @@ class TurnExecutor:
                 )
                 source_manifest_text += task_context
 
+            from deeptutor.bookmind.policy import permitted_optional_tools
             context = UnifiedContext(
                 session_id=session_id,
                 user_message=effective_user_message,
                 conversation_history=conversation_history,
-                enabled_tools=payload.get("tools"),
+                enabled_tools=permitted_optional_tools(payload.get("tools")),
                 # Selected-text tutoring must stay isolated from global
                 # memory and every other auto-mounted built-in.
                 allowed_builtin_tools=[] if selection_tutor_context else None,

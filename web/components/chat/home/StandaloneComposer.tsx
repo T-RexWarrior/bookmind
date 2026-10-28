@@ -811,6 +811,7 @@ function StandaloneComposerImpl({
           onConfirm={() => setCapabilityConfigConfirmed(true)}
         >
           <VisualizeConfigPanel
+            textbookOnly
             value={visualizeConfig}
             onChange={next => {
               setVisualizeConfig(next)

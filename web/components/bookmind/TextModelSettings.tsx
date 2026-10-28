@@ -36,7 +36,7 @@ export default function TextModelSettings() {
         const reply = await tested.json()
         if (!tested.ok) throw new Error(reply.detail || '连接失败')
         setNotice(`配置已保存。模型回复：${reply.reply}`)
-      } else setNotice('配置已保存，阅读助教与 Mastery Path 共用这一个文字模型。')
+      } else setNotice('配置已保存，自主学习与 AI 导学共用这一个文字模型。')
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -96,6 +96,12 @@ export default function TextModelSettings() {
           </p>
         )}
       </form>
+      <section className="bm-service-summary" aria-label="当前能力范围">
+        <h2>当前能力范围</h2>
+        <div><strong>共用文字模型</strong><p>自主学习、AI 导学、教材检索、出题、图解和笔记整理。</p></div>
+        <div><strong>外部服务暂未启用</strong><p>联网搜索、论文库、图像生成、视频和语音。本版不会因填写文字模型 API 就自动开启这些服务。</p></div>
+        <p>图解使用文字模型生成 SVG、流程图或交互图表，不需要图像生成 API。</p>
+      </section>
     </main>
   )
 }

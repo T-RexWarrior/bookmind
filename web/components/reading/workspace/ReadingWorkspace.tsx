@@ -242,8 +242,8 @@ export function ReadingWorkspacePage() {
     return () => window.removeEventListener("bookmind-reader-jump", navigate);
   }, [setActiveLocator, reportViewport]);
   useEffect(() => {
-    if (activeLocator) window.dispatchEvent(new CustomEvent("bookmind-reader-position", { detail: { locator: activeLocator } }));
-  }, [activeLocator]);
+    if (activeLocator && bookMindBook) window.dispatchEvent(new CustomEvent("bookmind-reader-position", { detail: { materialId: bookMindBook.material_id, locator: activeLocator } }));
+  }, [activeLocator, bookMindBook]);
   const collectionMenu = useMemo<WorkspaceMenuItem[]>(
     () => [
       {
@@ -262,7 +262,7 @@ export function ReadingWorkspacePage() {
         key: "mastery",
         icon: GraduationCap,
         label: t("Build Mastery Path"),
-        onSelect: () => bookMindBook ? router.push(bookMindBook.links.practice) : setShowMastery(true),
+        onSelect: () => bookMindBook ? router.push(bookMindBook.links.guide) : setShowMastery(true),
       },
     ],
     [organizeNotes, t, bookMindBook, router],

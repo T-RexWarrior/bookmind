@@ -507,7 +507,10 @@ def _topic_material_manifest(path_id: str) -> tuple[str, dict[str, str]]:
             )
         manifest, source_index = render_topic_manifest(materials)
         if any(source.kind.value == "reading" for source in sources):
-            manifest += "\nBookMind: material_outline / search_material / read_material read the same bound textbook by physical page or section, including chapters outside this source window. Use them whenever the excerpts are insufficient; cite actual locators."
+            manifest += ("\nBookMind AI 导学：material_outline / search_material / read_material 读取同一本绑定教材，位置按文件实际页序或节号计算。"
+                "read_source 可用于了解材料；向学习者引用原文前，请用 read_material 核对对应位置，并在回答使用 [p.12] 这样的来源标记。"
+                "阅读工具的成功结果会提供可点击的原文入口。不要编造页码，不要声称教材文件不存在。"
+                "按学习者的回答安排讲解和检查；画图或解释请求不要丢弃当前题目，也不要仅凭学习者说懂了就提高掌握状态。")
         return manifest, source_index
     except Exception:
         logger.exception("Failed to build topic materials for mastery path %s", path_id)

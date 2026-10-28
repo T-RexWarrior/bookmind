@@ -395,7 +395,7 @@ async def lifespan(app: FastAPI):
 from deeptutor.services.workspace.activity import WorkspaceActivityMiddleware
 
 app = FastAPI(
-    title="DeepTutor API",
+    title="BookMind API",
     version="1.0.0",
     lifespan=lifespan,
     # Disable automatic trailing slash redirects to prevent protocol downgrade issues
@@ -717,7 +717,7 @@ app.include_router(quiz_judge.router, prefix="/ws", tags=["quiz-judge"])
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to DeepTutor API"}
+    return {"message": "Welcome to BookMind API"}
 
 
 @app.get("/health/live")

@@ -28,7 +28,9 @@ export type Textbook = {
   objectives: Objective[]
   current_objective_id: string
   locator: number
-  links: { learn: string; practice: string; notes: string }
+  unit: string
+  unit_count: number
+  links: { learn: string; guide: string; practice: string; notes: string }
 }
 const Context = createContext<{
   books: Textbook[]
@@ -67,3 +69,5 @@ export function BookMindProvider({ children }: { children: React.ReactNode }) {
 }
 
 export const useBookMind = () => useContext(Context)
+
+export const textbookUnitLabel = (unit: string) => ({ page: '页', chapter: '章', section: '节', slide: '页', segment: '段' }[unit] || '节')

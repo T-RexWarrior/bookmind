@@ -2026,6 +2026,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   onSkipMasteryQuestion,
   onChallengeMasteryQuestion,
   showModeBadge = true,
+  showVoiceActions = false,
   onLoadMessageTrace,
   onReleaseMessageTrace,
 }: {
@@ -2033,6 +2034,8 @@ export const ChatMessageList = memo(function ChatMessageList({
   isStreaming: boolean;
   sessionId?: string | null;
   language?: string;
+  /** BookMind is text-only until a speech service is explicitly connected. */
+  showVoiceActions?: boolean;
   onCopyAssistantMessage: CopyHandler;
   onRegenerateMessage: () => void;
   /** True when the last turn failed (not cancelled) and streaming has
@@ -2492,7 +2495,7 @@ export const ChatMessageList = memo(function ChatMessageList({
                         onCopy={onCopyAssistantMessage}
                       />
                     )}
-                    {showActions && (
+                    {showActions && showVoiceActions && (
                       <PlayAudioButton
                         content={msg.content}
                         conversationKey={sessionId ?? undefined}

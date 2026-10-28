@@ -57,8 +57,8 @@ export default function Bookshelf() {
       </div>
       <div className="bm-three-steps">
         {[
-          [BookOpen, '学习', '原版阅读 · 原文提问 · 图解 · 随堂小测'],
-          [GraduationCap, '练习', 'Mastery Path · 专项训练 · 错题 · 到期复习'],
+          [BookOpen, '学习', '自主阅读与探索 · AI 导学循序推进'],
+          [GraduationCap, '练习', '知识点自测 · 错题巩固 · 到期复习'],
           [NotebookPen, '笔记', '摘录 · 总结 · 关联图解 · 返回原文'],
         ].map(([Icon, title, description]) => {
           const Glyph = Icon as typeof BookOpen

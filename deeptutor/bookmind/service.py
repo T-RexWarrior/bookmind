@@ -174,6 +174,15 @@ def objective_at(book, locator):
     return max(candidates, key=lambda p: (p['start'], p['level']), default=None)
 
 
+def verified_practice_objective(material_id, objective_id, locator):
+    """Only associate an assessment with an actual source span in this book."""
+    book = find_book(material_id=material_id)
+    point = next((p for p in objectives(book) if p['id'] == objective_id), None) if book else None
+    if not point or point['start'] is None or not point['start'] <= locator <= point['end']:
+        raise ValueError('所选知识点与教材原文范围不匹配，请重新选择。')
+    return book, point
+
+
 def overview(book):
     if not book:
         raise ValueError('Textbook not found')
@@ -187,8 +196,12 @@ def overview(book):
     result['current_objective_id'] = (module.knowledge_points[progress.current_kp_index].id
         if module and 0 <= progress.current_kp_index < len(module.knowledge_points) else '')
     result['locator'] = ReadingStore().position(book['material_id']).locator
+    manifest = ReadingStore().manifest(book['material_id'])
+    result['unit'] = manifest.unit
+    result['unit_count'] = manifest.unit_count
     result['links'] = {'learn': f"/learning/reading/{book['workspace_id']}",
-        'practice': f"/learning/mastery/{book['path_id']}", 'notes': f"/notebooks/{book['notebook_id']}"}
+        'guide': f"/learning/mastery/{book['path_id']}",
+        'practice': f"/learning/practice/{book['path_id']}", 'notes': f"/notebooks/{book['notebook_id']}"}
     return result
 
 

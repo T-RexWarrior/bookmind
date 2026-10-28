@@ -219,7 +219,8 @@ def get_enabled_optional_tools() -> list[str]:
     allowed = allowed_optional_tools()
     if allowed is not None:
         enabled = [name for name in enabled if name in allowed]
-    return enabled
+    from deeptutor.bookmind.policy import permitted_optional_tools
+    return permitted_optional_tools(enabled)
 
 
 def atomic_update(

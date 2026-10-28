@@ -194,6 +194,9 @@ def _build_tool_payload(
 
 
 def _runtime_availability(name: str, *, coming_soon: bool = False) -> tuple[bool, str | None]:
+    from deeptutor.bookmind.policy import TEXT_TOOLS, text_only_app
+    if text_only_app() and name in USER_TOGGLEABLE_TOOL_NAMES and name not in TEXT_TOOLS:
+        return False, 'bookmind_service_not_enabled'
     if coming_soon:
         return False, "coming_soon"
     if name != "web_search":

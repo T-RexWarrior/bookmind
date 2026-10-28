@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
-import { Suspense, useEffect, useState } from 'react'
-import { BookOpen, GraduationCap, Library, NotebookPen, Settings, Sprout } from 'lucide-react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { BookOpen, GraduationCap, Library, NotebookPen, Settings, Sprout, ListChecks } from 'lucide-react'
 import { useBookMind } from './BookMindProvider'
 import { useSidebarDrawer } from '@/components/layout/AppShell'
+import TextbookSourceDrawer from './TextbookSourceDrawer'
 
 export function BookMindSidebar() {
   const { books, activeBook } = useBookMind()
@@ -64,20 +65,48 @@ export function BookMindFrame({ children }: { children: React.ReactNode }) {
 function BookMindFrameInner({ children }: { children: React.ReactNode }) {
   const { activeBook: book } = useBookMind()
   const path = usePathname()
-  const focusedId = useSearchParams().get('objective')
-  const [locator, setLocator] = useState(0)
+  const router = useRouter()
+  const params = useSearchParams()
+  const focusedId = params.get('objective')
+  const query = params.toString()
+  const [readerPosition, setReaderPosition] = useState({ materialId: '', locator: 0 })
   useEffect(() => {
-    const update = (event: Event) =>
-      setLocator((event as CustomEvent<{ locator: number }>).detail.locator)
+    const update = (event: Event) => {
+      const detail = (event as CustomEvent<{ materialId: string; locator: number }>).detail
+      setReaderPosition(detail)
+    }
     window.addEventListener('bookmind-reader-position', update)
     return () => window.removeEventListener('bookmind-reader-position', update)
   }, [])
-  const position = locator || book?.locator || 1
-  const isPracticing = Boolean(book && path.startsWith(book.links.practice))
+  const position = (readerPosition.materialId === book?.material_id ? readerPosition.locator : 0) || book?.locator || 1
+  const isGuiding = Boolean(book && path.startsWith(book.links.guide) && !path.endsWith('/mistakes'))
+  const isPracticing = Boolean(book && (path.startsWith(book.links.practice) || path.endsWith('/mistakes')))
+  const isLearning = Boolean(book && (path.startsWith(book.links.learn) || isGuiding))
+  useEffect(() => {
+    if (!book || !isLearning) return
+    const mode = isGuiding ? 'guide' : 'learn'
+    try {
+      sessionStorage.setItem(`bookmind.learning-mode.${book.id}`, mode)
+      sessionStorage.setItem(`bookmind.learning-route.${book.id}.${mode}`, path + (query ? `?${query}` : ''))
+    } catch { /* Navigation still works when browser storage is unavailable. */ }
+  }, [book?.id, isLearning, isGuiding, path, query])
+  function resumeLearning(event: ReactMouseEvent<HTMLAnchorElement>, requestedMode?: 'learn' | 'guide') {
+    if (!book || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    try {
+      const mode = requestedMode || (sessionStorage.getItem(`bookmind.learning-mode.${book.id}`) === 'guide' ? 'guide' : 'learn')
+      const saved = sessionStorage.getItem(`bookmind.learning-route.${book.id}.${mode}`)
+      if (!saved) return
+      const target = new URL(saved, window.location.origin)
+      const base = book.links[mode]
+      if (target.origin !== window.location.origin || !(target.pathname === base || target.pathname.startsWith(base + '/'))) return
+      event.preventDefault()
+      router.push(target.pathname + target.search)
+    } catch { /* Fall back to the link's ordinary destination. */ }
+  }
   const point =
     book &&
     (book.objectives.find(p => p.id === focusedId) ||
-      (isPracticing ? book.objectives.find(p => p.id === book.current_objective_id) : undefined) ||
+      (isGuiding ? book.objectives.find(p => p.id === book.current_objective_id) : undefined) ||
       [...book.objectives]
         .filter(p => p.start !== null && p.end !== null && p.start <= position && position <= p.end)
         .sort((a, b) => (b.start || 0) - (a.start || 0) || b.level - a.level)[0] ||
@@ -90,13 +119,13 @@ function BookMindFrameInner({ children }: { children: React.ReactNode }) {
             <BookOpen size={16} />
             <strong title={book.title}>{book.title}</strong>
             <span>
-              {book.objectives.length} 个学习目标 · {book.note_count} 条笔记
+              {book.note_count} 条笔记
             </span>
           </div>
-          <nav aria-label="教材学习方式">
+          <nav aria-label="教材页面">
             {[
               { key: 'learn', label: '学习', icon: BookOpen },
-              { key: 'practice', label: '练习 · Mastery Path', icon: GraduationCap },
+              { key: 'practice', label: '练习', icon: ListChecks },
               { key: 'notes', label: '笔记', icon: NotebookPen },
             ].map(tab => (
               <Link
@@ -109,9 +138,9 @@ function BookMindFrameInner({ children }: { children: React.ReactNode }) {
                       : `?objective=${point.id}`
                     : '')
                 }
-                className={
-                  path.startsWith(book.links[tab.key as keyof typeof book.links]) ? 'active' : ''
-                }
+                className={(tab.key === 'learn' ? isLearning : tab.key === 'practice' ? isPracticing : path.startsWith(book.links.notes)) ? 'active' : ''}
+                aria-current={(tab.key === 'learn' ? isLearning : tab.key === 'practice' ? isPracticing : path.startsWith(book.links.notes)) ? 'page' : undefined}
+                onClick={tab.key === 'learn' ? event => resumeLearning(event) : undefined}
               >
                 <tab.icon size={15} />
                 {tab.label}
@@ -120,39 +149,25 @@ function BookMindFrameInner({ children }: { children: React.ReactNode }) {
           </nav>
         </header>
       )}
-      {book && point && (
-        <div className="bm-knowledge-strip">
-          <span>
-            共同学习目标：<strong>{point.name}</strong>
-          </span>
-          <span>
-            {point.evidence_count} 条作答证据
-            {point.next_review
-              ? ` · 下次复习 ${new Date(point.next_review * 1000).toLocaleDateString('zh-CN')}`
-              : ' · 尚无复习安排'}
-          </span>
-          {point.start && (
-            <Link href={`${book.links.learn}?locator=${point.start}`}>对应原文 ↗</Link>
-          )}
-        </div>
-      )}
-      {book && path.startsWith(book.links.practice) && (
-        <nav className="bm-practice-tabs" aria-label="练习内容">
-          <Link
-            href={book.links.practice + (point ? `?objective=${point.id}` : '')}
-            className={!path.endsWith('/mistakes') ? 'active' : ''}
-          >
-            学习路径与到期复习
+      {book && isLearning && (
+        <nav className="bm-learning-modes" aria-label="学习模式">
+          <Link className={!isGuiding ? 'active' : ''} aria-current={!isGuiding ? 'page' : undefined}
+            onClick={event => resumeLearning(event, 'learn')}
+            href={`${book.links.learn}?locator=${point?.start || position}`}>
+            <BookOpen size={15} /><span>自主学习<small>按自己的节奏阅读与探索</small></span>
           </Link>
-          <Link
-            href={`${book.links.practice}/mistakes`}
-            className={path.endsWith('/mistakes') ? 'active' : ''}
-          >
-            本书错题
+          <Link className={isGuiding ? 'active' : ''} aria-current={isGuiding ? 'page' : undefined}
+            onClick={event => resumeLearning(event, 'guide')}
+            href={book.links.guide + (point ? `?objective=${point.id}` : '')}>
+            <GraduationCap size={16} /><span>AI 导学<small>沿学习路径，讲解、检验与复习</small></span>
           </Link>
+          {point && <div className="bm-learning-focus"><span title={point.name}>当前：<strong>{point.name}</strong></span>
+            {isGuiding && point.start && <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('bookmind-source-open', { detail: { materialId: book.material_id, locator: point.start } }))}>查看教材原文</button>}
+          </div>}
         </nav>
       )}
       <div className="bm-frame-content">{children}</div>
+      {book && isGuiding && <TextbookSourceDrawer key={book.id} book={book} />}
     </div>
   )
 }

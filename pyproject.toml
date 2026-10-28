@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "deeptutor"
 dynamic = ["version"]
-description = "An agent-native intelligent learning companion with multi-agent collaboration and RAG"
+description = "BookMind: textbook learning with self-directed reading, AI guidance, practice and notebooks"
 # Python 3.14 is supported by the core app now that compiled base dependencies
 # such as FAISS publish compatible wheels. Keep a forward cap so a future
 # interpreter is not advertised before the compiled dependency stack is ready.

@@ -50,7 +50,11 @@ class VisualizerRegistry:
         self._enabled = installed - disabled
 
     def catalog(self) -> list[VisualizerPlugin]:
-        return sorted(self._catalog.values(), key=lambda item: item.manifest.priority)
+        from deeptutor.bookmind.policy import TEXT_VISUALIZERS, text_only_app
+        plugins = self._catalog.values()
+        if text_only_app():
+            plugins = [plugin for plugin in plugins if plugin.manifest.id in TEXT_VISUALIZERS]
+        return sorted(plugins, key=lambda item: item.manifest.priority)
 
     def installed(self, *, include_disabled: bool = False) -> list[VisualizerPlugin]:
         ids = self._installed if include_disabled else self._enabled
@@ -60,6 +64,9 @@ class VisualizerRegistry:
         return [plugin for plugin in self.installed() if plugin.manifest.agentic]
 
     def get(self, visualizer_id: str, *, require_enabled: bool = True) -> VisualizerPlugin | None:
+        from deeptutor.bookmind.policy import TEXT_VISUALIZERS, text_only_app
+        if text_only_app() and str(visualizer_id or '').strip().lower() not in TEXT_VISUALIZERS:
+            return None
         plugin = self._catalog.get(str(visualizer_id or "").strip().lower())
         if plugin is None:
             return None

@@ -30,7 +30,7 @@ export default function TextbookMistakes() {
         <div>
           <h1 className="text-xl font-semibold">本书错题</h1>
           <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-            随堂小测与 Mastery Path 的错题共用这份记录 · {bank.total} 道
+            自主学习、AI 导学与练习中的错题共用这份记录 · {bank.total} 道
           </p>
         </div>
         <button

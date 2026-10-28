@@ -10,6 +10,52 @@ from deeptutor.services.path_service import PathService
 from deeptutor.services.notebook import notebook_manager
 
 
+def test_practice_requires_a_real_point_and_matching_source(native_book):
+    point = native_book['objectives'][-1]
+    book, verified = service.verified_practice_objective(native_book['material_id'], point['id'], point['start'])
+    assert book['id'] == native_book['id'] and verified['id'] == point['id']
+    with pytest.raises(ValueError):
+        service.verified_practice_objective(native_book['material_id'], 'point-from-another-book', point['start'])
+    with pytest.raises(ValueError):
+        service.verified_practice_objective(native_book['material_id'], point['id'], point['end'] + 1)
+
+
+def test_practice_persists_selected_point_without_revealing_answer(native_book):
+    from deeptutor.api.routers.reading_extensions import _persist_reading_quiz_pending
+    from deeptutor.services.session import get_sqlite_session_store
+    point = native_book['objectives'][-1]
+    async def scenario():
+        result = {'questions': [{'prompt': '中序遍历在什么时候访问根节点？', 'choices': ['最先', '左右之间', '最后', '随机'], 'correct_choice_index': 1, 'evidence': '先左子树，再根节点，最后右子树'}]}
+        await _persist_reading_quiz_pending(native_book['material_id'], point['start'], result, objective_id=point['id'])
+        public = result['questions'][0]
+        assert 'correct_choice_index' not in public and 'evidence' not in public
+        saved = await get_sqlite_session_store().get_reading_quiz_pending(native_book['material_id'], point['start'])
+        assert saved[public['id']]['knowledge_point_id'] == point['id']
+        assert saved[public['id']]['correct_choice_index'] == 1
+    asyncio.run(scenario())
+
+
+def test_optional_service_policy_applies_to_explicit_turn_tools(monkeypatch):
+    from deeptutor.bookmind.policy import permitted_optional_tools
+    from deeptutor.api.routers.tools import _runtime_availability
+    monkeypatch.setenv('BOOKMIND_APP', '1')
+    assert permitted_optional_tools(['reason', 'imagegen', 'videogen', 'web_search', 'brainstorm']) == ['reason', 'brainstorm']
+    assert permitted_optional_tools(None) == []
+    assert _runtime_availability('imagegen') == (False, 'bookmind_service_not_enabled')
+    monkeypatch.delenv('BOOKMIND_APP')
+    assert permitted_optional_tools(None) is None
+
+
+def test_visualizer_catalog_excludes_unconfigured_renderers(native_book, monkeypatch):
+    from deeptutor.visualizers.registry import get_visualizer_registry
+    monkeypatch.setenv('BOOKMIND_APP', '1')
+    registry = get_visualizer_registry()
+    ids = {plugin.manifest.id for plugin in registry.catalog()}
+    assert 'svg' in ids
+    assert ids <= {'svg', 'chartjs', 'mermaid', 'mindmap', 'html'}
+    assert registry.get('manim_video') is None
+
+
 @pytest.fixture
 def native_book(tmp_path, monkeypatch):
     monkeypatch.setenv('DEEPTUTOR_HOME', str(tmp_path))

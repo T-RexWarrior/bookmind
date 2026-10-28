@@ -44,6 +44,22 @@ const READING_EVIDENCE_TOOLS = new Set([
   "reader_goto",
 ]);
 
+/** Identify a document from this turn's actual tools, never the open UI tab. */
+export function readingEvidenceMaterial(events: ReadingEvidenceEvent[] | null | undefined): { materialId: string; materialRevision?: number } | null {
+  const documents = new Map<string, { materialId: string; materialRevision?: number }>();
+  for (const event of events ?? []) {
+    if (event.type !== 'tool_result' || !event.metadata) continue;
+    const outer = event.metadata as Record<string, unknown>;
+    if (!READING_EVIDENCE_TOOLS.has(String(outer.tool ?? outer.tool_name ?? ''))) continue;
+    const metadata = toolResultMetadata(outer);
+    if (!metadata || typeof metadata.material_id !== 'string' || !metadata.material_id) continue;
+    const revision = Number(metadata.material_revision);
+    const identity = `${metadata.material_id}:${Number.isSafeInteger(revision) ? revision : ''}`;
+    documents.set(identity, { materialId: metadata.material_id, ...(Number.isSafeInteger(revision) && revision > 0 ? { materialRevision: revision } : {}) });
+  }
+  return documents.size === 1 ? [...documents.values()][0] : null;
+}
+
 export interface ReadingCitationTarget {
   materialId?: string;
   materialRevision?: number;
