@@ -1,6 +1,6 @@
 /** Normalize a version string into a ``vMAJOR.MINOR.PATCH`` tag form.
  *
- * Accepts PEP 440 / semver forms used in ``deeptutor/__version__.py`` and
+ * Accepts PEP 440 / semver forms used in ``bookmind/__version__.py`` and
  * GitHub release tags (``1.4.0``, ``v1.4.0``, ``1.4.0rc1``, ``v1.0.0-beta.4``)
  * while rejecting git-describe output like ``v1.2.3-5-gabc1234``.
  */

@@ -340,7 +340,7 @@ function Preview({ service, profile, model }: Props) {
           {result.url && (
             <a
               href={result.url}
-              download={result.kind === 'image' ? 'deeptutor-preview' : 'deeptutor-preview-video'}
+              download={result.kind === 'image' ? 'bookmind-preview' : 'bookmind-preview-video'}
               className="inline-block text-xs underline underline-offset-4"
             >
               {t('Download')}

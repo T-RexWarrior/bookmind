@@ -9,7 +9,7 @@ import {
 } from "react";
 import { browserStorage } from "@/shared/storage";
 
-const WIDTH_KEY = "deeptutor.sidebar.width";
+const WIDTH_KEY = "bookmind.sidebar.width";
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 480;
 const DEFAULT_WIDTH = 220;

@@ -1,5 +1,6 @@
 import { activeWorkspaceId } from './workspace-scope'
 import { fetchAuthStatus } from './auth'
+import { openBookMindDatabase } from './brand-migration'
 
 export type WorkspaceDraft = {
   text: string
@@ -14,11 +15,8 @@ async function key(workspaceId = activeWorkspaceId(), pathname = window.location
 }
 
 async function database(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('deeptutor-workspace-drafts', 1)
-    request.onupgradeneeded = () => request.result.createObjectStore('drafts')
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
+  return openBookMindDatabase('bookmind-workspace-drafts', 2, db => {
+    if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts')
   })
 }
 

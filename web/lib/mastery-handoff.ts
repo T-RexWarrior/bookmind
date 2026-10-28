@@ -9,7 +9,7 @@ import { toolResultPayload } from "@/lib/tool-event";
  * study screen owns the map, the lesson outline and the gate, so a request
  * like "take me back through lesson one" is resolved here and *handed over*
  * rather than answered in place. `mastery_open_session` and
- * `mastery_new_session` (see `deeptutor/tools/mastery_nav.py`) emit that
+ * `mastery_new_session` (see `bookmind/tools/mastery_nav.py`) emit that
  * hand-off as `mastery_handoff` on a tool result's metadata, and it becomes a
  * card.
  *

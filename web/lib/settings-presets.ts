@@ -12,7 +12,7 @@ export interface SettingsPreset {
 }
 
 export interface SettingsPresetsPayload {
-  schema_version: "deeptutor.settings-presets/v1";
+  schema_version: "bookmind.settings-presets/v1";
   presets: SettingsPreset[];
 }
 

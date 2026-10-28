@@ -162,7 +162,7 @@ export default function CourseSyllabus({
             onChange={(event) => setDraft(event.target.value)}
             rows={8}
             placeholder={t(
-              "One unit per line. Add keywords after a | so DeepTutor can tell which questions belong to it:\n\nProcesses and threads | context switch, scheduling\nVirtual memory | address translation, page replacement",
+              "One unit per line. Add keywords after a | so BookMind can tell which questions belong to it:\n\nProcesses and threads | context switch, scheduling\nVirtual memory | address translation, page replacement",
             )}
             className="w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 font-mono text-[12px] leading-relaxed text-[var(--foreground)] outline-none transition-colors focus:border-[var(--ring)]"
           />

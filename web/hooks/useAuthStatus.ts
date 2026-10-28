@@ -58,7 +58,7 @@ function learningPolicyFromStatus(
  * baked into the build. Components that need to know whether auth is on — to
  * show the Sign-out / Admin affordances — use this hook instead of a build-time
  * constant, so it works identically on Docker (read-only rootfs), the PyPI
- * `deeptutor start` launcher, and source dev.
+ * `bookmind start` launcher, and source dev.
  */
 function loadAuthStatus(): Promise<AuthStatusState> {
   return fetchAuthStatus().then((status) => ({

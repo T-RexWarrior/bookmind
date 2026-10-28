@@ -98,7 +98,7 @@ export default function CourseConventions({
         <details className="group mt-3">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11.5px] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]">
             <Sparkles size={12} strokeWidth={1.8} />
-            {t("What DeepTutor has noticed")}
+            {t("What BookMind has noticed")}
           </summary>
           <div className="mt-2 whitespace-pre-line rounded-xl border border-dashed border-[var(--border)] px-3 py-2.5 text-[11.5px] leading-relaxed text-[var(--muted-foreground)]">
             {agentNotes}

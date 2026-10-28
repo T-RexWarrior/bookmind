@@ -1,7 +1,7 @@
 /**
  * Hand a starting message from one surface to another's composer.
  *
- * Two callers today. The Settings hub's "let DeepTutor configure this" button
+ * Two callers today. The Settings hub's "let BookMind configure this" button
  * navigates to chat with the request already typed, so the user reads and sends
  * it rather than arriving at an empty box wondering what to say. Course Study's
  * hand-off cards do the same across the learning surfaces: the assistant
@@ -20,7 +20,7 @@
  */
 import { browserStorage } from "@/shared/storage";
 
-const PENDING_PROMPT_KEY = "deeptutor.pendingPrompt";
+const PENDING_PROMPT_KEY = "bookmind.pendingPrompt";
 
 function keyFor(scope: string): string {
   const clean = scope.trim();

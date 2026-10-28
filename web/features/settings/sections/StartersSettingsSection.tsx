@@ -126,7 +126,7 @@ export default function StarterSettingsPage() {
       <SettingsPageHeader
         title={t("Conversation")}
         description={t(
-          "Manage home suggestions and how long DeepTutor waits for replies.",
+          "Manage home suggestions and how long BookMind waits for replies.",
         )}
       />
 

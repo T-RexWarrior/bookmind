@@ -98,7 +98,7 @@ export function makeProj(yaw: number, tilt: number, cx: number, cy: number, scal
 }
 
 /**
- * DeepTutor local change: the ink a frame is painted in.
+ * BookMind local change: the ink a frame is painted in.
  *
  * Upstream paints pure greyscale, which would drop the brand colour the
  * status header has always carried. A tint replaces the grey ramp with the
@@ -122,7 +122,7 @@ export interface Tint {
 /**
  * How much of the depth ramp a tinted mark actually spends.
  *
- * DeepTutor local change. Upstream runs `white` the whole way to 1, so the
+ * BookMind local change. Upstream runs `white` the whole way to 1, so the
  * farthest dots land exactly on the paper colour. That is right for a 64px
  * orb carrying hundreds of dots — the ones that vanish read as depth. At
  * inline size there are only 30-120 dots in an 18px mark, and the same ramp

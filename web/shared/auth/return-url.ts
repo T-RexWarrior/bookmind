@@ -1,4 +1,4 @@
-const RETURN_URL_BASE = "https://deeptutor.invalid";
+const RETURN_URL_BASE = "https://bookmind.invalid";
 
 export interface BrowserLocationParts {
   pathname: string;

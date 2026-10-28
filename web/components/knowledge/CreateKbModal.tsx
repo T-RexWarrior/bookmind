@@ -1361,7 +1361,7 @@ function WeKnoraFields({
         </div>
         <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">
           {t(
-            "The base URL of your self-hosted WeKnora deployment. Documents remain there; DeepTutor only runs retrieval searches.",
+            "The base URL of your self-hosted WeKnora deployment. Documents remain there; BookMind only runs retrieval searches.",
           )}
         </p>
       </div>

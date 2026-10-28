@@ -116,7 +116,7 @@ export interface StandaloneComposerSubmission {
   persona: string | null
   llmSelection: LLMSelection | null
   /**
-   * How many times DeepTutor may consult the selected agent this turn, or
+   * How many times BookMind may consult the selected agent this turn, or
    * null when no agent is selected. Travels on the submission rather than in
    * `knowledgeBases` because it is a per-turn budget, and the caller is the
    * one that owns the request config it belongs in.
@@ -306,7 +306,7 @@ function StandaloneComposerImpl({
 
   // Connected subagents arrive as `type: subagent` knowledge bases and travel
   // the same request path, but they are a different question — "who else
-  // should DeepTutor ask" rather than "what should it read" — so they get
+  // should BookMind ask" rather than "what should it read" — so they get
   // their own chip and never appear in the knowledge picker.
   const agentNameSet = useMemo(
     () =>

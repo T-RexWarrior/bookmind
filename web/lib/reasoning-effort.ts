@@ -16,7 +16,7 @@ const LABELS: Record<string, string> = {
 };
 
 // Mirrors the reasoning-relevant half of PROVIDER_ALIASES in
-// deeptutor/services/provider_registry.py. A profile stored as "azure" or
+// bookmind/services/provider_registry.py. A profile stored as "azure" or
 // "openai-compatible" resolves to the same adapter as its canonical name, so
 // the lookup below has to see the canonical name or the selector vanishes.
 const PROVIDER_ALIASES: Record<string, string> = {
@@ -126,7 +126,7 @@ function tableReasoningEffortOptions(
     // "adaptive"}` and reject enabled+budget_tokens; the older thinking
     // families are the mirror image and 400 on adaptive. Keep the two lists
     // aligned with _EFFORT_BASED_FAMILIES in
-    // deeptutor/services/llm/provider_core/anthropic_provider.py.
+    // bookmind/services/llm/provider_core/anthropic_provider.py.
     const effortBased = includesAny(modelName, [
       "opus-4-7",
       "opus-4-8",

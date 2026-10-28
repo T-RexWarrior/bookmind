@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+require('./scripts/brand-environment.cjs');
 
 const fs = require("fs");
 const os = require("os");
@@ -76,12 +77,12 @@ process.env.NEXT_PUBLIC_API_BASE = NEXT_PUBLIC_API_BASE;
 process.env.NEXT_PUBLIC_AUTH_ENABLED = NEXT_PUBLIC_AUTH_ENABLED;
 
 // Resolve the build-time application version from the single source of
-// truth at ``deeptutor/__version__.py``. The Python file is parsed with a
+// truth at ``bookmind/__version__.py``. The Python file is parsed with a
 // small regex so the JS build does not need to execute Python.
 const APP_VERSION = (() => {
   try {
     const text = fs.readFileSync(
-      path.resolve(__dirname, "..", "deeptutor", "__version__.py"),
+      path.resolve(__dirname, "..", "bookmind", "__version__.py"),
       "utf8",
     );
     const match = text.match(/__version__\s*=\s*["']([^"']+)["']/);
@@ -91,16 +92,16 @@ const APP_VERSION = (() => {
 })();
 
 const nextConfig = {
-  // Keep the production build used by `deeptutor start` separate from the
-  // `.next` development cache used by the explicit `deeptutor start --dev`.
+  // Keep the production build used by `bookmind start` separate from the
+  // `.next` development cache used by the explicit `bookmind start --dev`.
   // Without separate directories either command can invalidate the other
   // process while it is running.
-  distDir: process.env.DEEPTUTOR_NEXT_DIST_DIR || ".next",
+  distDir: process.env.BOOKMIND_NEXT_DIST_DIR || ".next",
 
   // Build/typecheck wrappers can point Next at a process-local config so a
   // production build never rewrites the tsconfig watched by a live dev server.
   typescript: {
-    tsconfigPath: process.env.DEEPTUTOR_NEXT_TSCONFIG || "tsconfig.json",
+    tsconfigPath: process.env.BOOKMIND_NEXT_TSCONFIG || "tsconfig.json",
   },
 
   // Expose the build-time version to the browser so the sidebar badge
@@ -117,8 +118,8 @@ const nextConfig = {
 
   // Keep the standalone bundle rooted at this frontend directory. Without an
   // explicit root, Next.js can mirror the absolute checkout path inside
-  // `.next-deeptutor/standalone`, while the DeepTutor launcher expects
-  // `.next-deeptutor/standalone/server.js` directly.
+  // `.next-bookmind/standalone`, while the BookMind launcher expects
+  // `.next-bookmind/standalone/server.js` directly.
   outputFileTracingRoot: __dirname,
 
   // web/proxy.ts clones request bodies before rewriting them. Keep enough room

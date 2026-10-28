@@ -120,7 +120,7 @@ export function AppShellProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       // Both keys are checked, not just the interface one. They were split
       // after the interface language shipped, so a browser from before the
-      // split has `deeptutor-language` and no `deeptutor-response-language` —
+      // split has `bookmind-language` and no `bookmind-response-language` —
       // and returning here on the first alone locked it out of ever adopting
       // the account's model output language.
       const hadLanguageAtStart = hasStoredLanguage();

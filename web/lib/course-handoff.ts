@@ -17,7 +17,7 @@ import { toolResultPayload } from "@/lib/tool-event";
  * them reads as a malfunction. The card also makes the reasoning inspectable
  * and the suggestion refusable.
  *
- * Mirrors the metadata written by `deeptutor/capabilities/course_study/tools.py`.
+ * Mirrors the metadata written by `bookmind/capabilities/course_study/tools.py`.
  * Kept as pure functions, apart from the component that renders them, for the
  * same reason `lib/setup-signals.ts` is.
  */

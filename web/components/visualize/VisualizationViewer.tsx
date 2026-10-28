@@ -210,7 +210,7 @@ function PluginIframeRenderer({ result }: { result: VisualizeCanvasResult }) {
       };
       if (!data || typeof data !== "object") return;
       if (
-        (data.type === "deeptutor:visualization:prompt" ||
+        (data.type === "bookmind:visualization:prompt" ||
           data.type === "dt:visualize-prompt") &&
         data.text
       ) {
@@ -219,7 +219,7 @@ function PluginIframeRenderer({ result }: { result: VisualizeCanvasResult }) {
         );
       }
       if (
-        (data.type === "deeptutor:visualization:resize" ||
+        (data.type === "bookmind:visualization:resize" ||
           data.type === "dt:visualize-height") &&
         typeof data.height === "number" &&
         Number.isFinite(data.height)
@@ -250,7 +250,7 @@ function PluginIframeRenderer({ result }: { result: VisualizeCanvasResult }) {
       onLoad={() => {
         iframeRef.current?.contentWindow?.postMessage(
           {
-            type: "deeptutor:visualization:render",
+            type: "bookmind:visualization:render",
             schema_version: result.schema_version,
             renderer: result.renderer,
             payload: result.payload,

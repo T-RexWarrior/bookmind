@@ -514,7 +514,7 @@ function formatFileSize(bytes?: number): string {
   return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
 }
 
-/** "DeepTutor_Introduction.pdf" → "DeepTutor Introduction" — the card title
+/** "BookMind_Introduction.pdf" → "BookMind Introduction" — the card title
  * reads like a document name; the extension already shows in the subtitle. */
 function humanizeFilename(filename: string): string {
   const stem = filename.replace(/\.[A-Za-z0-9]{1,8}$/, "");
@@ -909,7 +909,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   );
 
   // Interleaved segments for the default chat surface: the message is laid
-  // out in the order it was written — what DeepTutor said it was about to do,
+  // out in the order it was written — what BookMind said it was about to do,
   // the work it then did, what it found, and so on down to the closing answer.
   // Only walked when this message will actually render through the default
   // branch (the research / quiz / animator / visualize branches have their own
@@ -1045,8 +1045,8 @@ export const AssistantMessage = memo(function AssistantMessage({
   return (
     <>
       {/* Activity block pinned to the TOP: the status header
-          ("DeepTutor Exploring… · 8s" → "DeepTutor responded. · 10s") with
-          the exploring trace nested beneath it — expanded while DeepTutor is
+          ("BookMind Exploring… · 8s" → "BookMind responded. · 10s") with
+          the exploring trace nested beneath it — expanded while BookMind is
           still working, collapsed once it settles into the final answer. */}
       <AssistantActivity
         events={events}

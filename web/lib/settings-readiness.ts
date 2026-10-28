@@ -54,7 +54,7 @@ export interface SettingsReadinessNotice {
 }
 
 export interface SettingsReadinessSnapshot {
-  schema_version: "deeptutor.settings-readiness/v2";
+  schema_version: "bookmind.settings-readiness/v2";
   ok: boolean;
   summary: Record<ReadinessState, number>;
   rows: SettingsReadinessRow[];
@@ -107,7 +107,7 @@ export function groupReadinessRows<Row extends SettingsReadinessRow>(
 }
 
 /**
- * Mirrors `deeptutor.services.config.readiness.row_severity`, so the client
+ * Mirrors `bookmind.services.config.readiness.row_severity`, so the client
  * can grade rows it has refined locally (a service whose last connection test
  * failed in this browser is not something the server knows about).
  */

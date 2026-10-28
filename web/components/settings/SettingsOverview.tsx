@@ -54,7 +54,7 @@ export default function SettingsOverview() {
       <SettingsPageHeader
         title={t("General")}
         description={t(
-          "Make DeepTutor feel at home. Apply your preferences using the bar below.",
+          "Make BookMind feel at home. Apply your preferences using the bar below.",
         )}
       />
       <SettingSection title={t("Language")}>

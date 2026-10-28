@@ -16,7 +16,12 @@ if (-not (Test-Path -LiteralPath $pythonExe)) {
 & $pythonExe -c "import fastapi, yaml, openai, pymupdf, aiosqlite"
 if ($LASTEXITCODE -ne 0) {
     & $pythonExe -m pip install --cache-dir (Join-Path $projectDir '.cache\pip') -e .
-    if ($LASTEXITCODE -ne 0) { throw 'Native DeepTutor dependency installation failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Native BookMind dependency installation failed.' }
+}
+& $pythonExe -c "import importlib.metadata; importlib.metadata.distribution('bookmind')"
+if ($LASTEXITCODE -ne 0) {
+    & $pythonExe -m pip install --no-deps -e .
+    if ($LASTEXITCODE -ne 0) { throw 'BookMind package registration failed.' }
 }
 $initialized = Join-Path $runtimeDir '.native-initialized'
 if (-not (Test-Path -LiteralPath $initialized)) {
@@ -50,7 +55,7 @@ function Get-OwnedListener([int]$Port) {
     return $listener.OwningProcess
 }
 if (-not (Get-OwnedListener 8019)) {
-    Start-Process -FilePath $pythonExe -ArgumentList @('-m','uvicorn','deeptutor.bookmind.app:app','--host','127.0.0.1','--port','8019','--no-access-log') -WorkingDirectory $projectDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runtimeDir 'backend.log') -RedirectStandardError (Join-Path $runtimeDir 'backend-error.log') | Out-Null
+    Start-Process -FilePath $pythonExe -ArgumentList @('-m','uvicorn','bookmind.main:app','--host','127.0.0.1','--port','8019','--no-access-log') -WorkingDirectory $projectDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runtimeDir 'backend.log') -RedirectStandardError (Join-Path $runtimeDir 'backend-error.log') | Out-Null
 }
 $ready = $false
 for ($attempt = 0; $attempt -lt 120; $attempt++) {

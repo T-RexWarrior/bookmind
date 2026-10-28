@@ -1770,7 +1770,7 @@ function ProfileFields({
                 {service === "embedding" && !linkedConnection && (
                   <p className="mt-1.5 text-[11px] text-[var(--muted-foreground)]">
                     {t(
-                      "Embedding requests are sent to this URL exactly; DeepTutor does not append /embeddings or /api/embed at request time.",
+                      "Embedding requests are sent to this URL exactly; BookMind does not append /embeddings or /api/embed at request time.",
                     )}
                   </p>
                 )}

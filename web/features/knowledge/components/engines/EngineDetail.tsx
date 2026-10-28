@@ -84,8 +84,8 @@ export interface EngineDetailProps {
 }
 
 const INSTALL_HINTS: Record<string, string> = {
-  graphrag: "pip install 'deeptutor[graphrag]'",
-  lightrag: "pip install 'deeptutor[rag-lightrag]'",
+  graphrag: "pip install 'bookmind[graphrag]'",
+  lightrag: "pip install 'bookmind[rag-lightrag]'",
 };
 
 // Mode one-liners, keyed by `${engineId}:${mode}`. English source strings double
@@ -157,7 +157,7 @@ const ENGINE_PREREQUISITES: Record<string, string> = {
     "Graph + vector retrieval with multimodal parsing. Needs the optional dependency installed; indexing is LLM-heavy. Requires active chat and embedding models; multimodal also needs a vision model.",
   "lightrag-server":
     "Server engine: retrieval runs on a standalone LightRAG service you operate. Save a reusable URL here, test it, then override it only when a knowledge base needs another server.",
-  ima: "Hosted engine: the library lives in Tencent IMA and DeepTutor keeps no copy. Requires an IMA Client ID and API key. Chat searches it, browses its documents, reads full sources, and — only when you ask — collects a web page or saves a note.",
+  ima: "Hosted engine: the library lives in Tencent IMA and BookMind keeps no copy. Requires an IMA Client ID and API key. Chat searches it, browses its documents, reads full sources, and — only when you ask — collects a web page or saves a note.",
 };
 
 function StatusBadge({ status }: { status: ProviderConnectionStatus }) {

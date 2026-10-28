@@ -1,5 +1,5 @@
 /** Recovery ownership comes only from a resolved server authentication status. */
-export const RECOVERY_PRINCIPAL_CHANGED = "deeptutor:recovery-principal-changed";
+export const RECOVERY_PRINCIPAL_CHANGED = "bookmind:recovery-principal-changed";
 let principal: string | null = null;
 
 export function recoveryPrincipal(): string | null {

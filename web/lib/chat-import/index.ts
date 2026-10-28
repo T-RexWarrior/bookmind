@@ -40,7 +40,7 @@ export async function pickAndScan(): Promise<ScanResult> {
   let root: FileSystemDirectoryHandle;
   try {
     root = await window.showDirectoryPicker!({
-      id: "deeptutor-chat-import",
+      id: "bookmind-chat-import",
       mode: "read",
     });
   } catch {

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './brand-environment.cjs';
 
 import { spawnSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -19,7 +20,7 @@ const tscBin = path.join(
 const original = readFileSync(tsconfigPath, "utf8");
 const isolatedTsconfigPath = path.join(
   webRoot,
-  `tsconfig.deeptutor-typecheck-${process.pid}.json`,
+  `tsconfig.bookmind-typecheck-${process.pid}.json`,
 );
 
 let result;

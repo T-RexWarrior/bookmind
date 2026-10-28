@@ -7,7 +7,7 @@ import { ApiError } from "@/shared/api/errors";
  *
  * A course stores a pointer, never the thing itself — one textbook can be the
  * reading for two courses, and one partner can assist all of them. Mirrors
- * `COURSE_RESOURCE_KINDS` in `deeptutor/services/courses.py`.
+ * `COURSE_RESOURCE_KINDS` in `bookmind/services/courses.py`.
  */
 export const COURSE_RESOURCE_KINDS = [
   "knowledge_base",

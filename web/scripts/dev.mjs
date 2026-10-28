@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './brand-environment.cjs';
 /**
  * Dev-server entrypoint that pins the V8 heap ceiling of the process that
  * actually holds the memory.

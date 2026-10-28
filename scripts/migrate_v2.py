@@ -11,9 +11,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from deeptutor.bookmind.service import bind_material
-from deeptutor.reading import ReadingCatalogStore, ReadingPosition, ReadingStore
-from deeptutor.services.notebook import notebook_manager
+from bookmind.textbook.service import bind_material
+from bookmind.reading import ReadingCatalogStore, ReadingPosition, ReadingStore
+from bookmind.services.notebook import notebook_manager
 
 legacy = ROOT.parent / 'BookMind-v2' / 'data'
 conn = sqlite3.connect((legacy / 'studytutor.db').as_uri() + '?mode=ro', uri=True)

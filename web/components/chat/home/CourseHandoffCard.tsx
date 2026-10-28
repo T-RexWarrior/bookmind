@@ -33,7 +33,7 @@ import { setPendingPrompt } from "@/lib/pending-prompt";
  * retype. Taking the card is also the only thing that navigates — nothing here
  * moves the page on its own.
  *
- * Mirrors `deeptutor.capabilities.course_study.tools`; the payload is read by
+ * Mirrors `bookmind.capabilities.course_study.tools`; the payload is read by
  * `extractCourseHandoffs` in `lib/course-handoff.ts`.
  */
 

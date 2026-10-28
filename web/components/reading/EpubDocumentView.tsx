@@ -124,14 +124,14 @@ function applyEpubDisplayPreferences(
   // publishers often set font and ink directly on paragraphs or spans; a
   // body-only epub.js override cannot beat those declarations (#1447).
   rendition.themes.registerCss(
-    "deeptutor",
+    "bookmind",
     `body { font-family: ${fontFamily} !important; font-size: ${preferences.fontSize}px !important; ${paper ? `background-color: ${paper.background} !important; color: ${paper.color} !important;` : ""} }
      body :is(p, span, div, li, blockquote) { font-family: ${fontFamily} !important; font-size: inherit !important; ${paper ? `color: ${paper.color} !important;` : ""} }
      body :is(h1, h2, h3, h4, h5, h6) { font-family: ${fontFamily} !important; ${paper ? `color: ${paper.color} !important;` : ""} }
      body * { vertical-align: baseline; }
      img { max-width: 100% !important; max-height: 85vh !important; height: auto !important; object-fit: contain !important; }`,
   );
-  rendition.themes.select("deeptutor");
+  rendition.themes.select("bookmind");
   rendition.themes.fontSize(`${preferences.fontSize}px`);
   // epub.js sets column-width but leaves column-count automatic. A wide pane
   // can fit a third visible column after the sidebar collapses (#1447).

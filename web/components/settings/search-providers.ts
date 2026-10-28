@@ -1,9 +1,9 @@
 // Which connection fields a web-search provider actually uses.
 //
 // The answer comes from the backend spec table
-// (`SEARCH_PROVIDERS` in `deeptutor/services/config/provider_runtime.py`),
+// (`SEARCH_PROVIDERS` in `bookmind/services/config/provider_runtime.py`),
 // served per provider by `_provider_choices` in
-// `deeptutor/api/routers/settings.py`. There is deliberately no provider table
+// `bookmind/api/routers/settings.py`. There is deliberately no provider table
 // here — a second copy is how the web app ended up flagging Serper as
 // deprecated while the backend supported it.
 //

@@ -111,7 +111,7 @@ export default function AboutSettingsPage() {
       }
       if (cancelled) return;
       if (Date.now() >= deadline) {
-        setError(t("DeepTutor did not reconnect before the update timeout."));
+        setError(t("BookMind did not reconnect before the update timeout."));
         return;
       }
       timer = setTimeout(poll, POLL_INTERVAL_MS);
@@ -194,7 +194,7 @@ export default function AboutSettingsPage() {
       <SettingsPageHeader
         title={t("About")}
         description={t(
-          "DeepTutor version, release channel, and the safest update path for this installation.",
+          "BookMind version, release channel, and the safest update path for this installation.",
         )}
       />
 
@@ -267,7 +267,7 @@ export default function AboutSettingsPage() {
         <SettingRow
           title={t("Installation")}
           description={t(
-            status?.installation.reason || "How DeepTutor is installed here.",
+            status?.installation.reason || "How BookMind is installed here.",
           )}
           control={
             <span className="text-[12.5px] text-[var(--foreground)]">
@@ -278,7 +278,7 @@ export default function AboutSettingsPage() {
         <SettingRow
           title={t("Release channel")}
           description={t(
-            "Only stable, published DeepTutor releases are considered.",
+            "Only stable, published BookMind releases are considered.",
           )}
           control={
             <span className="text-[12.5px] text-[var(--foreground)]">
@@ -291,7 +291,7 @@ export default function AboutSettingsPage() {
       <SettingSection
         title={t("Updates")}
         description={t(
-          "Version checks are cached for 24 hours. DeepTutor never installs an update without confirmation.",
+          "Version checks are cached for 24 hours. BookMind never installs an update without confirmation.",
         )}
       >
         <SettingRow
@@ -395,20 +395,20 @@ export default function AboutSettingsPage() {
         <ResourceRow
           title={t("GitHub")}
           description={t("Source code, issues, and contributions")}
-          href="https://github.com/HKUDS/DeepTutor"
+          href="https://github.com/T-RexWarrior/bookmind"
           icon={<Github className="h-4 w-4" />}
         />
         <ResourceRow
           title={t("Documentation")}
           description={t("Installation, configuration, and guides")}
-          href="https://docs.deeptutor.info"
+          href="https://github.com/T-RexWarrior/bookmind/tree/main/docs"
           icon={<ArrowUpRight className="h-4 w-4" />}
         />
       </SettingSection>
 
       <ConfirmDialog
         open={confirmOpen}
-        title={t("Update and restart DeepTutor?")}
+        title={t("Update and restart BookMind?")}
         confirmLabel={t("Update and restart")}
         busy={requesting}
         busyLabel={t("Preparing update…")}
@@ -416,7 +416,7 @@ export default function AboutSettingsPage() {
         onCancel={() => setConfirmOpen(false)}
       >
         {t(
-          "DeepTutor will briefly stop, install {{version}}, and reopen with the same settings. Active conversations must finish first.",
+          "BookMind will briefly stop, install {{version}}, and reopen with the same settings. Active conversations must finish first.",
           { version: latestVersion ?? "" },
         )}
       </ConfirmDialog>

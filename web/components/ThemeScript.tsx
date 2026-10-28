@@ -11,7 +11,7 @@ export default function ThemeScript() {
   const themeScript = `
     (function() {
       try {
-        const stored = localStorage.getItem('deeptutor-theme');
+        const stored = localStorage.getItem('bookmind-theme');
 
         document.documentElement.classList.remove('dark', 'theme-glass', 'theme-snow');
 
@@ -28,10 +28,10 @@ export default function ThemeScript() {
           // Dark for prefers-color-scheme: dark.
           if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
             document.documentElement.classList.add('dark');
-            localStorage.setItem('deeptutor-theme', 'dark');
+            localStorage.setItem('bookmind-theme', 'dark');
           } else {
             document.documentElement.classList.add('theme-snow');
-            localStorage.setItem('deeptutor-theme', 'snow');
+            localStorage.setItem('bookmind-theme', 'snow');
           }
         }
       } catch (e) {

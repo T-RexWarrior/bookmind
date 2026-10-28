@@ -3,11 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from deeptutor.bookmind import service
-from deeptutor.learning.storage import LearningStore
-from deeptutor.reading import ReadingStore
-from deeptutor.services.path_service import PathService
-from deeptutor.services.notebook import notebook_manager
+from bookmind.textbook import service
+from bookmind.textbook.repository import connection
+from bookmind.learning.storage import LearningStore
+from bookmind.reading import ReadingStore
+from bookmind.services.path_service import PathService
+from bookmind.services.notebook import notebook_manager
 
 
 @pytest.mark.parametrize('surface,requested_mode', [
@@ -18,10 +19,10 @@ from deeptutor.services.notebook import notebook_manager
 def test_conversation_scope_rejected_before_admission_writes(native_book, monkeypatch, surface, requested_mode):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
-    from deeptutor.bookmind import practice
-    from deeptutor.reading import ReadingCatalogStore
-    from deeptutor.services.session import get_sqlite_session_store
-    from deeptutor.services.session.turns.request_preparer import TurnRequestPreparer
+    from bookmind.textbook import practice
+    from bookmind.reading import ReadingCatalogStore
+    from bookmind.services.session import get_sqlite_session_store
+    from bookmind.services.session.turns.request_preparer import TurnRequestPreparer
 
     monkeypatch.setenv('BOOKMIND_APP', '1')
 
@@ -53,7 +54,7 @@ def test_conversation_scope_rejected_before_admission_writes(native_book, monkey
 
 
 def test_inline_quizzes_keep_their_reading_or_guidance_owner(native_book):
-    from deeptutor.bookmind.session_scope import assert_session_surface
+    from bookmind.textbook.session_scope import assert_session_surface
 
     for surface, field, owner in [
         ('immersive_reading', 'reading_workspace_id', native_book['workspace_id']),
@@ -66,11 +67,11 @@ def test_inline_quizzes_keep_their_reading_or_guidance_owner(native_book):
 
 
 def test_reading_catalog_hides_foreign_modes_without_deleting_conversations(native_book, monkeypatch):
-    from deeptutor.bookmind import practice
-    from deeptutor.bookmind.session_scope import assert_session_surface
-    from deeptutor.api.routers.reading import list_reading_sessions
-    from deeptutor.reading import ReadingCatalogStore
-    from deeptutor.services.session import get_sqlite_session_store
+    from bookmind.textbook import practice
+    from bookmind.textbook.session_scope import assert_session_surface
+    from bookmind.api.routers.reading import list_reading_sessions
+    from bookmind.reading import ReadingCatalogStore
+    from bookmind.services.session import get_sqlite_session_store
 
     monkeypatch.setenv('BOOKMIND_APP', '1')
 
@@ -114,8 +115,8 @@ def test_practice_requires_a_real_point_and_matching_source(native_book):
 
 
 def test_practice_persists_selected_point_without_revealing_answer(native_book):
-    from deeptutor.api.routers.reading_extensions import _persist_reading_quiz_pending
-    from deeptutor.services.session import get_sqlite_session_store
+    from bookmind.api.routers.reading_extensions import _persist_reading_quiz_pending
+    from bookmind.services.session import get_sqlite_session_store
     point = native_book['objectives'][-1]
     async def scenario():
         result = {'questions': [{'prompt': '中序遍历在什么时候访问根节点？', 'choices': ['最先', '左右之间', '最后', '随机'], 'correct_choice_index': 1, 'evidence': '先左子树，再根节点，最后右子树'}]}
@@ -129,8 +130,8 @@ def test_practice_persists_selected_point_without_revealing_answer(native_book):
 
 
 def test_optional_service_policy_applies_to_explicit_turn_tools(monkeypatch):
-    from deeptutor.bookmind.policy import permitted_optional_tools
-    from deeptutor.api.routers.tools import _runtime_availability
+    from bookmind.textbook.policy import permitted_optional_tools
+    from bookmind.api.routers.tools import _runtime_availability
     monkeypatch.setenv('BOOKMIND_APP', '1')
     assert permitted_optional_tools(['reason', 'imagegen', 'videogen', 'web_search', 'brainstorm']) == ['reason', 'brainstorm']
     assert permitted_optional_tools(None) == []
@@ -140,7 +141,7 @@ def test_optional_service_policy_applies_to_explicit_turn_tools(monkeypatch):
 
 
 def test_visualizer_catalog_excludes_unconfigured_renderers(native_book, monkeypatch):
-    from deeptutor.visualizers.registry import get_visualizer_registry
+    from bookmind.visualizers.registry import get_visualizer_registry
     monkeypatch.setenv('BOOKMIND_APP', '1')
     registry = get_visualizer_registry()
     ids = {plugin.manifest.id for plugin in registry.catalog()}
@@ -151,7 +152,7 @@ def test_visualizer_catalog_excludes_unconfigured_renderers(native_book, monkeyp
 
 @pytest.fixture
 def native_book(tmp_path, monkeypatch):
-    monkeypatch.setenv('DEEPTUTOR_HOME', str(tmp_path))
+    monkeypatch.setenv('BOOKMIND_HOME', str(tmp_path))
     PathService.reset_instance()
     file = tmp_path / 'tree.md'
     file.write_text('# 二叉树\n\n二叉树的每个结点至多有两个孩子。\n\n## 中序遍历\n\n中序遍历先左子树，再根节点，最后右子树。\n', encoding='utf-8')
@@ -174,7 +175,7 @@ def test_binding_reuses_three_native_aggregates(native_book):
 
 
 def test_mastery_reads_real_native_material(native_book):
-    from deeptutor.learning.topic_materials import build_topic_materials
+    from bookmind.learning.topic_materials import build_topic_materials
     topic = LearningStore().get_topic(native_book['path_id'])
     sources = build_topic_materials(topic.sources)
     assert any('中序遍历' in text for text in sources.source_index().values())
@@ -193,8 +194,8 @@ def test_notebook_keeps_verified_textbook_and_point(native_book):
 
 
 def test_reading_quiz_links_to_native_retention_once_and_hides_key(native_book):
-    from deeptutor.api.routers.reading_extensions import _persist_reading_quiz_pending, submit_quiz_answers, QuizAnswersPayload
-    from deeptutor.services.session import get_sqlite_session_store
+    from bookmind.api.routers.reading_extensions import _persist_reading_quiz_pending, submit_quiz_answers, QuizAnswersPayload
+    from bookmind.services.session import get_sqlite_session_store
     book = native_book
     point = book['objectives'][-1]
     async def scenario():
@@ -226,9 +227,9 @@ def test_same_named_points_in_different_books_stay_separate(native_book, tmp_pat
 
 
 def test_native_mastery_tools_bind_same_textbook_server_side(native_book):
-    from deeptutor.capabilities.mastery.loop import MasteryLoopCapability
-    from deeptutor.capabilities.reading.tools import ReadMaterialTool
-    from deeptutor.core.context import UnifiedContext
+    from bookmind.capabilities.mastery.loop import MasteryLoopCapability
+    from bookmind.capabilities.reading.tools import ReadMaterialTool
+    from bookmind.core.context import UnifiedContext
     context = UnifiedContext(user_message='读取本节', metadata={'mastery_mode':True, 'mastery_path_id':native_book['path_id']})
     point = native_book['objectives'][-1]
     kwargs = MasteryLoopCapability().augment_kwargs('read_material',
@@ -257,7 +258,7 @@ def test_visualization_note_retains_reading_objective(native_book):
 
 def test_binding_recovers_without_replacing_native_notebook(native_book):
     book = native_book
-    with service.connection() as conn:
+    with connection() as conn:
         conn.execute('DELETE FROM textbooks WHERE id=?', (book['id'],))
     recovered = service.bind_material(book['material_id'])
     assert recovered['path_id'] == book['path_id']
@@ -266,8 +267,8 @@ def test_binding_recovers_without_replacing_native_notebook(native_book):
 
 
 async def _practice_turn(book):
-    from deeptutor.bookmind import practice
-    from deeptutor.services.session import get_sqlite_session_store
+    from bookmind.textbook import practice
+    from bookmind.services.session import get_sqlite_session_store
     sid = await practice.open_session(book)
     store = get_sqlite_session_store()
     turn = await store.create_turn(sid, 'deep_question')
@@ -287,8 +288,8 @@ async def _practice_turn(book):
 
 
 def test_full_practice_uses_native_sources_and_preserves_mix(native_book):
-    from deeptutor.bookmind import practice
-    from deeptutor.reading.references import resolve_reading_sources
+    from bookmind.textbook import practice
+    from bookmind.reading.references import resolve_reading_sources
     async def scenario():
         sid, tid, payload, questions = await _practice_turn(native_book)
         assert await practice.open_session(native_book) == sid
@@ -299,7 +300,7 @@ def test_full_practice_uses_native_sources_and_preserves_mix(native_book):
         assert snapshot['turn_id'] == tid and len(snapshot['questions']) == 2
         assert snapshot['config']['difficulty'] == 'hard'
         assert snapshot['config']['per_type_counts'] == {'choice': 1, 'short_answer': 1}
-        from deeptutor.runtime.request_contracts import validate_deep_question_request_config
+        from bookmind.runtime.request_contracts import validate_deep_question_request_config
         validated = validate_deep_question_request_config(payload['config'])
         assert validated.bookmind_objective_id == native_book['objectives'][-1]['id']
     asyncio.run(scenario())
@@ -311,7 +312,7 @@ def test_full_practice_uses_native_sources_and_preserves_mix(native_book):
     {'bookmind_objective_id': 'another-book-point'}, {'bookmind_end': 99999},
 ])
 def test_full_practice_rejects_bad_config_and_source(native_book, override):
-    from deeptutor.bookmind import practice
+    from bookmind.textbook import practice
     async def scenario():
         sid, _, payload, _ = await _practice_turn(native_book)
         payload['config'].update(override)
@@ -322,8 +323,8 @@ def test_full_practice_rejects_bad_config_and_source(native_book, override):
 
 
 def test_full_practice_trusted_grades_share_evidence_without_duplicates(native_book):
-    from deeptutor.bookmind import practice
-    from deeptutor.api.routers.question_notebook import UpsertEntryRequest, upsert_single_entry
+    from bookmind.textbook import practice
+    from bookmind.api.routers.question_notebook import UpsertEntryRequest, upsert_single_entry
     async def scenario():
         sid, tid, _, questions = await _practice_turn(native_book)
         # Even a forged key, client grade and foreign objective are ignored.
@@ -332,7 +333,7 @@ def test_full_practice_trusted_grades_share_evidence_without_duplicates(native_b
             mastery_path_id='foreign-path', knowledge_point_id='foreign-point')
         first = await upsert_single_entry(payload)
         second = await practice.record_answer(sid, tid, payload.model_dump())
-        from deeptutor.api.routers.sessions import QuizResultsRequest, record_quiz_results
+        from bookmind.api.routers.sessions import QuizResultsRequest, record_quiz_results
         bulk = QuizResultsRequest(turn_id=tid, answers=[payload.model_dump()])
         await record_quiz_results(sid, bulk)
         await record_quiz_results(sid, bulk)
@@ -353,8 +354,8 @@ def test_full_practice_trusted_grades_share_evidence_without_duplicates(native_b
 
 
 def test_textbook_mistake_reattempt_updates_same_point_once(native_book):
-    from deeptutor.bookmind import practice
-    from deeptutor.api.routers.practice import review, ReviewRequest
+    from bookmind.textbook import practice
+    from bookmind.api.routers.practice import review, ReviewRequest
     async def scenario():
         sid, tid, _, _ = await _practice_turn(native_book)
         entry = await practice.record_answer(sid, tid, {'question_id': 'q_1', 'user_answer': 'A'})
@@ -369,9 +370,9 @@ def test_textbook_mistake_reattempt_updates_same_point_once(native_book):
 
 
 def _ready_generated_book():
-    from deeptutor.book.engine import BookEngine
-    from deeptutor.book.storage import BookStorage
-    from deeptutor.book.models import Book, BookInputs, BookStatus, Chapter, Spine, Page, PageStatus, Block, BlockStatus, BlockType
+    from bookmind.book.engine import BookEngine
+    from bookmind.book.storage import BookStorage
+    from bookmind.book.models import Book, BookInputs, BookStatus, Chapter, Spine, Page, PageStatus, Block, BlockStatus, BlockType
     engine = BookEngine(storage=BookStorage())
     book = Book(title='从目标理解二叉树', language='zh', status=BookStatus.READY)
     chapter = Chapter(title='二叉树与中序遍历', learning_objectives=['理解左右孩子', '能解释左根右的访问顺序'])
@@ -390,7 +391,7 @@ def _ready_generated_book():
 
 
 def test_generated_books_join_same_learning_surfaces_once(native_book):
-    from deeptutor.bookmind.generated import import_generated_book
+    from bookmind.textbook.generated import import_generated_book
     engine, source, page = _ready_generated_book()
     first = import_generated_book(source.id, engine)
     assert first['generated_book_id'] == source.id
@@ -406,8 +407,8 @@ def test_generated_books_join_same_learning_surfaces_once(native_book):
 
 @pytest.mark.parametrize('invalid', ['draft', 'partial', 'missing_page', 'unfinished_block'])
 def test_generated_books_require_complete_native_content(native_book, invalid):
-    from deeptutor.bookmind.generated import import_generated_book
-    from deeptutor.book.models import BookStatus, PageStatus, BlockStatus
+    from bookmind.textbook.generated import import_generated_book
+    from bookmind.book.models import BookStatus, PageStatus, BlockStatus
     engine, book, page = _ready_generated_book()
     if invalid == 'draft':
         book.status = BookStatus.DRAFT
@@ -428,7 +429,7 @@ def test_generated_books_require_complete_native_content(native_book, invalid):
 
 
 def test_separate_generated_books_keep_separate_learning_records(native_book):
-    from deeptutor.bookmind.generated import import_generated_book
+    from bookmind.textbook.generated import import_generated_book
     engine, source, _ = _ready_generated_book()
     first = import_generated_book(source.id, engine)
     engine2, source2, _ = _ready_generated_book()
