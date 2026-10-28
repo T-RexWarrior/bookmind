@@ -31,7 +31,7 @@ function metadata(event: StreamEvent): Record<string, unknown> {
  * without, so dropping one from a preview leaves the learner looking at a
  * question that is no longer there.
  */
-const CARD_METADATA_KEYS = ["ask_user", "mastery_question"] as const;
+const CARD_METADATA_KEYS = ["ask_user", "mastery_question", "bookmind_diagram"] as const;
 
 function carriesCard(event: StreamEvent): boolean {
   const meta = metadata(event);

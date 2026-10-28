@@ -88,6 +88,10 @@ BUILTIN_LOOP_CAPABILITY_SPECS: tuple[LoopCapabilitySpec, ...] = (
         "visualization_generation",
         "deeptutor.visualizers.loop_capability:VisualizationLoopCapability",
     ),
+    LoopCapabilitySpec(
+        "bookmind_study_diagrams",
+        "deeptutor.bookmind.study_diagrams:BookMindStudyDiagrams",
+    ),
 )
 
 # Compatibility surface: the descriptors remain zero-argument callables.

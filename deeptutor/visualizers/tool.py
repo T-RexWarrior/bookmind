@@ -141,6 +141,10 @@ class SubmitVisualizationTool(BaseTool):
                 "visualizer": visualizer_id,
                 "schema_version": envelope.schema_version,
                 "visualization_submitted": True,
+                # The same validated envelope can be shown alongside ordinary
+                # reading/guidance prose and survives saved-session replay.
+                **({"bookmind_diagram": envelope.model_dump(mode="json")}
+                   if kwargs.get("_bookmind_inline") else {}),
             },
         )
 

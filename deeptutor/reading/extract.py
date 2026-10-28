@@ -36,6 +36,7 @@ from pathlib import Path
 import re
 
 from deeptutor.reading.models import OutlineEntry, ReadingError, RenderMode, UnitKind, UnitReference
+from deeptutor.reading.outline_titles import clean_outline_title
 from deeptutor.utils.document_images import (
     EmbeddedImage,
     build_marker,
@@ -304,7 +305,7 @@ def _pdf_outline(doc: object, *, page_count: int) -> tuple[OutlineEntry, ...]:
         if not isinstance(row, (list, tuple)) or len(row) < 3:
             continue
         try:
-            level, title, page = int(row[0]), str(row[1]).strip(), int(row[2])
+            level, title, page = int(row[0]), clean_outline_title(str(row[1])), int(row[2])
         except (TypeError, ValueError):
             continue
         if not title or not (1 <= page <= page_count):

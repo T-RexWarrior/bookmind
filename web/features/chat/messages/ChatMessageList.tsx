@@ -64,7 +64,7 @@ import {
   extractQuizTurnId,
   extractStreamingQuizQuestions,
 } from "@/lib/quiz-types";
-import { extractVisualizeResult } from "@/lib/visualize-types";
+import { extractInlineVisualizeResult, extractVisualizeResult } from "@/lib/visualize-types";
 import type { StreamEvent } from "@/features/chat/model/protocol";
 import { hasVisibleMarkdownContent } from "@/lib/markdown-display";
 import type { SelectedBookReference } from "@/lib/book-references";
@@ -798,6 +798,8 @@ export const AssistantMessage = memo(function AssistantMessage({
     return extractVisualizeResult(resultEvent.metadata);
   }, [msg.capability, resultEvent]);
 
+  const inlineVisualizeResult = useMemo(() => extractInlineVisualizeResult(events), [events]);
+
   // Detect the ``ask_user`` terminator payload: when the assistant turn
   // ended via the ``ask_user`` tool, this is the question the user is
   // expected to answer next. Render option chips below the message.
@@ -1198,6 +1200,11 @@ export const AssistantMessage = memo(function AssistantMessage({
           readingMaterialRevision={readingMaterialRevision}
           events={events}
         />
+      )}
+      {inlineVisualizeResult && !visualizeResult && (
+        <section data-bookmind-diagram="" aria-label="学习图解" className="my-4">
+          <VisualizationViewer result={inlineVisualizeResult} />
+        </section>
       )}
       {events.some(event => event.type === "sources" &&
         Array.isArray(event.metadata.sources) && event.metadata.sources.some(source =>

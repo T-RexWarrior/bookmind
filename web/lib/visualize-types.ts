@@ -119,6 +119,26 @@ export interface VisualizeManimResult {
 
 export type VisualizeResult = VisualizeCanvasResult | VisualizeManimResult;
 
+/** Ordinary study messages keep both their prose and the native canvas. */
+export function extractInlineVisualizeResult(events: Array<{
+  type: string;
+  metadata?: Record<string, unknown>;
+}>): VisualizeResult | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type !== 'tool_result') continue;
+    const outer = event.metadata ?? {};
+    const metadata = outer.tool_metadata && typeof outer.tool_metadata === 'object'
+      ? outer.tool_metadata as Record<string, unknown> : outer;
+    if (metadata.visualization_submitted !== true) continue;
+    const envelope = metadata.bookmind_diagram;
+    if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) continue;
+    const result = extractVisualizeResult(envelope as Record<string, unknown>);
+    if (result) return result;
+  }
+  return null;
+}
+
 export function isManimResult(
   result: VisualizeResult,
 ): result is VisualizeManimResult {

@@ -33,7 +33,7 @@ def _metadata(event: dict[str, Any]) -> dict[str, Any]:
 #: one trace row a settled message cannot be rendered without, so both have to
 #: be named here — a preview that drops one leaves the learner looking at a
 #: question they can no longer answer.
-_CARD_METADATA_KEYS = ("ask_user", "mastery_question")
+_CARD_METADATA_KEYS = ("ask_user", "mastery_question", "bookmind_diagram")
 
 
 def _carries_card(event: dict[str, Any]) -> bool:

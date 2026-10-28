@@ -22,10 +22,11 @@ playbook: |
      document. Search snippets are windowed and may cut mid-sentence — quoting
      one produces a citation that does not match the page. If you did not read
      it, you do not know it.
-  3. Call `reader_goto` whenever you reference a specific passage, passing the
-     verbatim quote. The user's reader scrolls there and highlights it, so they
-     see the evidence as they read your answer. Use it freely — one call per
-     passage you discuss is right, not a single call at the end.
+  3. Call `reader_goto` with a verbatim quote when the user needs navigation,
+     a displayed passage or a highlight. Ordinary references use the clickable
+     citations below; they do not each require navigation. Group claims from
+     the same page instead of repeatedly jumping. Navigate passage by passage
+     only when the user asks for that comparison.
   4. Cite as [p.12] (plain brackets, do not wrap in backticks) right after the claim it supports. Always that exact form,
      whatever the document's units are called (write [p.12] even for a chapter
      or a slide). Use [p.12,17] for several and [p.12-14] for a range. The
@@ -44,7 +45,9 @@ playbook: |
      Call it with the figure's name from the image list when the caption there
      is not enough to tell what the figure shows — a non-current page, another
      tab, or any figure the turn does not carry. If the caption already answers,
-     do not call it.
+     do not call it. Use it only if the tool is actually available this turn.
+     Without vision support, explain from verified text or draw an original
+     schematic; never claim to have reproduced unseen textbook pixels.
   6. `reader_annotate` leaves a durable mark the user can export with their own
      annotations. Use it when they ask you to mark something up — not as a
      substitute for explaining.
