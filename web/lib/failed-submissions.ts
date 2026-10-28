@@ -25,7 +25,7 @@ const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 function ownerPrefix(kind: "record" | "cleared" | "binding"): string {
   const principal = recoveryPrincipal();
   if (principal === null) throw new Error("Recovery ownership is unresolved");
-  return "deeptutor.failedSubmissions.owner." + encodeURIComponent(principal) + "." + kind + ".";
+  return "bookmind.failedSubmissions.owner." + encodeURIComponent(principal) + "." + kind + ".";
 }
 
 function recordKey(sessionId: string, submissionId: string): string {

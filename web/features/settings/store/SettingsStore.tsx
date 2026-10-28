@@ -210,7 +210,7 @@ type SettingsPayload = {
   task_kinds?: TaskKindInfo[];
 };
 
-const DIAGNOSTICS_RESULTS_KEY = "deeptutor.settings.diagnosticsResults.v1";
+const DIAGNOSTICS_RESULTS_KEY = "bookmind.settings.diagnosticsResults.v1";
 
 // ─── Tour ──────────────────────────────────────────────────────────────────
 //
@@ -533,7 +533,7 @@ export type SettingsContextValue = {
 
   // Connections + task models
   connectionTargets: ConnectionTarget[];
-  /** The calls DeepTutor makes on its own, in the order the backend lists them. */
+  /** The calls BookMind makes on its own, in the order the backend lists them. */
   taskKinds: TaskKindInfo[];
   connectionTarget: (provider: string) => ConnectionTarget | null;
   addConnection: (input: {

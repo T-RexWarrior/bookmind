@@ -11,7 +11,7 @@ function nonEmpty(value: string | undefined): string | undefined {
 export function resolveBackendApiBase(
   env: BackendRuntimeEnvironment = process.env,
 ): string {
-  const privateBase = nonEmpty(env.DEEPTUTOR_API_BASE_URL);
+  const privateBase = nonEmpty(env.BOOKMIND_API_BASE_URL);
   if (privateBase) return privateBase;
 
   // `next dev` can isolate Proxy in a worker that keeps conventional and

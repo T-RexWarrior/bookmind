@@ -118,10 +118,10 @@ test("resolved selectors map to both W3C and Recogito annotation contracts", () 
   const stored = annotation({ note: "remember this", color: "blue" });
   const text = "Start portable quote end";
 
-  const w3c = toW3CTextAnnotation(stored, text, "urn:deeptutor:unit:1");
+  const w3c = toW3CTextAnnotation(stored, text, "urn:bookmind:unit:1");
   const recogito = toRecogitoTextAnnotation(stored, text);
 
-  assert.equal(w3c?.target.source, "urn:deeptutor:unit:1");
+  assert.equal(w3c?.target.source, "urn:bookmind:unit:1");
   assert.equal(w3c?.body[0].purpose, "commenting");
   assert.equal(recogito?.properties.annotationId, "mark-1");
   assert.equal(recogito?.target.selector[0].start, 6);

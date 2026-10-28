@@ -125,7 +125,7 @@ export default function KbGitHubSourcesSection({
           </div>
           <p className="mt-0.5 text-[11.5px] text-[var(--muted-foreground)]">
             {t(
-              "Track a GitHub repo's Markdown docs. DeepTutor auto-syncs daily; you can also trigger a sync manually.",
+              "Track a GitHub repo's Markdown docs. BookMind auto-syncs daily; you can also trigger a sync manually.",
             )}
           </p>
         </div>
@@ -170,7 +170,7 @@ export default function KbGitHubSourcesSection({
                 type="text"
                 value={repoInput}
                 onChange={(e) => setRepoInput(e.target.value)}
-                placeholder={t("e.g. HKUDS/DeepTutor")}
+                placeholder={t("e.g. T-RexWarrior/bookmind")}
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-[12.5px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
               />
             </FormField>

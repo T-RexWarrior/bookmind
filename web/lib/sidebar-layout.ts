@@ -4,7 +4,7 @@
  *
  * The arrangement is a *view* preference, not account data — it belongs to the
  * machine you arranged it on, so it lives in localStorage next to the existing
- * ``deeptutor.sidebar.*`` keys rather than in the profile. Every function here
+ * ``bookmind.sidebar.*`` keys rather than in the profile. Every function here
  * is pure and SSR-safe; the two storage helpers are the only place that touches
  * ``window``.
  */
@@ -34,9 +34,9 @@ export interface ResolvedNavLayout {
   customized: boolean;
 }
 
-export const NAV_LAYOUT_STORAGE_KEY = "deeptutor.sidebar.navLayout";
-export const SESSION_ORDER_STORAGE_KEY = "deeptutor.sidebar.sessionOrder";
-export const COLLAPSED_GROUPS_STORAGE_KEY = "deeptutor.sidebar.collapsedGroups";
+export const NAV_LAYOUT_STORAGE_KEY = "bookmind.sidebar.navLayout";
+export const SESSION_ORDER_STORAGE_KEY = "bookmind.sidebar.sessionOrder";
+export const COLLAPSED_GROUPS_STORAGE_KEY = "bookmind.sidebar.collapsedGroups";
 
 export const DEFAULT_NAV_LAYOUT: SidebarNavLayout = {
   order: [],

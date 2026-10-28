@@ -228,7 +228,7 @@ export default function CoursesShelf() {
                 ? t(
                     "Start with a subject such as Operating Systems or Network Security.",
                   )
-                : t("Attach its textbook, then let DeepTutor plan from there.")}
+                : t("Attach its textbook, then let BookMind plan from there.")}
             </span>
           </button>
         </div>

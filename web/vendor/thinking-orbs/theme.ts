@@ -70,7 +70,7 @@ export function useResolvedDark(theme: OrbTheme, hostRef: RefObject<Element | nu
 }
 
 /**
- * DeepTutor local addition: parse a computed CSS colour into a paintable
+ * BookMind local addition: parse a computed CSS colour into a paintable
  * tint. Returns `undefined` for anything that is not plain `rgb()`/`rgba()`
  * — a wide-gamut or `color-mix()` value falls back to upstream's greyscale
  * rather than guessing.
@@ -83,7 +83,7 @@ export function parseTint(color: string | undefined): Tint | undefined {
 }
 
 /**
- * DeepTutor local addition: the host element's live `currentColor`, as a raw
+ * BookMind local addition: the host element's live `currentColor`, as a raw
  * computed-style string.
  *
  * Returned as a string, not a parsed `Tint`, so callers can key an effect on
@@ -91,7 +91,7 @@ export function parseTint(color: string | undefined): Tint | undefined {
  *
  * Read from computed style rather than taken as a prop so the orb simply
  * inherits the colour of the row it sits in, and re-read on the same
- * class/`data-theme` mutations `useResolvedDark` watches: two of DeepTutor's
+ * class/`data-theme` mutations `useResolvedDark` watches: two of BookMind's
  * four themes are both "dark" substrates but carry different brand hues, so
  * a dark→dark switch changes the ink without changing `dark`.
  */

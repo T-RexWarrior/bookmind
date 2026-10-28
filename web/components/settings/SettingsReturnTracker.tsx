@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { browserStorage } from "@/shared/storage";
 import { usePathname } from "next/navigation";
 
-export const SETTINGS_RETURN_KEY = "deeptutor:settings-return";
+export const SETTINGS_RETURN_KEY = "bookmind:settings-return";
 
 /** Session-only navigation state; never touches a user's configuration. */
 export default function SettingsReturnTracker() {

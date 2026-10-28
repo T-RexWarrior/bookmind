@@ -1,6 +1,6 @@
 const SETTINGS_SCROLL_SELECTOR = "[data-settings-scroll]";
 
-export const SETTINGS_ANCHOR_EVENT = "deeptutor:settings-anchor";
+export const SETTINGS_ANCHOR_EVENT = "bookmind:settings-anchor";
 
 export type SettingsAnchorEvent = CustomEvent<{ key: string }>;
 

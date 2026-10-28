@@ -1,10 +1,10 @@
 # ============================================
-# DeepTutor Server — Full Dependencies (CLI + Web)
+# BookMind Server — Full Dependencies (CLI + Web)
 # ============================================
 # Mirrors pyproject.toml `[project.optional-dependencies].server`.
 # Keep in sync with pyproject.toml when adding/updating dependencies.
 #
-# Public install: pip install deeptutor
+# Public install: pip install bookmind
 # Source install: pip install -e .
 # Use this file for Docker/CI when pyproject.toml/source code aren't yet available.
 

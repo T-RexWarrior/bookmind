@@ -15,7 +15,7 @@ import {
 } from "./lib/proxy-policy";
 
 // Backend base URL for `/api/*` and `/ws/*` rewrites. The container entrypoint
-// exports `DEEPTUTOR_API_BASE_URL` from `data/user/settings/system.json`
+// exports `BOOKMIND_API_BASE_URL` from `data/user/settings/system.json`
 // (preferring `next_public_api_base`, then `next_public_api_base_external`,
 // then `http://127.0.0.1:${BACKEND_PORT}`). This last-resort default applies
 // only when nothing exported the variable at all.
@@ -26,7 +26,7 @@ import {
 const API_BASE_URL = resolveBackendApiBase();
 
 const AUTH_ENABLED = parseAuthEnabled(
-  process.env.DEEPTUTOR_AUTH_ENABLED ?? process.env.NEXT_PUBLIC_AUTH_ENABLED,
+  process.env.BOOKMIND_AUTH_ENABLED ?? process.env.NEXT_PUBLIC_AUTH_ENABLED,
 );
 
 // Redirect to the login page, preserving the intended destination in `next`.

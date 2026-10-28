@@ -9,9 +9,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from deeptutor.services.config import ensure_runtime_settings_files
-from deeptutor.services.file_io import atomic_write_json
-from deeptutor.services.path_service import get_path_service
+from bookmind.services.config import ensure_runtime_settings_files
+from bookmind.services.file_io import atomic_write_json
+from bookmind.services.path_service import get_path_service
 
 ensure_runtime_settings_files()
 settings = get_path_service().get_settings_dir()
@@ -27,7 +27,7 @@ atomic_write_json(interface_file, interface)
 
 legacy_settings = ROOT.parent / 'BookMind-v2' / 'data' / 'settings.json'
 if legacy_settings.exists():
-    from deeptutor.bookmind.router import TextModelSettings, save_text_settings
+    from bookmind.services.text_model import TextModelSettings, save_text_settings
     old = json.loads(legacy_settings.read_text(encoding='utf-8'))
     result = save_text_settings(TextModelSettings(base_url=old['base_url'], model=old['model'], api_key=old['api_key']))
     print(json.dumps({'native_model_configured': result['has_api_key'], 'model': result['model']}))

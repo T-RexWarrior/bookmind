@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { apiFetch, apiUrl } from "@/lib/api";
 
-const GLOBAL_EVENT = "deeptutor:voice-math-speak";
+const GLOBAL_EVENT = "bookmind:voice-math-speak";
 
 let cached: boolean | null = null;
 let inflight: Promise<boolean> | null = null;

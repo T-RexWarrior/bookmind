@@ -18,7 +18,7 @@ import {
  * Category order for the store's filter row.
  *
  * Mirrors the closed `CatalogCategory` enum in
- * `deeptutor/services/mcp/catalog/models.py`. It is only an ordering: the counts
+ * `bookmind/services/mcp/catalog/models.py`. It is only an ordering: the counts
  * decide which chips exist, so a category added on the backend still appears
  * (at the end) rather than vanishing from the filter.
  */
@@ -71,7 +71,7 @@ export function catalogCategoryChips(
  * i18n key for a backend refusal code, or `null` when only the backend's own
  * message can explain the failure.
  *
- * The codes come from `deeptutor/api/routers/space_mcp.py`; their messages are
+ * The codes come from `bookmind/api/routers/space_mcp.py`; their messages are
  * English strings assembled server-side, and several of them need an actionable
  * next step rather than a translation of the cause.
  */

@@ -1,5 +1,5 @@
 # ============================================
-# DeepTutor Matrix Channel — Dependencies
+# BookMind Matrix Channel — Dependencies
 # ============================================
 # Mirrors pyproject.toml `[project.optional-dependencies].matrix`.
 # Keep in sync with pyproject.toml when adding/updating dependencies.
@@ -8,7 +8,7 @@
 # Use this file for Docker/CI when pyproject.toml/source code aren't yet available.
 #
 # This default profile is non-E2EE and does not require libolm/python-olm.
-# For encrypted rooms, install requirements/matrix-e2e.txt or `deeptutor[matrix-e2e]`.
+# For encrypted rooms, install requirements/matrix-e2e.txt or `bookmind[matrix-e2e]`.
 
 -r partners.txt
 

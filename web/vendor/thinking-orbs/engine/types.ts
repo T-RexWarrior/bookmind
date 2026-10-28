@@ -19,7 +19,7 @@ export type ModeFrame = (size: number, t: number, opts: ModeOpts) => OrbFrame;
 /**
  * One frame painter: draws a mode into a 2D context at CSS-px `size`.
  *
- * `tint` is a DeepTutor local addition — optional, so every existing caller
+ * `tint` is a BookMind local addition — optional, so every existing caller
  * keeps upstream's greyscale ink.
  */
 export type ModeDraw = (

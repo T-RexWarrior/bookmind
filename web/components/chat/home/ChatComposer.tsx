@@ -332,7 +332,7 @@ export default memo(function ChatComposer({
   onSelectPartnerGroup?: (id: string | null) => void
   selectedAgent?: string | null
   onSelectAgent?: (name: string | null) => void
-  /** Max times DeepTutor may consult the selected agent this turn. */
+  /** Max times BookMind may consult the selected agent this turn. */
   subagentBudget?: number | null
   onSubagentBudgetChange?: (budget: number) => void
   llmOptions: LLMOption[]
@@ -616,10 +616,10 @@ export default memo(function ChatComposer({
           : restore.then(() => saveWorkspaceDraft(collectDraft()), saveAfterFailedRestore)
       )
     }
-    window.addEventListener('deeptutor:before-workspace-switch', save)
+    window.addEventListener('bookmind:before-workspace-switch', save)
     return () => {
       alive = false
-      window.removeEventListener('deeptutor:before-workspace-switch', save)
+      window.removeEventListener('bookmind:before-workspace-switch', save)
     }
   }, [])
   if (lastCapMenuOpen !== capMenuOpen) {

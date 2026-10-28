@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './brand-environment.cjs';
 
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -47,7 +48,7 @@ function prepareBuildTsconfig(snapshots, distDir) {
   if (!tsconfig) return null;
   const buildTsconfigPath = path.join(
     webRoot,
-    `tsconfig.deeptutor-build-${process.pid}.json`,
+    `tsconfig.bookmind-build-${process.pid}.json`,
   );
   restore(buildTsconfigPath, configureTypeIncludes(tsconfig[1], distDir));
   return buildTsconfigPath;
@@ -79,7 +80,7 @@ export function packageStandaloneAssets(sourceRoot, distDir) {
 }
 
 const snapshots = generatedPaths
-  .filter((path) => process.env.DEEPTUTOR_BUILD_SKIP_MISSING !== "1")
+  .filter((path) => process.env.BOOKMIND_BUILD_SKIP_MISSING !== "1")
   .map((path) => [path, snapshot(path)]);
 
 const isEntry =
@@ -88,7 +89,7 @@ const isEntry =
 export { restoreAll };
 
 if (isEntry) {
-  const distDir = process.env.DEEPTUTOR_NEXT_DIST_DIR || ".next";
+  const distDir = process.env.BOOKMIND_NEXT_DIST_DIR || ".next";
   const buildTsconfigPath = prepareBuildTsconfig(snapshots, distDir);
   const isVercel = process.env.VERCEL === "1";
   let result;
@@ -111,7 +112,7 @@ if (isEntry) {
         env: {
           ...process.env,
           ...(buildTsconfigPath
-            ? { DEEPTUTOR_NEXT_TSCONFIG: path.basename(buildTsconfigPath) }
+            ? { BOOKMIND_NEXT_TSCONFIG: path.basename(buildTsconfigPath) }
             : {}),
         },
       },

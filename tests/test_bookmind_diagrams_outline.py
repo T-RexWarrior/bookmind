@@ -4,13 +4,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from deeptutor.bookmind.study_diagrams import BookMindStudyDiagrams
-from deeptutor.capabilities.reading.capability import ReadingCapability
-from deeptutor.core.context import UnifiedContext
-from deeptutor.reading.extract import _pdf_outline
-from deeptutor.reading.outline_titles import clean_outline_title
-from deeptutor.visualizers.tool import SubmitVisualizationTool
-from deeptutor.visualizers.protocol import VISUALIZE_MODE_KEY
+from bookmind.textbook.study_diagrams import BookMindStudyDiagrams
+from bookmind.capabilities.reading.capability import ReadingCapability
+from bookmind.core.context import UnifiedContext
+from bookmind.reading.extract import _pdf_outline
+from bookmind.reading.outline_titles import clean_outline_title
+from bookmind.visualizers.tool import SubmitVisualizationTool
+from bookmind.visualizers.protocol import VISUALIZE_MODE_KEY
 
 
 @pytest.mark.parametrize('raw,expected', [
@@ -32,10 +32,10 @@ def test_pdf_extraction_cleans_only_decorative_bookmark_labels():
 
 
 def test_cached_outline_cleaning_needs_no_reimport_or_source_rewrite(tmp_path, monkeypatch):
-    from deeptutor.reading import ReadingStore
-    from deeptutor.services.path_service import PathService
+    from bookmind.reading import ReadingStore
+    from bookmind.services.path_service import PathService
 
-    monkeypatch.setenv('DEEPTUTOR_HOME', str(tmp_path))
+    monkeypatch.setenv('BOOKMIND_HOME', str(tmp_path))
     PathService.reset_instance()
     try:
         source = tmp_path / 'notes.md'
@@ -72,9 +72,9 @@ def test_native_diagrams_are_available_only_in_bookmind_study(monkeypatch, mode)
 
 
 def test_inline_diagram_uses_native_validation_and_persists_the_envelope(tmp_path, monkeypatch):
-    from deeptutor.services.path_service import PathService
+    from bookmind.services.path_service import PathService
 
-    monkeypatch.setenv('DEEPTUTOR_HOME', str(tmp_path))
+    monkeypatch.setenv('BOOKMIND_HOME', str(tmp_path))
     monkeypatch.setenv('BOOKMIND_APP', '1')
     PathService.reset_instance()
     try:
@@ -101,7 +101,7 @@ def test_inline_diagram_uses_native_validation_and_persists_the_envelope(tmp_pat
 
 
 def test_diagram_survives_trace_preview_event_pressure():
-    from deeptutor.services.session.event_preview import compact_trace_preview
+    from bookmind.services.session.event_preview import compact_trace_preview
 
     diagram = {'type': 'tool_result', 'metadata': {'bookmind_diagram': {'render_type': 'svg'}}}
     events = [diagram, *[{'type': 'tool_result', 'content': 'ordinary trace'} for _ in range(30)],

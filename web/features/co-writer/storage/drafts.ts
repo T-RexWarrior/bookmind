@@ -1,10 +1,10 @@
 import { clampPanelRatio } from "../model/editor-state";
 
 export const DRAFT_STORAGE_VERSION = 2 as const;
-export const DRAFT_STORAGE_PREFIX = "deeptutor.co_writer.draft.v2.";
-export const LEGACY_DRAFT_STORAGE_PREFIX = "deeptutor.co_writer.draft.";
-export const SPLIT_RATIO_KEY = "deeptutor.co_writer.split_ratio.v2";
-export const SYNC_SCROLL_KEY = "deeptutor.co_writer.sync_scroll.v2";
+export const DRAFT_STORAGE_PREFIX = "bookmind.co_writer.draft.v2.";
+export const LEGACY_DRAFT_STORAGE_PREFIX = "bookmind.co_writer.draft.";
+export const SPLIT_RATIO_KEY = "bookmind.co_writer.split_ratio.v2";
+export const SYNC_SCROLL_KEY = "bookmind.co_writer.sync_scroll.v2";
 
 export interface StoredDraft {
   version: typeof DRAFT_STORAGE_VERSION;

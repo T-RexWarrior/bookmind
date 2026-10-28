@@ -70,7 +70,7 @@ export interface ThinkingOrbProps extends Omit<CanvasHTMLAttributes<HTMLCanvasEl
   paused?: boolean;
 
   /**
-   * DeepTutor local addition: extra bitmap resolution on top of the device's
+   * BookMind local addition: extra bitmap resolution on top of the device's
    * own pixel ratio.
    *
    * Upstream caps the canvas at `min(2, devicePixelRatio) * size`, so a 20px

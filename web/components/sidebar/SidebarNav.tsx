@@ -5,7 +5,7 @@ import { browserStorage } from "@/shared/storage";
 /**
  * The workspace feature list — the part of the sidebar a learner owns.
  *
- * Every learner uses a different half of DeepTutor, so the shipped list is a
+ * Every learner uses a different half of BookMind, so the shipped list is a
  * starting point rather than a layout: rows can be dragged into the order the
  * work actually happens in, and the ones this learner never opens fold away
  * into "More" instead of sitting in the way. The arrangement is a per-machine
@@ -60,7 +60,7 @@ import {
 
 const MODULE_NAV_HREFS = PRIMARY_NAV_HREFS.filter((href) => href !== "/chat");
 
-const MORE_EXPANDED_KEY = "deeptutor.sidebar.moreExpanded";
+const MORE_EXPANDED_KEY = "bookmind.sidebar.moreExpanded";
 /** One curve and one duration for every part of the "More" disclosure, so the
  *  caret, the height and the count settle on the same beat. The curve is a
  *  fast-out/long-settle ease — the same shape sheet UIs use — which reads as

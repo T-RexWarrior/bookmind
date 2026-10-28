@@ -3,6 +3,7 @@ import './globals.css'
 import './bookmind.css'
 import { BookMindProvider } from '@/components/bookmind/BookMindProvider'
 import ThemeScript from '@/components/ThemeScript'
+import StorageMigrationScript from '@/components/StorageMigrationScript'
 import ToastViewport from '@/components/common/ToastViewport'
 import MotionProvider from '@/components/common/MotionProvider'
 import SettingsReturnTracker from '@/components/settings/SettingsReturnTracker'
@@ -10,8 +11,7 @@ import { WorkspaceNavigation } from '@/components/workspaces/WorkspaceNavigation
 import { AppShellProvider } from '@/context/AppShellContext'
 import { I18nClientBridge } from '@/i18n/I18nClientBridge'
 
-// Geist matches the public site (deeptutor.info) and stays crisp at the
-// small UI sizes the composer/toolbars use, unlike the rounder Jakarta.
+// Geist stays crisp at the small UI sizes used by the reader and composer.
 export const metadata: Metadata = {
   title: 'BookMind · 学迹',
   description: '围绕同一教材和知识点协作的阅读、练习与笔记助手',
@@ -29,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
+        <StorageMigrationScript />
         <ThemeScript />
       </head>
       <body

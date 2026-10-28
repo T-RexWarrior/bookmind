@@ -1,7 +1,7 @@
 /**
  * The client-side half of knowledge-base name validation.
  *
- * The backend is the authority — `deeptutor/knowledge/naming.py` rejects the
+ * The backend is the authority — `bookmind/knowledge/naming.py` rejects the
  * same set, and every `register_*` method calls it, so nothing depends on
  * this file being reached. It exists so the rule arrives as a hint under the
  * field the user is typing in, instead of as an English 400 after they press

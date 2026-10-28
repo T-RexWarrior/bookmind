@@ -1,5 +1,5 @@
 import type { LearningOrigin } from "@/lib/learning-library";
-// Type definitions mirroring deeptutor.book.models on the backend.
+// Type definitions mirroring bookmind.book.models on the backend.
 // Kept loose (Record<string, unknown>) where the payload is block-type
 // specific so we don't have to keep these in lock-step.
 

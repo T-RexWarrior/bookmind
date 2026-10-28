@@ -77,7 +77,7 @@ export interface McpRejectedServer {
 
 /**
  * Everything the per-user response adds on top of the shared
- * `servers` + `status` shape (see `deeptutor/api/routers/space_mcp.py`).
+ * `servers` + `status` shape (see `bookmind/api/routers/space_mcp.py`).
  */
 export interface McpUserView {
   /**
@@ -127,7 +127,7 @@ export const MCP_REMOTE_TRANSPORTS: readonly McpTransport[] = [
   "streamableHttp",
 ];
 
-// Mirrors `_SERVER_NAME_RE` in deeptutor/services/mcp/config.py: an invalid name
+// Mirrors `_SERVER_NAME_RE` in bookmind/services/mcp/config.py: an invalid name
 // is rejected there with a 400, so the form checks it first and reports inline.
 export const MCP_SERVER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 

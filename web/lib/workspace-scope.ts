@@ -39,7 +39,7 @@ export async function selectWorkspace(
 ): Promise<void> {
   const version = ++navigationVersion
   const pending: Promise<void>[] = []
-  window.dispatchEvent(new CustomEvent('deeptutor:before-workspace-switch', { detail: pending }))
+  window.dispatchEvent(new CustomEvent('bookmind:before-workspace-switch', { detail: pending }))
   try {
     await Promise.all(pending)
     if (version !== navigationVersion) return
@@ -48,7 +48,7 @@ export async function selectWorkspace(
     const { notify } = await import('./notifications')
     const { default: i18n } = await import('i18next')
     notify(i18n.t('Could not save the draft. Free browser storage before switching workspaces.'), { tone: 'error' })
-    window.dispatchEvent(new CustomEvent('deeptutor:workspace-switch-error'))
+    window.dispatchEvent(new CustomEvent('bookmind:workspace-switch-error'))
     return
   }
   if (version !== navigationVersion) return

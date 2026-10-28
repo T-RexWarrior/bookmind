@@ -1,7 +1,7 @@
 import { masterySessionsRoute } from "@/lib/learning-routes";
 /**
  * What a mastery conversation is doing right now — the client's half of
- * ``deeptutor/capabilities/mastery/mode.py``.
+ * ``bookmind/capabilities/mastery/mode.py``.
  *
  * Three modes, and the conversation moves between them: the outline mode
  * designs the map, study works it forward, review re-tests what is already

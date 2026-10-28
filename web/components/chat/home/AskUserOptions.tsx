@@ -20,7 +20,7 @@ import { hasRenderableCallTrace } from "@/features/chat/trace/selectors";
 import type { StreamEvent } from "@/features/chat/model/protocol";
 
 /**
- * v3 ``ask_user`` payload. Mirrors ``deeptutor.tools.ask_user.AskUserPayload``.
+ * v3 ``ask_user`` payload. Mirrors ``bookmind.tools.ask_user.AskUserPayload``.
  *
  * Every question is rendered as one tab on the card (labelled by its
  * short ``header`` when present); the user can switch between tabs

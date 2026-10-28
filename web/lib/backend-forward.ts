@@ -1,4 +1,4 @@
-export const FRONTEND_HOST_HEADER = "x-deeptutor-frontend-host";
+export const FRONTEND_HOST_HEADER = "x-bookmind-frontend-host";
 
 const UNTRUSTED_FORWARD_HEADERS = [
   "connection",

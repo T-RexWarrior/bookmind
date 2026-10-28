@@ -5,7 +5,7 @@ import type { StreamEvent } from '@/features/chat/model/protocol';
 
 const diagram = (title = '二叉树') => ({
   type: 'tool_result', metadata: { visualization_submitted: true, bookmind_diagram: {
-    schema_version: 'deeptutor.visualization/v1', render_type: 'svg',
+    schema_version: 'bookmind.visualization/v1', render_type: 'svg',
     payload: { format: 'image/svg+xml', data: '<svg viewBox="0 0 300 200"><title>二叉树</title></svg>' },
     presentation: { title },
   } },

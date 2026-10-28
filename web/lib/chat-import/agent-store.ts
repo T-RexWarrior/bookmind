@@ -1,7 +1,7 @@
 /**
  * Client-side registry of imported "agents". An agent is a *named, scoped*
  * slice of one source folder (a `.claude` or `.codex` home): the user can carve
- * several agents out of the same folder (e.g. "DeepTutor work" vs "research").
+ * several agents out of the same folder (e.g. "BookMind work" vs "research").
  * We keep each agent's `FileSystemDirectoryHandle` in IndexedDB — handles are
  * structured-cloneable but not JSON-serializable — so it can be re-synced later
  * without re-picking the folder (subject to a permission re-grant on a fresh
@@ -14,6 +14,7 @@
 
 import { SOURCE_LABEL } from "./shared";
 import { randomUuid } from "../random-uuid";
+import { openBookMindDatabase } from "../brand-migration";
 import type { AgentScope, ImportSource } from "./types";
 
 export interface ImportAgent {
@@ -33,11 +34,11 @@ export interface ImportAgent {
   lastSyncAt: number;
 }
 
-const DB_NAME = "deeptutor-chat-import";
+const DB_NAME = "bookmind-chat-import";
 const STORE = "agents";
 // v2: the store key moved from `source` (one agent per source) to a generated
 // `id` (many named, scoped agents per source). See `migrate` below.
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 interface LegacyAgent {
   source: ImportSource;
@@ -91,13 +92,9 @@ function migrate(
 }
 
 function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = (event) => {
-      migrate(request.result, request.transaction!, event.oldVersion);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+  return openBookMindDatabase(DB_NAME, DB_VERSION, migrate, (_store, value) => {
+    const row = value as ImportAgent | LegacyAgent;
+    return 'id' in row ? row : migrateLegacy(row);
   });
 }
 

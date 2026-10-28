@@ -1,7 +1,7 @@
 // Vendored from Jakubantalik/Libraries, packages/thinking-orbs
 // (MIT, source commit 3862ffa345217443b63696a8c331a0664eea4b04). See THIRD_PARTY_NOTICES.md at the repo root.
 //
-// Local changes, each marked "DeepTutor local addition/change" at its site:
+// Local changes, each marked "BookMind local addition/change" at its site:
 //  - `engine/core.ts`  — an optional `Tint` threaded through the painters, so
 //    the dots take the host row's `currentColor` instead of upstream's flat
 //    greyscale. The depth ramp is preserved: `white` now fades the tint

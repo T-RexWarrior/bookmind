@@ -10,20 +10,22 @@ const webRoot = path.resolve(scriptDirectory, "..");
 const schemaRoot = path.join(webRoot, "contracts", "schema");
 const generatedRoot = path.join(webRoot, "contracts", "generated");
 const check = process.argv.includes("--check");
-const temporaryRoot = mkdtempSync(path.join(tmpdir(), "deeptutor-contracts-"));
+const temporaryRoot = mkdtempSync(path.join(tmpdir(), "bookmind-contracts-"));
 
 const outputs = [
   {
     name: "api.ts",
     command: path.join(webRoot, "node_modules", "openapi-typescript", "bin", "cli.js"),
     args: [
-      path.join(schemaRoot, "openapi.json"),
       "--output",
       path.join(temporaryRoot, "api.ts"),
       "--alphabetize",
       "--immutable",
       "--root-types",
     ],
+    // Feed JSON through stdin: the CLI's Windows file-URL resolution encodes
+    // non-ASCII workspace paths and cannot reopen them correctly.
+    input: readFileSync(path.join(schemaRoot, "openapi.json"), "utf8"),
   },
   {
     name: "turn-protocol.ts",
@@ -54,6 +56,7 @@ try {
     const result = spawnSync(process.execPath, [output.command, ...output.args], {
       cwd: webRoot,
       encoding: "utf8",
+      input: output.input,
     });
     if (result.status !== 0) {
       process.stderr.write(result.stderr || result.stdout);

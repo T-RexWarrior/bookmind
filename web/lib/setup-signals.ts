@@ -9,7 +9,7 @@ import { toolResultMetadata } from "@/lib/tool-event";
  * count and how they are deduplicated, and that deserves tests that do not need
  * a DOM.
  *
- * Mirrors the metadata written by `deeptutor/capabilities/setup/tools.py`.
+ * Mirrors the metadata written by `bookmind/capabilities/setup/tools.py`.
  */
 
 /** Hand-off card shown when a step needs a credential the assistant must not touch. */

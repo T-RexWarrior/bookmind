@@ -24,7 +24,7 @@
  * identify a product and imply no endorsement (see the notice in the stores).
  */
 
-/** MCP catalog ids (`deeptutor/services/mcp/catalog/vendor/curated.json`). */
+/** MCP catalog ids (`bookmind/services/mcp/catalog/vendor/curated.json`). */
 export const MCP_BRAND_SLUGS: Readonly<Record<string, string>> = {
   airtable: "airtable",
   "baidu-maps": "baidu",
@@ -48,7 +48,7 @@ export const MCP_BRAND_SLUGS: Readonly<Record<string, string>> = {
   zapier: "zapier",
 };
 
-/** CLI app ids (`deeptutor/services/cli_apps/vendor/catalog.json`). */
+/** CLI app ids (`bookmind/services/cli_apps/vendor/catalog.json`). */
 export const CLI_BRAND_SLUGS: Readonly<Record<string, string>> = {
   "1password-cli": "1password",
   adguardhome: "adguard",

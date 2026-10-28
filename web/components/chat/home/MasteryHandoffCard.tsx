@@ -35,7 +35,7 @@ import { setPendingPrompt } from "@/lib/pending-prompt";
  * a course that is 9/12 mastered is a different offer from the same words on
  * a course barely begun.
  *
- * Mirrors `deeptutor/tools/mastery_nav.py`; the payload is read by
+ * Mirrors `bookmind/tools/mastery_nav.py`; the payload is read by
  * `extractMasteryHandoffs` in `lib/mastery-handoff.ts`.
  */
 

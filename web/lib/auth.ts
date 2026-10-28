@@ -4,7 +4,7 @@ import { updateRecoveryPrincipal } from "@/lib/recovery-principal";
 
 // Auth state is resolved at runtime from the backend (`/api/auth/status`),
 // not from a build-time/env constant: the browser bundle never sees
-// `DEEPTUTOR_AUTH_ENABLED` (not a `NEXT_PUBLIC_` var), and auth is runtime
+// `BOOKMIND_AUTH_ENABLED` (not a `NEXT_PUBLIC_` var), and auth is runtime
 // config that must not be baked into the bundle. Components observe it via the
 // `useAuthStatus` hook (web/hooks/useAuthStatus.ts); `apiFetch`'s redirect gate
 // is driven by `setRuntimeAuthEnabled`, which `fetchAuthStatus` calls below.
@@ -35,7 +35,7 @@ export interface AuthStatus {
 }
 
 const AUTH_STATUS_CACHE_MS = 5_000;
-const AUTH_BOUNDARY_KEY = "deeptutor.authBoundary";
+const AUTH_BOUNDARY_KEY = "bookmind.authBoundary";
 let authGeneration = 0;
 let boundaryListenerInstalled = false;
 let authStatusRequest: Promise<AuthStatus | null> | null = null;
