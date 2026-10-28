@@ -82,10 +82,11 @@ rules_svg: |
   - SVG `<text>` never wraps. If a label needs two lines, add an explicit
     `<tspan x=... dy="1.2em">`. If it's long enough to need wrapping, it's too
     long — shorten it.
-  - The host vertically centers every `<text>` on its `y` (dominant-baseline:
-    central — do not set it yourself). To center a label in a box: x = box
-    center with `text-anchor="middle"`, y = box center. For a title + subtitle
-    pair, y = center−9 and center+9.
+  - To center a label in a box, use its center for x/y with explicit
+    `text-anchor="middle"` and `dominant-baseline="central"`. Do not add a
+    manual y/dy baseline offset too. The host respects authored SVG baselines
+    instead of overriding all text. For title/subtitle pairs, use center−9
+    and center+9, each with an explicit central baseline.
 
   viewBox checklist — verify before finalizing:
   1. viewBox height = (bottom-most element's y + height) + 40px buffer.

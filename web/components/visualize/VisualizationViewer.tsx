@@ -7,6 +7,7 @@ import { Code2, Copy, Check, ExternalLink, Maximize2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Mermaid } from "@/components/Mermaid";
 import { prepareIframeHtml } from "@/lib/iframe-html";
+import { preserveCenteredSvgLabels } from "@/lib/svg-text-alignment";
 import {
   isManimResult,
   type VisualizeCanvasResult,
@@ -362,6 +363,7 @@ function sanitizeSvg(raw: string): string {
     rescope(root);
   }
 
+  preserveCenteredSvgLabels(root);
   return root.outerHTML;
 }
 

@@ -68,9 +68,10 @@ rules_svg: |
     就用 L 形折线绕开。
   - SVG 的 `<text>` 不会自动换行。需要两行就用显式 `<tspan x=... dy="1.2em">`。
     如果长到需要换行，说明它太长了——精简它。
-  - 宿主会把每个 `<text>` 在其 `y` 上垂直居中（dominant-baseline: central——
-    你自己不要设置它）。让标签在框内居中：x = 框中心并配 `text-anchor="middle"`，
-    y = 框中心。标题 + 副标题成对时，y 分别取中心−9 和中心+9。
+  - 标签在框内居中时，x/y 使用框中心，并显式设置 `text-anchor="middle"` 和
+    `dominant-baseline="central"`，不要再叠加 y/dy 的手工基线偏移。
+    宿主尊重 SVG 自己的基线，不会统一覆盖所有文字。标题 + 副标题成对时，
+    分别使用中心−9、中心+9，并各自声明中心基线。
 
   viewBox 终检清单——定稿前逐条核对：
   1. viewBox 高度 = （最底部元素的 y + 高度）+ 40px 余量。
