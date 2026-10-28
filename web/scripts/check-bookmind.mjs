@@ -25,8 +25,8 @@ try {
   checks.push('bookshelf');
   for(const mode of ['learn','guide','practice','notes']) {
     await page.goto(base+small.links[mode]);
-    await page.locator('.bm-context-header nav a').last().waitFor();
-    assert.equal(await page.locator('.bm-context-header nav a').count(),4);
+    await page.locator('.bm-page-nav a').last().waitFor();
+    assert.equal(await page.locator('.bm-page-nav a').count(),4);
     if(mode === 'learn') await page.locator('[data-reader-unit]').first().waitFor();
     else if(mode === 'guide') await page.locator('#mastery-outline-start').waitFor();
     else if(mode === 'practice') await page.getByRole('heading',{name:'练习巩固',exact:true}).waitFor();

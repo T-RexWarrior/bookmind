@@ -141,21 +141,35 @@
   color: var(--muted-foreground);
   white-space: nowrap;
 }
-.bm-context-header nav {
+.bm-workspace-toolbar {
   display: flex;
-  gap: 5px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 9px 24px;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.bm-context-header nav a {
+.bm-page-nav {
+  display: flex;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.bm-page-nav a {
   display: flex;
   gap: 6px;
   align-items: center;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 8px 15px;
+  font-size: 13px;
   border-radius: 8px;
   color: var(--muted-foreground);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.bm-context-header nav a.active {
+.bm-page-nav a.active {
   color: #155e52;
   background: #e6efe4;
   font-weight: 600;
@@ -413,13 +427,6 @@
   .bm-context-title strong {
     max-width: 280px;
   }
-  .bm-context-header nav {
-    justify-content: space-between;
-  }
-  .bm-context-header nav a {
-    padding: 7px;
-    font-size: 11px;
-  }
   .bm-bookshelf {
     padding: 30px 20px;
   }
@@ -493,9 +500,7 @@
 .bm-frame .prose { font-family: var(--font-sans); line-height: 1.85; }
 .bm-context-header { min-height: 61px; padding-inline: 24px; }
 .bm-context-title { gap: 10px; font-size: 13px; }
-.bm-context-title strong { max-width: min(36vw, 480px); font-weight: 600; }
-.bm-context-header nav a { padding: 8px 15px; font-size: 13px; }
-.bm-learning-context { display: flex; align-items: center; gap: 14px; flex-shrink: 0; padding: 9px 24px; background: var(--background); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted-foreground); }
+.bm-context-title strong { max-width: min(75vw, 900px); font-weight: 600; }
 .bm-learning-focus { display: flex; align-items: center; gap: 14px; min-width: 0; margin-left: auto; color: var(--muted-foreground); font-size: 11px; }
 .bm-learning-focus > span { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bm-learning-focus strong { color: var(--foreground); font-weight: 500; }
@@ -511,6 +516,8 @@
 .bm-response-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-family: var(--font-sans); font-size: 11px; color: var(--muted-foreground); }
 .bm-response-sources a { color: var(--primary); border-radius: 5px; padding: 2px 6px; background: color-mix(in srgb, var(--primary) 6%, transparent); text-decoration: none; }
 .bm-practice-page { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.bm-practice-panel { display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.bm-practice-panel[hidden] { display: none; }
 .bm-practice-tabs { flex-shrink: 0; gap: 24px; padding: 0 28px; }
 .bm-practice-tabs button { display: inline-flex; align-items: center; gap: 7px; padding: 15px 0 12px; border-bottom: 2px solid transparent; color: var(--muted-foreground); font-size: 12px; }
 .bm-practice-tabs button.active { color: var(--primary); border-color: var(--primary); font-weight: 600; }
@@ -540,16 +547,10 @@
 .bm-generation-status { display: flex; align-items: center; gap: 9px; margin-top: 20px; font-size: 13px; color: var(--muted-foreground); }
 .bm-practice-followup { display: flex; flex-direction: column; height: 650px; margin-top: 28px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .bm-practice-followup > header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--border); font-size: 13px; }
-@media (max-width: 960px) {
-  .bm-context-header { flex-wrap: wrap; gap: 8px; padding-block: 10px; }
-  .bm-context-header nav { overflow-x: auto; max-width: 100%; }
-  .bm-context-header nav a { white-space: nowrap; }
-}
 @media (max-width: 640px) {
-  .bm-context-header nav { width: 100%; }
-  .bm-context-header nav a { flex: 1; justify-content: center; padding: 8px 7px; font-size: 12px; }
-  .bm-learning-context { padding-inline: 14px; }
-  .bm-learning-context > span { display: none; }
+  .bm-workspace-toolbar { padding-inline: 14px; }
+  .bm-page-nav { width: 100%; }
+  .bm-page-nav a { flex: 1; justify-content: center; padding: 8px 7px; font-size: 12px; }
   .bm-practice-config { padding: 16px; }
   .bm-practice-scope { grid-template-columns: 1fr 1fr; }
   .bm-practice-scope > label:first-child { grid-column: 1 / -1; }

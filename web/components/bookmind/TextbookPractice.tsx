@@ -44,7 +44,7 @@ export default function TextbookPractice() {
           <button key={item.id} type="button" className={tab === item.id ? 'active' : ''} aria-pressed={tab === item.id} onClick={() => { setTab(item.id); void refresh() }}><item.icon size={15} />{item.label}</button>
         ))}
       </nav>
-      <div hidden={tab !== 'quiz'}><PracticeGenerator key={book.id} book={book} /></div>
+      <div className="bm-practice-panel" hidden={tab !== 'quiz'}><PracticeGenerator key={book.id} book={book} /></div>
       {tab === 'mistakes' && <TextbookMistakes />}
       {tab === 'review' && <ReviewPlan key={book.id} book={book} />}
     </div>

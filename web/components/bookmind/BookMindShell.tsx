@@ -122,7 +122,11 @@ function BookMindFrameInner({ children }: { children: React.ReactNode }) {
               {book.note_count} 条笔记
             </span>
           </div>
-          <nav aria-label="教材页面">
+        </header>
+      )}
+      {book && (
+        <div className="bm-workspace-toolbar">
+          <nav className="bm-page-nav" aria-label="教材页面">
             {[
               { key: 'learn', label: '自主学习', icon: BookOpen },
               { key: 'guide', label: 'AI 导学', icon: GraduationCap },
@@ -148,12 +152,7 @@ function BookMindFrameInner({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>
-        </header>
-      )}
-      {book && isLearning && (
-        <div className="bm-learning-context">
-          <span>{isGuiding ? '沿学习路径，讲解、随堂测验与复习' : '按自己的节奏阅读、提问与探索'}</span>
-          {point && <div className="bm-learning-focus"><span title={point.name}>当前：<strong>{point.name}</strong></span>
+          {isLearning && point && <div className="bm-learning-focus"><span title={point.name}>当前：<strong>{point.name}</strong></span>
             {isGuiding && point.start && <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('bookmind-source-open', { detail: { materialId: book.material_id, locator: point.start } }))}>查看教材原文</button>}
           </div>}
         </div>

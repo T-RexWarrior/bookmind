@@ -32,15 +32,19 @@ try {
 
   await page.goto(base + demo.links.learn);
   await page.locator('[data-reader-unit]').first().waitFor();
-  assert.deepEqual(await page.locator('.bm-context-header nav a').allTextContents(), ['自主学习', 'AI 导学', '练习巩固', '学习笔记']);
+  assert.deepEqual(await page.locator('.bm-page-nav a').allTextContents(), ['自主学习', 'AI 导学', '练习巩固', '学习笔记']);
+  const headerBox = await page.locator('.bm-context-header').boundingBox();
+  const navigationBox = await page.locator('.bm-page-nav').boundingBox();
+  assert(navigationBox.y >= headerBox.y + headerBox.height, 'The four tabs belong below the textbook header.');
+  assert(navigationBox.x - headerBox.x <= 28, 'The tabs should start at the left side of the content.');
   assert.equal(await page.locator('.bm-learning-modes').count(), 0);
-  assert.match(await page.locator('.bm-context-header nav a.active').innerText(), /自主学习/);
+  assert.match(await page.locator('.bm-page-nav a.active').innerText(), /自主学习/);
   await screenshot('01-self-directed');
   check('self-directed-reading');
 
   await page.goto(base + demo.links.guide);
   await page.locator('#mastery-outline-start').waitFor();
-  assert.match(await page.locator('.bm-context-header nav a.active').innerText(), /AI 导学/);
+  assert.match(await page.locator('.bm-page-nav a.active').innerText(), /AI 导学/);
   await page.getByRole('button', { name: '查看教材原文', exact: true }).click();
   await page.locator('.bm-source-text').waitFor();
   assert((await page.locator('.bm-source-text').innerText()).length > 10);
@@ -60,9 +64,9 @@ try {
     assert.equal(await page.getByRole('button', { name: /Play audio|朗读此回复|播放音频/i }).count(), 0);
     await page.getByRole('button', { name: '随堂测验', exact: true }).waitFor();
     await page.getByRole('button', { name: '补充示例', exact: true }).waitFor();
-    await page.locator('.bm-context-header nav a').filter({ hasText: '自主学习' }).click();
+    await page.locator('.bm-page-nav a').filter({ hasText: '自主学习' }).click();
     await page.locator('[data-reader-unit]').first().waitFor();
-    await page.locator('.bm-context-header nav a').filter({ hasText: 'AI 导学' }).click();
+    await page.locator('.bm-page-nav a').filter({ hasText: 'AI 导学' }).click();
     await page.waitForURL(guidedUrl);
     await page.getByRole('button', { name: '图解说明', exact: true }).waitFor();
     check('learning-mode-resumes-its-own-session');
@@ -70,8 +74,29 @@ try {
 
   await page.goto(base + demo.links.practice);
   await page.getByRole('heading', { name: '练习巩固', exact: true }).waitFor();
+  await page.getByRole('button', { name: '生成练习', exact: true }).waitFor();
   assert.equal(await page.locator('.bm-learning-modes').count(), 0);
+  await page.setViewportSize({ width: 1366, height: 600 });
+  const practiceContent = page.locator('.bm-practice-panel .bm-practice-content');
+  const dimensions = await practiceContent.evaluate(element => ({ height: element.clientHeight, total: element.scrollHeight }));
+  assert(dimensions.height > 0 && dimensions.height < 600);
+  assert(dimensions.total > dimensions.height, 'Practice content must scroll when longer than the viewport.');
+  const contentBox = await practiceContent.boundingBox();
+  await page.mouse.move(contentBox.x + 8, contentBox.y + 80);
+  await page.mouse.wheel(0, 1800);
+  await page.waitForFunction(() => document.querySelector('.bm-practice-panel .bm-practice-content').scrollTop > 0);
+  const nextQuestion = page.locator('.bm-practice-quiz').getByRole('button', { name: /下一个|Next/, exact: true });
+  const hasPracticeQuestions = await nextQuestion.count() > 0;
+  if (await nextQuestion.count() && await nextQuestion.isEnabled()) {
+    await nextQuestion.click();
+    await page.locator('.bm-practice-quiz').getByText('Q2', { exact: true }).waitFor();
+    await page.locator('.bm-practice-quiz').getByRole('button', { name: /上一题|Previous/, exact: true }).click();
+    await page.locator('.bm-practice-quiz').getByText('Q1', { exact: true }).waitFor();
+    check('practice-question-pagination');
+  }
+  check('practice-wheel-scroll-with-constrained-height');
   await screenshot('03-practice');
+  await page.setViewportSize({ width: 1600, height: 1000 });
   if (live) {
     const before = demo.objectives.reduce((sum, point) => sum + point.evidence_count, 0);
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent === '生成练习' && !button.disabled));
@@ -108,6 +133,7 @@ try {
   }
   await page.getByRole('button', { name: '错题本', exact: true }).click();
   await page.getByRole('heading', { name: '本书错题', exact: true }).waitFor();
+  assert.equal(await page.locator('.bm-practice-panel').isVisible(), false);
   check('same-book-mistakes');
   await page.getByRole('button', { name: '复习计划', exact: true }).click();
   await page.getByRole('heading', { name: '复习计划', exact: true }).waitFor();
@@ -136,7 +162,11 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base + demo.links.practice);
   await page.getByRole('heading', { name: '练习巩固', exact: true }).waitFor();
+  await page.getByRole('button', { name: '生成练习', exact: true }).waitFor();
+  if (hasPracticeQuestions) await page.locator('.bm-practice-quiz').waitFor();
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await page.locator('.bm-practice-panel .bm-practice-content').evaluate(element => { element.scrollTop = element.scrollHeight; });
+  assert(await page.locator('.bm-practice-panel .bm-practice-content').evaluate(element => element.scrollTop > 0));
   await screenshot('07-mobile-practice');
   await page.goto(base + demo.links.guide);
   await page.locator('#mastery-outline-start').waitFor();
