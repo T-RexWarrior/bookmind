@@ -164,6 +164,8 @@ export function ReadingWorkspacePage() {
     conversations,
     setConversations,
     loading,
+    sessionLoading,
+    sessionError,
     error,
     notice,
     setNotice,
@@ -401,7 +403,7 @@ export function ReadingWorkspacePage() {
     toggleCompanion,
   ]);
 
-  if (loading) {
+  if (loading || (workspace && sessionLoading)) {
     return (
       <div className="flex h-full items-center justify-center gap-2 bg-[var(--background)] text-[12px] text-[var(--muted-foreground)] dark:bg-[var(--background)]">
         <Loader2 size={16} className="animate-spin" />
@@ -410,11 +412,12 @@ export function ReadingWorkspacePage() {
     );
   }
 
-  if (error && !workspace) {
+  if ((error && !workspace) || sessionError) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-[var(--background)] px-6 text-center dark:bg-[var(--background)]">
         <CircleAlert size={25} className="text-[var(--primary)]" />
-        <p className="mt-3 text-[13px] font-medium">{error}</p>
+        <p className="mt-3 text-[13px] font-medium">{sessionError || error}</p>
+        {workspace && <button type="button" onClick={newConversation} className="mt-4 text-sm underline">重新打开阅读对话</button>}
         <Link
           href={scopedUrl(READING_HOME)}
           className="mt-5 rounded-xl bg-[var(--primary)] px-4 py-2 text-[11px] font-semibold text-[var(--primary-foreground)]"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import time
 from typing import TYPE_CHECKING, Any
 import uuid
@@ -180,6 +181,18 @@ class TurnRequestPreparer:
             raise RuntimeError("Conversation not found in this workspace.")
         session = await self.store.ensure_session(payload.get("session_id"))
         preferences = session.get("preferences") or {}
+        if os.environ.get('BOOKMIND_APP') == '1':
+            from deeptutor.bookmind.session_scope import assert_session_surface
+
+            mode = _workspace_mode(
+                payload.get('workspace_mode')
+                if 'workspace_mode' in payload else preferences.get('workspace_mode'),
+                capability=str(payload.get('capability') or 'chat'),
+            )
+            await asyncio.to_thread(
+                assert_session_surface, session['id'], preferences,
+                str(payload.get('capability') or 'chat'), mode, payload,
+            )
         # A conversation-level choice wins over the account default that the
         # browser sends on every turn. Only the selector's explicit field may
         # change or clear this durable override (#1511).

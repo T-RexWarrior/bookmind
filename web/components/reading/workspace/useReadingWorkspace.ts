@@ -22,6 +22,7 @@ import {
 } from "@/lib/reading-reader-action";
 import { setReadingWorkspace } from "@/lib/reading-turn-state";
 import { READING_WORKSPACE_MODE } from "@/lib/workspace-mode";
+import { isReadingSessionReady, readingSessionScope, type ReadingSessionBinding } from "@/lib/reading-study-route";
 import {
   activateReadingMaterial,
   generateMasteryPathFromReading,
@@ -75,13 +76,21 @@ export function useReadingWorkspace(
   const [organizedNotes, setOrganizedNotes] =
     useState<OrganizedReadingNotes | null>(null);
   const sessionBootRef = useRef("");
+  const sessionLoadRef = useRef<AbortController | null>(null);
+  const workspaceRequestRef = useRef(0);
+  const [sessionBinding, setSessionBinding] = useState<ReadingSessionBinding | null>(null);
+  const [sessionFailure, setSessionFailure] = useState<{ routeKey: string; message: string } | null>(null);
+  const sessionScope = readingSessionScope(workspaceId, courseId);
+  const sessionRouteKey = JSON.stringify([sessionScope, sessionIdParam]);
   const transcriptRequestRef = useRef(0);
 
   const refresh = useCallback(async () => {
-    const result = await getReadingWorkspace(workspaceId);
-    const sessionRows = await listReadingConversations(workspaceId);
-    setWorkspace(result.workspace);
-    setConversations(sessionRows);
+    const requestId = ++workspaceRequestRef.current;
+    const [result, sessionRows] = await Promise.all([getReadingWorkspace(workspaceId), listReadingConversations(workspaceId)]);
+    if (requestId === workspaceRequestRef.current) {
+      setWorkspace(result.workspace);
+      setConversations(sessionRows);
+    }
     return { workspace: result.workspace, sessions: sessionRows };
   }, [workspaceId]);
 
@@ -103,6 +112,7 @@ export function useReadingWorkspace(
       });
     return () => {
       cancelled = true;
+      workspaceRequestRef.current += 1;
     };
   }, [refresh, t]);
 
@@ -115,8 +125,9 @@ export function useReadingWorkspace(
   }, [closeMaterial, workspaceId]);
 
   const sessionConfiguration = useMemo(
-    () => ({ workspaceMode: READING_WORKSPACE_MODE }),
-    [],
+    () => ({ workspaceMode: READING_WORKSPACE_MODE, readingWorkspaceId: workspaceId,
+      masteryPathId: null, masterySessionMode: null }),
+    [workspaceId],
   );
 
   const activeTab = useMemo(
@@ -156,9 +167,11 @@ export function useReadingWorkspace(
       return;
     let attempt = 0;
     let timer = 0;
+    let active = true;
     const tick = () => {
       attempt += 1;
       void refresh().finally(() => {
+        if (!active) return;
         timer = window.setTimeout(
           tick,
           Math.min(2500 * 2 ** Math.floor(attempt / 4), 30_000),
@@ -166,65 +179,60 @@ export function useReadingWorkspace(
       });
     };
     timer = window.setTimeout(tick, 2500);
-    return () => window.clearTimeout(timer);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [refresh, workspace]);
 
+  // Route changes cancel only their own load, never a running model turn.
+  useEffect(() => () => { sessionLoadRef.current?.abort(); }, [sessionRouteKey]);
+
   useEffect(() => {
-    if (!workspace || loading) return;
-    const bootKey = `${workspaceId}:${sessionIdParam ?? "new"}:${courseId.trim()}`;
-    if (sessionBootRef.current === bootKey) return;
-    sessionBootRef.current = bootKey;
-
-    // The URL catching up with the session the first turn just created is not
-    // a request to open a different conversation — the transcript on screen
-    // already IS that conversation. Reloading it here would swap a streaming
-    // answer for whatever partial row the backend has written so far.
-    if (sessionIdParam && sessionIdParam === state.sessionId) return;
-
+    if (!workspace || workspace.workspace_id !== workspaceId || loading) return;
+    if (sessionBootRef.current === sessionRouteKey) return;
+    sessionBootRef.current = sessionRouteKey;
+    const scoped = courseSessionConfiguration(sessionConfiguration, courseId);
+    if (!sessionIdParam) {
+      const draftKey = newSession({ ...scoped, capability: null });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- record the draft created for this route.
+      setSessionBinding({ scope: sessionScope, draftKey, previousSessionId: state.sessionId });
+      return;
+    }
+    const controller = new AbortController();
+    sessionLoadRef.current = controller;
     void (async () => {
       try {
-        // The URL is the truth about which conversation is open, the same
-        // rule /chat follows: `/reading/<ws>/sessions/<id>` opens that conversation,
-        // `/reading/<ws>` is a *new* one. This used to reopen the most recent
-        // conversation instead, so arriving from the library — which links to
-        // the bare collection URL — dropped the reader into an old transcript
-        // they had not asked for.
-        //
-        // A conversation with nothing in it is a local draft, never a row:
-        // the backend attaches the session to this workspace when the first
-        // turn runs (see `turn_runtime`), so opening a collection and walking
-        // away no longer litters it with empty conversations.
-        const scopedSessionConfiguration = courseSessionConfiguration(
-          sessionConfiguration,
-          courseId,
-        );
-        if (sessionIdParam) {
-          await loadSession(sessionIdParam);
-          configureSession(scopedSessionConfiguration, sessionIdParam);
-        } else {
-          newSession({ ...scopedSessionConfiguration, capability: null });
+        // A URL can have been polluted by the previously selected practice
+        // session. Prove ownership before loading any messages or preferences.
+        const rows = await listReadingConversations(workspaceId);
+        if (controller.signal.aborted) return;
+        if (!rows.some(row => row.session_id === sessionIdParam)) {
+          const latest = rows[0];
+          const target = latest ? readingSessionRoute(workspaceId, latest.session_id) : readingCollectionRoute(workspaceId);
+          const destination = new URL(target, window.location.origin);
+          const current = new URL(window.location.href);
+          for (const [key, value] of current.searchParams) destination.searchParams.set(key, value);
+          setNotice('已切回本书独立的自主学习对话。');
+          router.replace(destination.pathname + destination.search, { scroll: false });
+          return;
         }
+        if (!(state.sessionId === sessionIdParam && state.workspaceMode === READING_WORKSPACE_MODE && state.readingWorkspaceId === workspaceId)) {
+          await loadSession(sessionIdParam, { signal: controller.signal });
+        }
+        if (controller.signal.aborted) return;
+        configureSession(scoped, sessionIdParam);
+        setSessionBinding({ scope: sessionScope, sessionId: sessionIdParam });
       } catch (caught) {
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : t("The reading conversation could not be loaded."),
-        );
+        if (!controller.signal.aborted) setSessionFailure({ routeKey: sessionRouteKey,
+          message: caught instanceof Error ? caught.message : t("The reading conversation could not be loaded.") });
       }
     })();
-  }, [
-    configureSession,
-    courseId,
-    loadSession,
-    loading,
-    newSession,
-    sessionIdParam,
-    sessionConfiguration,
-    state.sessionId,
-    t,
-    workspace,
-    workspaceId,
-  ]);
+  }, [configureSession, courseId, loadSession, loading, newSession, router,
+    sessionIdParam, sessionConfiguration, sessionScope, sessionRouteKey,
+    state.sessionId, state.workspaceMode, state.readingWorkspaceId, t, workspace, workspaceId]);
+
+  const sessionError = sessionFailure?.routeKey === sessionRouteKey ? sessionFailure.message : '';
+  const sessionReady = workspace?.workspace_id === workspaceId && isReadingSessionReady({
+    binding: sessionBinding, scope: sessionScope, routeSessionId: sessionIdParam, workspaceId, state,
+  });
 
   useEffect(() => {
     if (!material || material.unit !== "segment") return;
@@ -413,13 +421,16 @@ export function useReadingWorkspace(
   // the previous answer mid-flight.
   const newConversation = useCallback(() => {
     if (!workspace) return;
-    newSession({ ...sessionConfiguration, capability: null });
-    router.push(readingCollectionRoute(workspace.workspace_id));
+    sessionLoadRef.current?.abort();
+    const draftKey = newSession({ ...courseSessionConfiguration(sessionConfiguration, courseId), capability: null });
+    const scope = readingSessionScope(workspace.workspace_id, courseId);
+    sessionBootRef.current = JSON.stringify([scope, null]);
+    setSessionBinding({ scope, draftKey, previousSessionId: state.sessionId });
+    const destination = new URL(readingCollectionRoute(workspace.workspace_id), window.location.origin);
+    if (courseId.trim()) destination.searchParams.set('course', courseId.trim());
+    router.push(destination.pathname + destination.search);
   }, [
-    newSession,
-    router,
-    sessionConfiguration,
-    workspace,
+    newSession, router, sessionConfiguration, workspace, courseId, state.sessionId,
   ]);
 
   // When the first turn assigns a session id, put it in the URL and let the
@@ -442,16 +453,15 @@ export function useReadingWorkspace(
   // does follow the native API — keeps `sessionIdParam` honest for refreshes,
   // links and the back button.
   useEffect(() => {
-    if (!state.sessionId || sessionIdParam) return;
-    window.history.replaceState(
-      null,
-      "",
-      readingSessionRoute(workspaceId, state.sessionId),
-    );
+    if (!sessionReady || !state.sessionId || sessionIdParam) return;
+    const destination = new URL(readingSessionRoute(workspaceId, state.sessionId), window.location.origin);
+    const current = new URL(window.location.href);
+    for (const [key, value] of current.searchParams) destination.searchParams.set(key, value);
+    window.history.replaceState(null, "", destination.pathname + destination.search);
     void listReadingConversations(workspaceId)
       .then(setConversations)
       .catch(() => {});
-  }, [sessionIdParam, state.sessionId, workspaceId]);
+  }, [sessionIdParam, state.sessionId, workspaceId, sessionReady]);
 
   const organizeNotes = useCallback(async () => {
     if (!workspace) return;
@@ -510,6 +520,8 @@ export function useReadingWorkspace(
     conversations,
     setConversations,
     loading,
+    sessionLoading: !sessionReady && !sessionError,
+    sessionError,
     error,
     notice,
     setNotice,

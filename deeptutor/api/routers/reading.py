@@ -841,6 +841,7 @@ async def list_reading_sessions(workspace_id: str) -> dict[str, Any]:
         # the session store. Read it from there so the reader sees the same
         # name the sidebar does instead of a list of "New conversation".
         titles: dict[str, str] = {}
+        summaries = []
         try:
             summaries = await get_session_store().get_session_summaries(
                 [row.session_id for row in rows]
@@ -853,6 +854,19 @@ async def list_reading_sessions(workspace_id: str) -> dict[str, Any]:
             }
         except Exception:
             logger.debug("reading sessions: live titles unavailable", exc_info=True)
+        import os
+        if os.environ.get('BOOKMIND_APP') == '1':
+            from deeptutor.bookmind.session_scope import is_reading_conversation
+
+            preferences_by_id = {
+                str(summary.get('session_id') or summary.get('id') or ''):
+                summary.get('preferences') or {} for summary in summaries
+            }
+            rows = await asyncio.to_thread(lambda: [
+                row for row in rows if is_reading_conversation(
+                    row.session_id, workspace_id, preferences_by_id.get(row.session_id, {}),
+                )
+            ])
         return {
             "sessions": [
                 row.to_dict()

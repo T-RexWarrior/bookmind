@@ -103,7 +103,7 @@ function PracticeGenerator({ book }: { book: Textbook }) {
     void openPractice(book.id, controller.signal).then(async result => {
       await loadSession(result.session_id, { signal: controller.signal })
       if (!active) return
-      configureSession({ capability: 'deep_question', workspaceMode: null, masteryPathId: null, masterySessionMode: null, knowledgeBases: [], enabledTools: [] }, result.session_id)
+      configureSession({ capability: 'deep_question', workspaceMode: null, readingWorkspaceId: null, masteryPathId: null, masterySessionMode: null, knowledgeBases: [], enabledTools: [] }, result.session_id)
       setSessionId(result.session_id)
       setSnapshot(result)
     }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : '练习加载失败。') })

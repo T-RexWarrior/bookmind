@@ -125,6 +125,7 @@ export function useMasteryStudySession(
   const sessionConfiguration = useMemo<SessionConfiguration>(
     () => ({
       workspaceMode: MASTERY_WORKSPACE_MODE,
+      readingWorkspaceId: null,
       // Sent only when opening a new conversation; a route that names an
       // existing one leaves the stored kind alone (see the parameter's note).
       ...(routeSessionId ? {} : { masterySessionMode: requestedMode }),

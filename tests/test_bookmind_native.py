@@ -10,6 +10,99 @@ from deeptutor.services.path_service import PathService
 from deeptutor.services.notebook import notebook_manager
 
 
+@pytest.mark.parametrize('surface,requested_mode', [
+    ('practice', 'immersive_reading'), ('practice', 'mastery_path'),
+    ('immersive_reading', None), ('immersive_reading', 'mastery_path'),
+    ('mastery_path', None), ('mastery_path', 'immersive_reading'),
+])
+def test_conversation_scope_rejected_before_admission_writes(native_book, monkeypatch, surface, requested_mode):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from deeptutor.bookmind import practice
+    from deeptutor.reading import ReadingCatalogStore
+    from deeptutor.services.session import get_sqlite_session_store
+    from deeptutor.services.session.turns.request_preparer import TurnRequestPreparer
+
+    monkeypatch.setenv('BOOKMIND_APP', '1')
+
+    async def scenario():
+        store = get_sqlite_session_store()
+        if surface == 'practice':
+            sid = await practice.open_session(native_book)
+        else:
+            saved = await store.create_session(title=surface)
+            sid = saved['id']
+            await store.update_session_preferences(sid, {
+                'workspace_mode': surface, 'reading_workspace_id': native_book['workspace_id'],
+                'mastery_path_id': native_book['path_id'],
+            })
+        before = await store.get_session(sid)
+        catalog = ReadingCatalogStore()
+        rows_before = catalog.list_sessions(native_book['workspace_id'])
+        admission = SimpleNamespace(store=store, _ensure_accepting_turns=AsyncMock())
+        with pytest.raises(RuntimeError, match='会话属于'):
+            await TurnRequestPreparer.start_turn.__wrapped__(admission, {
+                'session_id': sid, 'content': 'wrong screen', 'capability': 'chat',
+                'workspace_mode': requested_mode, 'reading_workspace_id': native_book['workspace_id'],
+                'mastery_path_id': native_book['path_id'], 'language': 'zh', 'auto_route': False,
+            })
+        assert await store.get_session(sid) == before
+        assert catalog.list_sessions(native_book['workspace_id']) == rows_before
+
+    asyncio.run(scenario())
+
+
+def test_inline_quizzes_keep_their_reading_or_guidance_owner(native_book):
+    from deeptutor.bookmind.session_scope import assert_session_surface
+
+    for surface, field, owner in [
+        ('immersive_reading', 'reading_workspace_id', native_book['workspace_id']),
+        ('mastery_path', 'mastery_path_id', native_book['path_id']),
+    ]:
+        preferences = {'workspace_mode': surface, field: owner}
+        assert_session_surface('inline-chat', preferences, 'deep_question', surface, {field: owner})
+        with pytest.raises(RuntimeError, match='另一'):
+            assert_session_surface('inline-chat', preferences, 'chat', surface, {field: 'another-book'})
+
+
+def test_reading_catalog_hides_foreign_modes_without_deleting_conversations(native_book, monkeypatch):
+    from deeptutor.bookmind import practice
+    from deeptutor.bookmind.session_scope import assert_session_surface
+    from deeptutor.api.routers.reading import list_reading_sessions
+    from deeptutor.reading import ReadingCatalogStore
+    from deeptutor.services.session import get_sqlite_session_store
+
+    monkeypatch.setenv('BOOKMIND_APP', '1')
+
+    async def scenario():
+        store = get_sqlite_session_store()
+        catalog = ReadingCatalogStore()
+        practice_id = await practice.open_session(native_book)
+        point = native_book['objectives'][-1]
+        assert_session_surface(practice_id, {}, 'deep_question', None,
+                               {'config': {'bookmind_objective_id': point['id']}})
+        saved_ids = [practice_id]
+        allowed = []
+        for preferences in [{}, {'workspace_mode': 'immersive_reading', 'reading_workspace_id': native_book['workspace_id']},
+                            {'workspace_mode': 'mastery_path', 'mastery_path_id': native_book['path_id']},
+                            {'workspace_mode': 'immersive_reading', 'reading_workspace_id': 'another-book'}]:
+            session = await store.create_session(title='conversation')
+            sid = session['id']
+            await store.update_session_preferences(sid, preferences)
+            saved_ids.append(sid)
+            if not preferences or preferences.get('reading_workspace_id') == native_book['workspace_id']:
+                allowed.append(sid)
+        for sid in saved_ids:
+            catalog.attach_session(native_book['workspace_id'], sid, title='conversation')
+        listed = await list_reading_sessions(native_book['workspace_id'])
+        assert {row['session_id'] for row in listed['sessions']} == set(allowed)
+        for sid in saved_ids:
+            assert await store.get_session(sid)
+        assert len(catalog.list_sessions(native_book['workspace_id'])) == len(saved_ids)
+
+    asyncio.run(scenario())
+
+
 def test_practice_requires_a_real_point_and_matching_source(native_book):
     point = native_book['objectives'][-1]
     book, verified = service.verified_practice_objective(native_book['material_id'], point['id'], point['start'])

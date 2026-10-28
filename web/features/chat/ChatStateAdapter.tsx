@@ -185,6 +185,8 @@ export interface ChatState {
   activeCapability: string | null;
   /** Stable product surface; per-turn capability selection is orthogonal. */
   workspaceMode: WorkspaceMode | null;
+  /** Reading collection that owns this conversation. */
+  readingWorkspaceId?: string | null;
   knowledgeBases: string[];
   llmSelection: LLMSelection | null;
   /** Persistent mastery state associated with this conversation. */
@@ -231,6 +233,7 @@ export interface ChatState {
 export interface SessionConfiguration {
   capability?: string | null;
   workspaceMode?: WorkspaceMode | null;
+  readingWorkspaceId?: string | null;
   knowledgeBases?: string[];
   masteryPathId?: string | null;
   masterySessionMode?: string | null;
@@ -379,6 +382,7 @@ interface SessionSnapshot {
   tools?: string[];
   capability?: string | null;
   workspaceMode?: WorkspaceMode | null;
+  readingWorkspaceId?: string | null;
   knowledgeBases?: string[];
   llmSelection?: LLMSelection | null;
   masteryPathId?: string | null;
@@ -501,6 +505,7 @@ function createSessionEntry(
     enabledTools: [],
     activeCapability: null,
     workspaceMode: null,
+    readingWorkspaceId: null,
     knowledgeBases: [],
     llmSelection: null,
     masteryPathId: null,
@@ -601,6 +606,10 @@ function applySessionConfiguration(
       configuration.workspaceMode !== undefined
         ? configuration.workspaceMode
         : session.workspaceMode,
+    readingWorkspaceId:
+      configuration.readingWorkspaceId !== undefined
+        ? configuration.readingWorkspaceId
+        : session.readingWorkspaceId,
     knowledgeBases:
       configuration.knowledgeBases !== undefined
         ? [...configuration.knowledgeBases]
@@ -1221,6 +1230,10 @@ function reducer(state: ProviderState, action: Action): ProviderState {
               action.workspaceMode !== undefined
                 ? action.workspaceMode
                 : existing.workspaceMode,
+            readingWorkspaceId:
+              action.readingWorkspaceId !== undefined
+                ? action.readingWorkspaceId
+                : existing.readingWorkspaceId,
             knowledgeBases: action.knowledgeBases ?? existing.knowledgeBases,
             llmSelection:
               action.llmSelection !== undefined
@@ -2625,6 +2638,10 @@ export function ChatStateAdapterProvider({
             ? null
             : session.preferences?.capability || null,
         workspaceMode: loadedWorkspaceMode,
+        readingWorkspaceId:
+          typeof session.preferences?.reading_workspace_id === "string"
+            ? session.preferences.reading_workspace_id
+            : null,
         knowledgeBases: Array.isArray(session.preferences?.knowledge_bases)
           ? session.preferences.knowledge_bases
           : [],
@@ -3516,6 +3533,7 @@ export function ChatStateAdapterProvider({
       enabledTools: current.enabledTools,
       activeCapability: current.activeCapability,
       workspaceMode: current.workspaceMode,
+      readingWorkspaceId: current.readingWorkspaceId,
       knowledgeBases: current.knowledgeBases,
       llmSelection: current.llmSelection,
       masteryPathId: current.masteryPathId,
