@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// Uses only the dedicated demo material. Pass --live to make two real LLM calls.
+// Uses only the dedicated demo material. --live runs real generation and guidance.
 const live = process.argv.includes('--live');
 const base = 'http://127.0.0.1:8018';
 const out = new URL('../../data/mode-verification/', import.meta.url);
@@ -32,16 +32,15 @@ try {
 
   await page.goto(base + demo.links.learn);
   await page.locator('[data-reader-unit]').first().waitFor();
-  assert.equal(await page.locator('.bm-context-header nav a').count(), 3);
-  assert.equal(await page.locator('.bm-learning-modes a').count(), 2);
-  assert.match(await page.locator('.bm-learning-modes a.active').innerText(), /自主学习/);
+  assert.deepEqual(await page.locator('.bm-context-header nav a').allTextContents(), ['自主学习', 'AI 导学', '练习巩固', '学习笔记']);
+  assert.equal(await page.locator('.bm-learning-modes').count(), 0);
+  assert.match(await page.locator('.bm-context-header nav a.active').innerText(), /自主学习/);
   await screenshot('01-self-directed');
   check('self-directed-reading');
 
   await page.goto(base + demo.links.guide);
   await page.locator('#mastery-outline-start').waitFor();
-  assert.match(await page.locator('.bm-learning-modes a.active').innerText(), /AI 导学/);
-  assert.match(await page.locator('.bm-context-header nav a.active').innerText(), /学习/);
+  assert.match(await page.locator('.bm-context-header nav a.active').innerText(), /AI 导学/);
   await page.getByRole('button', { name: '查看教材原文', exact: true }).click();
   await page.locator('.bm-source-text').waitFor();
   assert((await page.locator('.bm-source-text').innerText()).length > 10);
@@ -59,41 +58,59 @@ try {
     await page.goto(guidedUrl);
     await page.getByRole('button', { name: '图解说明', exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: /Play audio|朗读此回复|播放音频/i }).count(), 0);
-    await page.locator('.bm-learning-modes a').filter({ hasText: '自主学习' }).click();
+    await page.getByRole('button', { name: '随堂测验', exact: true }).waitFor();
+    await page.getByRole('button', { name: '补充示例', exact: true }).waitFor();
+    await page.locator('.bm-context-header nav a').filter({ hasText: '自主学习' }).click();
     await page.locator('[data-reader-unit]').first().waitFor();
-    await page.locator('.bm-learning-modes a').filter({ hasText: 'AI 导学' }).click();
+    await page.locator('.bm-context-header nav a').filter({ hasText: 'AI 导学' }).click();
     await page.waitForURL(guidedUrl);
     await page.getByRole('button', { name: '图解说明', exact: true }).waitFor();
     check('learning-mode-resumes-its-own-session');
   }
 
   await page.goto(base + demo.links.practice);
-  await page.getByRole('heading', { name: '用一道题，检验一份理解' }).waitFor();
+  await page.getByRole('heading', { name: '练习巩固', exact: true }).waitFor();
   assert.equal(await page.locator('.bm-learning-modes').count(), 0);
   await screenshot('03-practice');
   if (live) {
     const before = demo.objectives.reduce((sum, point) => sum + point.evidence_count, 0);
-    const responsePromise = page.waitForResponse(response => response.url().includes('/extensions/quiz/actions/start') && response.request().method() === 'POST', { timeout: 240000 });
-    await page.getByRole('button', { name: '生成三道题', exact: true }).click();
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent === '生成练习' && !button.disabled));
+    const panel = page.getByRole('region', { name: '练习配置' });
+    await panel.locator('input[type="number"]').nth(2).fill('2');
+    await panel.locator('.bm-native-quiz-config select').selectOption('hard');
+    await panel.locator('.bm-native-quiz-config button[aria-expanded]').click();
+    await page.getByRole('button', { name: '简答题', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await screenshot('03-practice-mixed-config');
+    const responsePromise = page.waitForResponse(response => response.url().includes('/practice/session') && response.request().method() === 'POST', { timeout: 360000 });
+    await page.getByRole('button', { name: '生成练习', exact: true }).click();
     const response = await responsePromise;
     assert.equal(response.status(), 200, await response.text());
     const result = await response.json();
-    assert.equal(result.payload.questions.length, 3);
-    assert(result.payload.questions.every(question => !('correct_choice_index' in question) && !('evidence' in question)));
-    const first = result.payload.questions[0];
-    const answerPromise = page.waitForResponse(response => response.url().includes('/extensions/quiz/answers') && response.request().method() === 'POST');
-    await page.locator('.bm-practice-quiz').getByRole('button').filter({ hasText: first.choices[0] }).first().click();
+    assert.equal(result.questions.length, 2);
+    assert.equal(result.config.difficulty, 'hard');
+    assert.deepEqual(result.config.per_type_counts, { choice: 1, short_answer: 1 });
+    assert.deepEqual(result.questions.map(q => q.question_type).sort(), ['choice', 'short_answer']);
+    await page.locator('.bm-practice-quiz').waitFor();
+    const first = result.questions[0];
+    assert.equal(first.question_type, 'choice');
+    const wrong = Object.keys(first.options).find(key => key !== first.correct_answer.trim().charAt(0).toUpperCase());
+    await page.locator('.bm-practice-quiz').getByRole('button').filter({ hasText: first.options[wrong] }).first().click();
+    const answerPromise = page.waitForResponse(response => response.url().includes('/entries/upsert') && response.request().method() === 'POST');
+    await page.locator('.bm-practice-quiz').getByRole('button', { name: /检查答案|Check Answer/i }).click();
     assert.equal((await answerPromise).status(), 200);
     const afterBook = await (await context.request.get(base + '/api/bookmind/books/' + demo.id)).json();
     assert(afterBook.objectives.reduce((sum, point) => sum + point.evidence_count, 0) > before);
     await screenshot('04-practice-answer');
-    check('live-native-quiz-hidden-key-and-shared-evidence');
+    await page.reload();
+    await page.locator('.bm-practice-quiz').waitFor();
+    check('live-full-pipeline-mixed-types-difficulty-answer-and-shared-evidence');
   }
   await page.getByRole('button', { name: '错题本', exact: true }).click();
   await page.getByRole('heading', { name: '本书错题', exact: true }).waitFor();
   check('same-book-mistakes');
-  await page.getByRole('button', { name: '复习安排', exact: true }).click();
-  await page.getByRole('heading', { name: '让记住的知识，留得更久' }).waitFor();
+  await page.getByRole('button', { name: '复习计划', exact: true }).click();
+  await page.getByRole('heading', { name: '复习计划', exact: true }).waitFor();
   await screenshot('05-review');
   check('shared-review-schedule');
 
@@ -118,7 +135,7 @@ try {
   check('settings-key-redacted-and-services-explained');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base + demo.links.practice);
-  await page.getByRole('heading', { name: '用一道题，检验一份理解' }).waitFor();
+  await page.getByRole('heading', { name: '练习巩固', exact: true }).waitFor();
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await screenshot('07-mobile-practice');
   await page.goto(base + demo.links.guide);

@@ -58,6 +58,11 @@ class DeepQuestionRequestConfig(BaseModel):
     # ``num_questions`` (frontend keeps them in sync). Empty dict means
     # "no per-type targets — distribute freely across allowed types".
     per_type_counts: dict[str, int] = Field(default_factory=dict)
+    # Optional source selection for the BookMind textbook practice surface.
+    # The binding layer verifies these against the session's actual book.
+    bookmind_objective_id: str | None = None
+    bookmind_start: int | None = Field(default=None, ge=1)
+    bookmind_end: int | None = Field(default=None, ge=1)
     paper_path: str = ""
     max_questions: int = Field(default=10, ge=1, le=100)
 

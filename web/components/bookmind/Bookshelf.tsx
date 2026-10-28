@@ -106,8 +106,8 @@ export default function Bookshelf() {
                     <Link href={book.links.learn}>
                       继续阅读 <ArrowRight size={15} />
                     </Link>
-                    <Link href={book.links.practice}>练习</Link>
-                    <Link href={book.links.notes}>笔记</Link>
+                    <Link href={book.links.practice}>练习巩固</Link>
+                    <Link href={book.links.notes}>学习笔记</Link>
                   </div>
                 </div>
               </article>

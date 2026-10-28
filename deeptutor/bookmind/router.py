@@ -34,6 +34,15 @@ async def get_book(book_id: str):
     return await asyncio.to_thread(service.overview, book)
 
 
+@router.post('/books/{book_id}/practice/session')
+async def practice_session(book_id: str):
+    from .practice import snapshot
+    book = await asyncio.to_thread(service.find_book, id=book_id)
+    if not book:
+        raise HTTPException(404, '教材不存在')
+    return await snapshot(book)
+
+
 class TextModelSettings(BaseModel):
     base_url: str
     model: str

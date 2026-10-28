@@ -34,6 +34,8 @@ interface QuizConfigPanelProps {
   onChange: (next: DeepQuestionFormConfig) => void;
   uploadedPdf: File | null;
   onUploadPdf: (file: File | null) => void;
+  /** A textbook-scoped page uses the custom question pipeline only. */
+  customOnly?: boolean;
   /**
    * When provided, the panel is wrapped in a `CollapsibleConfigSection`.
    * Omit both to render the bare form inside a parent card that supplies its
@@ -104,6 +106,7 @@ export default memo(function QuizConfigPanel({
   onChange,
   uploadedPdf,
   onUploadPdf,
+  customOnly = false,
   collapsed,
   onToggleCollapsed,
 }: QuizConfigPanelProps) {
@@ -167,7 +170,7 @@ export default memo(function QuizConfigPanel({
 
   const body = (
     <>
-      <div className="grid w-full grid-cols-2 gap-1 rounded-lg border border-[var(--border)]/25 p-0.5">
+      {!customOnly && <div className="grid w-full grid-cols-2 gap-1 rounded-lg border border-[var(--border)]/25 p-0.5">
         {(["custom", "mimic"] as const).map((m) => (
           <button
             key={m}
@@ -182,7 +185,7 @@ export default memo(function QuizConfigPanel({
             {m === "custom" ? t("Custom") : t("Mimic Paper")}
           </button>
         ))}
-      </div>
+      </div>}
 
       {value.mode === "custom" ? (
         <div className="space-y-2.5">
@@ -196,7 +199,7 @@ export default memo(function QuizConfigPanel({
                 onChange={(e) =>
                   update(
                     "num_questions",
-                    Math.max(1, Number(e.target.value) || 1),
+                    Math.min(50, Math.max(1, Math.floor(Number(e.target.value)) || 1)),
                   )
                 }
                 className={`${INPUT_CLS} w-full`}

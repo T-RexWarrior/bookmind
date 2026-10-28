@@ -740,6 +740,15 @@ async def record_quiz_results(session_id: str, payload: QuizResultsRequest):
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
     content = _format_quiz_results_message(payload.answers)
+    from deeptutor.bookmind.practice import binding, record_answer
+    if await asyncio.to_thread(binding, session_id):
+        try:
+            for answer in payload.answers:
+                await record_answer(session_id, payload.turn_id, answer.model_dump())
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return {"recorded": True, "session_id": session_id, "answer_count": len(payload.answers),
+                "notebook_count": len(payload.answers), "content": content}
     await store.add_message(
         session_id=session_id,
         role="user",

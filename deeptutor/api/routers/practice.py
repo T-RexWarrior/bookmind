@@ -243,7 +243,7 @@ async def check(entry_id: int, payload: AnswerRequest):
 @router.post("/questions/{entry_id}/review")
 async def review(entry_id: int, payload: ReviewRequest):
     try:
-        return await asyncio.to_thread(
+        outcome = await asyncio.to_thread(
             PracticeStore(get_sqlite_session_store().db_path).review,
             entry_id,
             payload.request_id,
@@ -252,6 +252,14 @@ async def review(entry_id: int, payload: ReviewRequest):
             payload.answer,
             self_report=payload.self_report,
         )
+        # A linked textbook reattempt feeds the same objective evidence log.
+        # Native subjective self-ratings remain review scheduling, not grades.
+        from deeptutor.bookmind.practice import turn_scope, record_answer
+        entry = await _entry(entry_id)
+        sid, tid = str(entry.get('session_id') or ''), str(entry.get('turn_id') or '')
+        if not payload.self_report and await asyncio.to_thread(turn_scope, sid, tid):
+            await record_answer(sid, tid, {**entry, 'user_answer': payload.answer}, attempt_id=f'practice-{payload.request_id}')
+        return outcome
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ReviewConflict as exc:

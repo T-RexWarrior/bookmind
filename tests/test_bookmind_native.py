@@ -170,3 +170,106 @@ def test_binding_recovers_without_replacing_native_notebook(native_book):
     assert recovered['path_id'] == book['path_id']
     assert recovered['workspace_id'] == book['workspace_id']
     assert recovered['notebook_id'] == book['notebook_id']
+
+
+async def _practice_turn(book):
+    from deeptutor.bookmind import practice
+    from deeptutor.services.session import get_sqlite_session_store
+    sid = await practice.open_session(book)
+    store = get_sqlite_session_store()
+    turn = await store.create_turn(sid, 'deep_question')
+    tid = turn.get('turn_id') or turn['id']
+    point = book['objectives'][-1]
+    payload = {'config': {'num_questions': 2, 'difficulty': 'hard',
+        'question_types': ['choice', 'short_answer'], 'per_type_counts': {'choice': 1, 'short_answer': 1},
+        'bookmind_objective_id': point['id'], 'bookmind_start': point['start'], 'bookmind_end': point['end']}}
+    practice.prepare_turn(sid, tid, 'deep_question', payload)
+    questions = [
+        {'question_id': 'q_1', 'question': '中序遍历何时访问根？', 'question_type': 'choice', 'options': {'A': '最先', 'B': '左右之间'}, 'correct_answer': 'B', 'explanation': '左根右', 'difficulty': 'hard'},
+        {'question_id': 'q_2', 'question': '解释递归过程', 'question_type': 'short_answer', 'correct_answer': '先左子树，再根，最后右子树'}]
+    for q in questions:
+        await store.append_turn_event(tid, {'type': 'content', 'metadata': {'call_kind': 'quiz_question_emitted', 'qa_pair': q}})
+    await store.update_turn_status(tid, 'completed')
+    return sid, tid, payload, questions
+
+
+def test_full_practice_uses_native_sources_and_preserves_mix(native_book):
+    from deeptutor.bookmind import practice
+    from deeptutor.reading.references import resolve_reading_sources
+    async def scenario():
+        sid, tid, payload, questions = await _practice_turn(native_book)
+        assert await practice.open_session(native_book) == sid
+        references = payload['reading_references']
+        assert references[0]['material_id'] == native_book['material_id']
+        assert '中序遍历' in resolve_reading_sources(references)[0].full_text
+        snapshot = await practice.snapshot(native_book)
+        assert snapshot['turn_id'] == tid and len(snapshot['questions']) == 2
+        assert snapshot['config']['difficulty'] == 'hard'
+        assert snapshot['config']['per_type_counts'] == {'choice': 1, 'short_answer': 1}
+        from deeptutor.runtime.request_contracts import validate_deep_question_request_config
+        validated = validate_deep_question_request_config(payload['config'])
+        assert validated.bookmind_objective_id == native_book['objectives'][-1]['id']
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('override', [
+    {'num_questions': 0}, {'num_questions': 51}, {'difficulty': 'impossible'},
+    {'question_types': ['unknown']}, {'per_type_counts': {'choice': 2, 'short_answer': 1}},
+    {'bookmind_objective_id': 'another-book-point'}, {'bookmind_end': 99999},
+])
+def test_full_practice_rejects_bad_config_and_source(native_book, override):
+    from deeptutor.bookmind import practice
+    async def scenario():
+        sid, _, payload, _ = await _practice_turn(native_book)
+        payload['config'].update(override)
+        with pytest.raises(ValueError):
+            practice.prepare_turn(sid, 'invalid-turn', 'deep_question', payload)
+        assert practice.turn_scope(sid, 'invalid-turn') is None
+    asyncio.run(scenario())
+
+
+def test_full_practice_trusted_grades_share_evidence_without_duplicates(native_book):
+    from deeptutor.bookmind import practice
+    from deeptutor.api.routers.question_notebook import UpsertEntryRequest, upsert_single_entry
+    async def scenario():
+        sid, tid, _, questions = await _practice_turn(native_book)
+        # Even a forged key, client grade and foreign objective are ignored.
+        payload = UpsertEntryRequest(session_id=sid, turn_id=tid, question_id='q_1',
+            question='forged question', correct_answer='A', user_answer='A', is_correct=True,
+            mastery_path_id='foreign-path', knowledge_point_id='foreign-point')
+        first = await upsert_single_entry(payload)
+        second = await practice.record_answer(sid, tid, payload.model_dump())
+        from deeptutor.api.routers.sessions import QuizResultsRequest, record_quiz_results
+        bulk = QuizResultsRequest(turn_id=tid, answers=[payload.model_dump()])
+        await record_quiz_results(sid, bulk)
+        await record_quiz_results(sid, bulk)
+        assert first['id'] == second['id'] and second['result'] == 'incorrect'
+        assert second['correct_answer'] == 'B' and second['question'] == questions[0]['question']
+        assert second['mastery_path_id'] == native_book['path_id']
+        progress = LearningStore().load(native_book['path_id'])
+        assert len(progress.learning_evidence) == 1
+        assert progress.review_queue
+        subjective = await practice.record_answer(sid, tid, {'question_id': 'q_2', 'user_answer': '我的解释', 'is_correct': True})
+        assert subjective['result'] == 'ungraded'
+        assert len(LearningStore().load(native_book['path_id']).learning_evidence) == 1
+        with pytest.raises(ValueError):
+            await practice.record_answer(sid, tid, {'question_id': 'other-q', 'user_answer': 'B'})
+        with pytest.raises(ValueError):
+            await practice.record_answer('other-session', tid, {'question_id': 'q_1', 'user_answer': 'B'})
+    asyncio.run(scenario())
+
+
+def test_textbook_mistake_reattempt_updates_same_point_once(native_book):
+    from deeptutor.bookmind import practice
+    from deeptutor.api.routers.practice import review, ReviewRequest
+    async def scenario():
+        sid, tid, _, _ = await _practice_turn(native_book)
+        entry = await practice.record_answer(sid, tid, {'question_id': 'q_1', 'user_answer': 'A'})
+        request = ReviewRequest(answer='B', request_id='bookmind-reattempt-001', version=0, rating='good')
+        first = await review(entry['id'], request)
+        second = await review(entry['id'], request)
+        assert first == second
+        progress = LearningStore().load(native_book['path_id'])
+        assert len(progress.learning_evidence) == 2
+        assert progress.learning_evidence[-1].result == 'correct'
+    asyncio.run(scenario())

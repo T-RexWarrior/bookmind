@@ -234,6 +234,10 @@ class TurnExecutor:
             )
         )
         try:
+            # Bound textbook practice uses the native question pipeline with
+            # server-verified reading references and objective identity.
+            from deeptutor.bookmind.practice import prepare_turn
+            await asyncio.to_thread(prepare_turn, session_id, turn_id, capability_name, payload)
             # A queued turn may start after a learner's material grant changes.
             # Recheck before prompt construction and reading-tool execution.
             material_id = _reading_material_id(payload.get("reading_material_id"))

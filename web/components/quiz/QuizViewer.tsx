@@ -80,6 +80,7 @@ interface QuizViewerProps {
    */
   turnId?: string | null;
   language?: string;
+  allowImages?: boolean;
 }
 
 type AnswerImage = {
@@ -193,6 +194,7 @@ export default function QuizViewer({
   sessionId,
   turnId,
   language = "en",
+  allowImages = true,
 }: QuizViewerProps) {
   const { t } = useTranslation();
   const followupController = useQuizFollowupController();
@@ -406,7 +408,7 @@ export default function QuizViewer({
   // Fill-in-the-blank questions normally use exact text grading, but formulas
   // can be much easier to submit as a photo. Keep the existing image path for
   // open-ended questions and extend it to fill-in-the-blank questions only.
-  const canAttachImage = isFillBlank || !isGradable;
+  const canAttachImage = allowImages && (isFillBlank || !isGradable);
   const currentUserAnswer = q ? getUserAnswer(q, ans) : "";
   const canShowCorrectness = isGradable && currentUserAnswer.length > 0;
 

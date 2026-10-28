@@ -160,9 +160,9 @@ export function MasteryComposer({
       contextBudget={contextBudget}
       inputHeader={
         <div className="bm-guide-actions" aria-label="AI 导学辅助操作">
-          <button type="button" disabled={disabled || state.isStreaming || awaitingUserReply} onClick={() => sendMessage('请检查我对当前知识点的理解。如果已有未完成题目，请继续使用那道题；否则请按导学规则发出可作答的题卡，并记录我的真实作答。')}>检查理解</button>
+          <button type="button" disabled={disabled || state.isStreaming || awaitingUserReply} onClick={() => sendMessage('请针对当前知识点安排随堂测验。如果已有未完成题目，请继续使用那道题；否则请按导学规则发出可作答的题卡，在我作答后给出反馈并记录真实结果。')}>随堂测验</button>
           <button type="button" disabled={disabled || state.isStreaming || awaitingUserReply} onClick={() => sendMessage('请用 Mermaid 图解辅助解释当前知识点，并结合教材说明图中关系。保留当前学习目标和未完成的题目。')}>图解说明</button>
-          <button type="button" disabled={disabled || state.isStreaming || awaitingUserReply} onClick={() => sendMessage('请换一个更直观的例子解释当前知识点，再根据我的回答继续引导。不要提前认定我已掌握。')}>换个例子</button>
+          <button type="button" disabled={disabled || state.isStreaming || awaitingUserReply} onClick={() => sendMessage('请补充一个更直观的例子解释当前知识点，再根据我的回答继续引导。不要提前认定我已掌握。')}>补充示例</button>
         </div>
       }
     />

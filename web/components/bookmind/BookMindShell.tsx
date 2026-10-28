@@ -124,9 +124,10 @@ function BookMindFrameInner({ children }: { children: React.ReactNode }) {
           </div>
           <nav aria-label="教材页面">
             {[
-              { key: 'learn', label: '学习', icon: BookOpen },
-              { key: 'practice', label: '练习', icon: ListChecks },
-              { key: 'notes', label: '笔记', icon: NotebookPen },
+              { key: 'learn', label: '自主学习', icon: BookOpen },
+              { key: 'guide', label: 'AI 导学', icon: GraduationCap },
+              { key: 'practice', label: '练习巩固', icon: ListChecks },
+              { key: 'notes', label: '学习笔记', icon: NotebookPen },
             ].map(tab => (
               <Link
                 key={tab.key}
@@ -138,9 +139,9 @@ function BookMindFrameInner({ children }: { children: React.ReactNode }) {
                       : `?objective=${point.id}`
                     : '')
                 }
-                className={(tab.key === 'learn' ? isLearning : tab.key === 'practice' ? isPracticing : path.startsWith(book.links.notes)) ? 'active' : ''}
-                aria-current={(tab.key === 'learn' ? isLearning : tab.key === 'practice' ? isPracticing : path.startsWith(book.links.notes)) ? 'page' : undefined}
-                onClick={tab.key === 'learn' ? event => resumeLearning(event) : undefined}
+                className={(tab.key === 'learn' ? isLearning && !isGuiding : tab.key === 'guide' ? isGuiding : tab.key === 'practice' ? isPracticing : path.startsWith(book.links.notes)) ? 'active' : ''}
+                aria-current={(tab.key === 'learn' ? isLearning && !isGuiding : tab.key === 'guide' ? isGuiding : tab.key === 'practice' ? isPracticing : path.startsWith(book.links.notes)) ? 'page' : undefined}
+                onClick={tab.key === 'learn' || tab.key === 'guide' ? event => resumeLearning(event, tab.key as 'learn' | 'guide') : undefined}
               >
                 <tab.icon size={15} />
                 {tab.label}
@@ -150,21 +151,12 @@ function BookMindFrameInner({ children }: { children: React.ReactNode }) {
         </header>
       )}
       {book && isLearning && (
-        <nav className="bm-learning-modes" aria-label="学习模式">
-          <Link className={!isGuiding ? 'active' : ''} aria-current={!isGuiding ? 'page' : undefined}
-            onClick={event => resumeLearning(event, 'learn')}
-            href={`${book.links.learn}?locator=${point?.start || position}`}>
-            <BookOpen size={15} /><span>自主学习<small>按自己的节奏阅读与探索</small></span>
-          </Link>
-          <Link className={isGuiding ? 'active' : ''} aria-current={isGuiding ? 'page' : undefined}
-            onClick={event => resumeLearning(event, 'guide')}
-            href={book.links.guide + (point ? `?objective=${point.id}` : '')}>
-            <GraduationCap size={16} /><span>AI 导学<small>沿学习路径，讲解、检验与复习</small></span>
-          </Link>
+        <div className="bm-learning-context">
+          <span>{isGuiding ? '沿学习路径，讲解、随堂测验与复习' : '按自己的节奏阅读、提问与探索'}</span>
           {point && <div className="bm-learning-focus"><span title={point.name}>当前：<strong>{point.name}</strong></span>
             {isGuiding && point.start && <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('bookmind-source-open', { detail: { materialId: book.material_id, locator: point.start } }))}>查看教材原文</button>}
           </div>}
-        </nav>
+        </div>
       )}
       <div className="bm-frame-content">{children}</div>
       {book && isGuiding && <TextbookSourceDrawer key={book.id} book={book} />}

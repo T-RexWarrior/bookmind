@@ -274,6 +274,13 @@ async def _persist_answer_images(
 
 @router.post("/entries/upsert")
 async def upsert_single_entry(payload: UpsertEntryRequest):
+    import asyncio
+    from deeptutor.bookmind.practice import binding, record_answer
+    if payload.origin_type == 'conversation' and await asyncio.to_thread(binding, payload.session_id):
+        try:
+            return await record_answer(payload.session_id, payload.turn_id, payload.model_dump())
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     store = get_sqlite_session_store()
     existing = await store.find_notebook_entry_by_origin(
         payload.origin_type,
