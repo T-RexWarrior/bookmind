@@ -33,7 +33,8 @@ def binding(session_id):
     with connection() as conn:
         _tables(conn)
         row = conn.execute('SELECT book_id FROM practice_sessions WHERE session_id=?', (session_id,)).fetchone()
-        return service.find_book(id=row['book_id']) if row else None
+        # Shelf removal must not release a conversation's durable ownership.
+        return service.find_book(id=row['book_id'], include_removed=True) if row else None
 
 
 async def open_session(book):

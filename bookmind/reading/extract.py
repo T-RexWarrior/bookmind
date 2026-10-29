@@ -398,13 +398,16 @@ def _sections_from_text(text: str, *, extractor: str) -> Extraction:
     return Extraction(units=split_into_sections(text), unit="section", extractor=extractor)
 
 
-def split_into_sections(text: str) -> tuple[str, ...]:
+def split_into_sections(text: str, *, preserve_fences: bool = False) -> tuple[str, ...]:
     """Cut flat text into sections, preferring paragraph boundaries.
 
     Greedy accumulation up to :data:`SECTION_TARGET_CHARS`, flushing at the
     paragraph that crosses it. A single paragraph longer than
     :data:`SECTION_HARD_CHARS` is hard-split so that pathological input (one
     enormous line) stays addressable.
+
+    With ``preserve_fences``, a fenced diagram/code block stays in one unit
+    even when longer than the prose cap; its original source is never cut.
     """
     normalised = text.replace("\r\n", "\n").replace("\r", "\n").strip()
     if not normalised:
@@ -423,17 +426,47 @@ def split_into_sections(text: str) -> tuple[str, ...]:
             buffer.clear()
             size = 0
 
-    for paragraph in normalised.split("\n\n"):
+    paragraphs = _markdown_paragraphs(normalised) if preserve_fences else ((p, False) for p in normalised.split('\n\n'))
+    for paragraph, fenced in paragraphs:
         block = paragraph.strip()
         if not block:
             continue
-        for piece in _hard_split(block, SECTION_HARD_CHARS):
+        # SVG/chart/code fences are indivisible reader content. Splitting one
+        # at a blank line or character cap turns its tail into ordinary prose
+        # and prevents diagrams from rendering. Prose keeps the normal cap.
+        for piece in ([block] if fenced else _hard_split(block, SECTION_HARD_CHARS)):
+            if fenced and size:
+                flush()
             buffer.append(piece)
             size += len(piece)
             if size >= SECTION_TARGET_CHARS:
                 flush()
     flush()
     return tuple(sections)
+
+
+def _markdown_paragraphs(text):
+    """Yield prose paragraphs and complete CommonMark fenced blocks."""
+    lines, marker = [], ''
+    for line in text.splitlines():
+        fence = _MD_FENCE.match(line)
+        if marker:
+            lines.append(line)
+            if fence and fence['marker'][0] == marker[0] and len(fence['marker']) >= len(marker) and not fence['info'].strip():
+                yield '\n'.join(lines), True
+                lines, marker = [], ''
+        elif fence and not (fence['marker'][0] == '`' and '`' in fence['info']):
+            if lines:
+                yield '\n'.join(lines), False
+            lines, marker = [line], fence['marker']
+        elif not line.strip():
+            if lines:
+                yield '\n'.join(lines), False
+                lines = []
+        else:
+            lines.append(line)
+    if lines:
+        yield '\n'.join(lines), bool(marker)
 
 
 def split_markdown_by_headings(
@@ -491,7 +524,7 @@ def split_markdown_by_headings(
         offset += len(line)
 
     if len(boundaries) < 2:
-        return split_into_sections(normalised), ()
+        return split_into_sections(normalised, preserve_fences=True), ()
 
     units: list[str] = []
     outline: list[OutlineEntry] = []
@@ -501,7 +534,7 @@ def split_markdown_by_headings(
         # extraction this is uncommon (the title is normally first), but hand-
         # authored pages sometimes place a short deck or byline above it.
         section_start = 0 if index == 0 else start
-        for piece in split_into_sections(normalised[section_start:end]):
+        for piece in split_into_sections(normalised[section_start:end], preserve_fences=True):
             units.append(piece)
             outline.append(OutlineEntry(locator=len(units), title=title, level=level))
     return tuple(units), tuple(outline)

@@ -693,3 +693,10 @@
 .bm-plan-type{flex-shrink:0;background:var(--muted);color:var(--primary);border-radius:6px;padding:4px 8px;font-size:11px}
 .bm-plan-actions{display:flex;gap:14px;justify-content:space-between;align-items:center;margin-top:16px}
 @media(max-width:640px){.bm-learning-plan{padding:16px}.bm-plan-fields{grid-template-columns:1fr}.bm-plan-actions{align-items:stretch;flex-direction:column}}
+.bm-book-body > .bm-book-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.bm-book-title h3 { flex: 1; min-width: 0; }
+.bm-delete-book { color: #7a857e; border-radius: 6px; padding: 5px; flex-shrink: 0; }
+.bm-delete-book:hover { color: #b33d39; background: #fff0ed; }
+.bm-removed-books { margin-top: 28px; color: #617167; font-size: 13px; }
+.bm-removed-books summary { cursor: pointer; padding: 12px 0; }
+.bm-removed-books > div { display: flex; align-items: center; justify-content: space-between; gap: 15px; border-bottom: 1px solid #e6ebe3; padding: 10px 0; }

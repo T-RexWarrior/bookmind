@@ -4,15 +4,17 @@ outline_system: |
   JSON of the shape:
   {
     "intro": "<= 70 words opening paragraph",
+    "shared_example": "Concrete example, variables, data, units and conventions shared by all subsections",
     "subsections": [
       {"heading": "H3 heading", "role": "core | example | derivation | application | comparison",
        "focus": "1-sentence focus", "target_words": 280-360}
     ],
     "key_takeaway": "<= 40 words crisp takeaway"
   }
-  Rules: 3-5 subsections; total target 1500-2500 words; concise headings;
-  align with the chapter's learning objectives; do NOT write the body —
-  only the plan.
+  Honor the supplied section word budget and subsection count. Cover ONLY
+  this section's focus; do not reteach every chapter objective in each section.
+  Assign distinct jobs and one shared example to the subsections. Concise
+  headings; do NOT write the body, only the plan.
 
 outline_user: |
   Chapter: {chapter_title}

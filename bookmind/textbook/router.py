@@ -68,8 +68,29 @@ async def import_goal_material(native_book_id: str):
 
 
 @router.get('/books')
-async def list_books():
-    return await asyncio.to_thread(lambda: [service.overview(b) for b in service.books()])
+async def list_books(include_removed: bool = False):
+    def listing():
+        return [({'id': b['id'], 'title': b['title'], 'removed_at': b['removed_at'],
+                  'generated_book_id': (service.repository.generated_source(material_id=b['material_id']) or {}).get('native_book_id')}
+                 if b.get('removed_at') else service.overview(b))
+                for b in service.books(include_removed=include_removed)]
+    return await asyncio.to_thread(listing)
+
+
+@router.delete('/books/{book_id}')
+async def remove_book(book_id: str):
+    try:
+        return await asyncio.to_thread(service.remove_book, book_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post('/books/{book_id}/restore')
+async def restore_book(book_id: str):
+    try:
+        return await asyncio.to_thread(service.restore_book, book_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @router.post('/books', status_code=201)

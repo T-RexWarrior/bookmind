@@ -80,6 +80,11 @@ class CodeGenerator(BlockGenerator):
             intent=intent,
             language=language,
         )
+        user_prompt += ('\nAssigned focus: ' + str(params.get('focus') or intent)
+                        + '\nSupply a small literal dataset or create it in the example. '
+                        'Do not depend on an unprovided CSV/image/local file. Reuse the chapter\'s '
+                        'existing fields, units and variable names. Explain the expected output '
+                        'and the reason for each important operation; avoid generic boilerplate.')
         data = await llm_json(
             user_prompt=user_prompt,
             system_prompt=get_book_prompt(prompts, "system"),

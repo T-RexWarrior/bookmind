@@ -38,6 +38,7 @@ async def llm_text(
     language: str | None = None,
     reasoning_effort: str | None = None,
     outcome: StreamOutcome | None = None,
+    require_complete: bool = False,
 ) -> str:
     """Run an LLM completion for a Book block / agent.
 
@@ -49,6 +50,10 @@ async def llm_text(
     """
     if language:
         system_prompt = append_language_directive(system_prompt, language)
+    from ..writing import active_writing_context
+    writing_context = active_writing_context.get()
+    if writing_context:
+        user_prompt += '\n\n' + writing_context
 
     config = get_llm_config()
     model = config.model
@@ -69,11 +74,15 @@ async def llm_text(
         "binding": binding,
         **kwargs,
     }
+    if require_complete and outcome is None:
+        outcome = StreamOutcome()
     if outcome is None:
         response = await llm_complete(**call_kwargs)
     else:
         chunks = [chunk async for chunk in llm_stream(**call_kwargs, outcome=outcome)]
         response = "".join(chunks)
+        if require_complete and outcome.truncated:
+            raise RuntimeError('LLM output truncated before the subsection was complete; retry this block.')
     return clean_thinking_tags(response, binding, model).strip()
 
 

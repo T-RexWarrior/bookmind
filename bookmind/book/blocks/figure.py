@@ -51,6 +51,8 @@ class FigureGenerator(BlockGenerator):
             for obj in objectives:
                 history_lines.append(f"- {obj}")
         history_context = "\n".join(history_lines)
+        from ..writing import block_writing_context
+        history_context += '\n\n' + block_writing_context(ctx)
 
         focus_clause = (
             get_book_prompt(prompts, "focus_clause").rstrip().format(focus=focus) if focus else ""

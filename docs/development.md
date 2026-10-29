@@ -69,6 +69,7 @@ npm.cmd run dev -- --hostname 127.0.0.1 --port 8018
 ```powershell
 .\.venv\Scripts\python.exe -m pip install pytest pytest-asyncio
 .\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_native.py tests/test_bookmind_learning_plan.py tests/test_bookmind_diagrams_outline.py tests/test_bookmind_brand_migration.py bookmind/learning/tests/test_mastery_state_integrity.py bookmind/learning/tests/test_mastery_choices.py bookmind/learning/tests/test_scheduler.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_library.py tests/test_book_generation_quality.py
 .\.venv\Scripts\python.exe -m bookmind.api.contracts.export --check
 ```
 
@@ -80,6 +81,7 @@ npm.cmd run contracts:check
 npm.cmd run typecheck
 npm.cmd run build
 npm.cmd run test:unit -- tests/svg-text-alignment.spec.ts tests/inline-study-diagram.spec.ts tests/reading-session-isolation.spec.tsx tests/mastery-question-card.spec.tsx tests/mastery-question-group.spec.tsx tests/notebook-record-edit-discoverability.spec.tsx tests/reading-quiz-persistence.spec.tsx
+npm.cmd run test:unit -- tests/bookshelf-library.spec.tsx
 node scripts/check-bookmind-brand-migration.mjs
 ```
 

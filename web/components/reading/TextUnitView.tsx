@@ -576,7 +576,7 @@ export function TextUnitView({
                 allowHtml={false}
                 enableMath
                 enableCode
-                enableMermaid={false}
+                enableMermaid
                 enableImages
                 variant="prose"
               />

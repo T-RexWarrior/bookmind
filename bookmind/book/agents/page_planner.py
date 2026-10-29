@@ -322,6 +322,7 @@ class SectionArchitect:
         language: str = "en",
         depth: str | None = None,
         allowed: set[BlockType] | None = None,
+        writing_context: str = '',
     ) -> list[Block]:
         if not self.llm_enabled:
             return self.plan_blocks(chapter, depth=depth, allowed=allowed)
@@ -338,7 +339,9 @@ class SectionArchitect:
                     language=language,
                     exploration_summary=(exploration.summary if exploration else ""),
                     user_template=user_template,
-                ),
+                ) + '\n\n' + writing_context + '\nOnly select from these available block types: '
+                + ', '.join(sorted(t.value for t in (allowed or _ALLOWED_LLM_TYPES)))
+                + '. Assign non-overlapping focuses. Use figures only when they explain a structure or process.',
                 system_prompt=system_prompt,
                 max_tokens=1200,
                 temperature=0.6,

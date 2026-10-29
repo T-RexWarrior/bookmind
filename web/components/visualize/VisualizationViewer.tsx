@@ -441,6 +441,13 @@ function SvgRenderer({ svg }: { svg: string }) {
   );
 }
 
+/** Reuse the validated SVG/chart renderers for figures in generated Markdown books. */
+export function MarkdownFigure({ type, code }: { type: 'svg' | 'chartjs'; code: string }) {
+  return <div className="my-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4" data-book-figure={type}>
+    {type === 'svg' ? <SvgRenderer svg={code} /> : <ChartJsRenderer config={code} />}
+  </div>;
+}
+
 function CanvasVisualization({ result }: { result: VisualizeCanvasResult }) {
   const { t } = useTranslation();
   if (result.renderer.target === "iframe") {

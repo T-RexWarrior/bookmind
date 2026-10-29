@@ -3,18 +3,32 @@
 import Link from 'next/link'
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, BookOpen, FileUp, GraduationCap, Loader2, NotebookPen, Sparkles } from 'lucide-react'
+import { ArrowRight, BookOpen, FileUp, GraduationCap, Loader2, NotebookPen, RotateCcw, Sparkles, Trash2 } from 'lucide-react'
+import { Dialog } from '@/shared/ui/Dialog'
 import { apiFetch } from '@/shared/api/client'
 import { uploadMaterial } from '@/lib/reading-api'
 import { Textbook, useBookMind } from './BookMindProvider'
 import GoalDrafts from './GoalDrafts'
 
 export default function Bookshelf() {
-  const { books, refresh, error } = useBookMind()
+  const { books, removedBooks, refresh, error } = useBookMind()
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState('')
+  const [removing, setRemoving] = useState<Textbook | null>(null)
+  const [changing, setChanging] = useState('')
   const input = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  async function changeBook(id: string, restore = false) {
+    if (changing) return
+    setChanging(id); setFailure('')
+    try {
+      const response = await apiFetch(`/api/bookmind/books/${encodeURIComponent(id)}${restore ? '/restore' : ''}`, { method: restore ? 'POST' : 'DELETE' })
+      if (!response.ok) throw new Error(restore ? '恢复教材失败，请重试。' : '删除教材失败，请重试。')
+      setRemoving(null)
+      await refresh()
+    } catch (reason) { setFailure(reason instanceof Error ? reason.message : String(reason)) }
+    finally { setChanging('') }
+  }
   async function upload(file?: File) {
     if (!file || busy) return
     setBusy(true)
@@ -101,7 +115,7 @@ export default function Bookshelf() {
                   <span>BookMind</span>
                 </div>
                 <div className="bm-book-body">
-                  <h3>{book.title}</h3>
+                  <div className="bm-book-title"><h3>{book.title}</h3><button type="button" className="bm-delete-book" aria-label={`删除教材《${book.title}》`} title="删除教材" onClick={() => setRemoving(book)} disabled={Boolean(changing)}><Trash2 size={16} /></button></div>
                   <p>
                     {book.objectives.length} 个目录学习目标 · {book.note_count} 条笔记
                   </p>
@@ -121,6 +135,10 @@ export default function Bookshelf() {
           </div>
         )}
       </section>
+      {removedBooks.length > 0 && <details className="bm-removed-books"><summary>已删除的教材（{removedBooks.length}）</summary><p>学习记录与笔记已保留，可随时恢复。</p>{removedBooks.map(book => <div key={book.id}><span>{book.title}</span><button className="bm-secondary" disabled={Boolean(changing)} onClick={() => void changeBook(book.id, true)}><RotateCcw size={14} />恢复教材</button></div>)}</details>}
+      <Dialog open={Boolean(removing)} title="删除这本教材？" onClose={() => setRemoving(null)} busy={Boolean(changing)} alert size="sm" closeLabel="关闭" footer={<><button className="bm-secondary" disabled={Boolean(changing)} onClick={() => setRemoving(null)} data-autofocus>取消</button><button className="bm-primary" disabled={Boolean(changing)} onClick={() => removing && void changeBook(removing.id)}>{changing ? '正在删除…' : '确认删除'}</button></>}>
+        <p>《{removing?.title}》将从书架移除，笔记、对话和练习记录会保留。可在书架底部恢复，重新导入同一文件也会恢复。电脑中的原始文件不会删除。</p>
+      </Dialog>
     </main>
   )
 }
