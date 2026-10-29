@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from bookmind.services.text_model import TextModelSettings, save_text_settings, text_settings
 
@@ -13,6 +13,45 @@ router = APIRouter(prefix='/api/bookmind', tags=['BookMind'])
 
 class BindRequest(BaseModel):
     material_id: str
+
+
+class PlanRequest(BaseModel):
+    objective_id: str
+    goal: str = Field(default='', max_length=1500)
+    prior_knowledge: str = Field(default='', max_length=1000)
+
+
+class AdoptPlanRequest(BaseModel):
+    plan_id: str
+
+
+@router.post('/books/{book_id}/learning-plan/preview')
+async def preview_learning_plan(book_id: str, body: PlanRequest):
+    from .planning import PlanningError, generate_plan
+    book = await asyncio.to_thread(service.find_book, id=book_id)
+    if not book:
+        raise HTTPException(404, '教材不存在')
+    try:
+        return await generate_plan(book, body.objective_id, goal=body.goal, prior_knowledge=body.prior_knowledge)
+    except PlanningError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, '学习目标生成失败，请检查文字模型配置后重试。') from exc
+
+
+@router.post('/books/{book_id}/learning-plan/apply')
+async def adopt_learning_plan(book_id: str, body: AdoptPlanRequest):
+    from bookmind.learning.storage import PathLeaseConflictError
+    from .planning import PlanningError, apply_plan
+    book = await asyncio.to_thread(service.find_book, id=book_id)
+    if not book:
+        raise HTTPException(404, '教材不存在')
+    try:
+        return await asyncio.to_thread(apply_plan, book, body.plan_id)
+    except PathLeaseConflictError as exc:
+        raise HTTPException(409, '当前有导学正在运行，请结束本轮对话后采用学习目标。') from exc
+    except PlanningError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.post('/generated/{native_book_id}/import')

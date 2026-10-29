@@ -298,6 +298,15 @@ def assign_objective_identities(
                 kp.module_id = module.id
 
     new_ids = {kp.id for module in modules for kp in module.knowledge_points}
+    # A route reorder/save may omit UI-hidden planning metadata. Preserve it
+    # when the durable objective still means exactly the same thing.
+    for module in modules:
+        for point in module.knowledge_points:
+            old = old_by_id.get(point.id)
+            if old is not None and _objective_fingerprint(old) == _objective_fingerprint(point):
+                point.planning_status = old.planning_status
+                point.mastery_requirement = old.mastery_requirement
+                point.source_section_id = old.source_section_id
     return {
         "mode": mode,
         "preserved": preserved,

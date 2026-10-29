@@ -73,6 +73,12 @@ async def lifespan(app: FastAPI):
         emit_task_event=get_task_stream_manager().emit,
     )
     migration_reports = await application_container.run_startup_data_migrations()
+    from bookmind.textbook.repository import books as textbook_books
+    from bookmind.textbook.planning import migrate_outline_markers
+    import asyncio
+
+    for textbook in await asyncio.to_thread(textbook_books):
+        await asyncio.to_thread(migrate_outline_markers, textbook)
     legacy_reports = migration_reports["legacy_chat"]
     migrated_reports = [report for report in legacy_reports if report.get("source_hash")]
     if migrated_reports:

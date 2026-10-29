@@ -68,6 +68,8 @@ export async function initModules(bookId: string, modules: ModuleInit[]) {
 export type ObjectiveStatus = "new" | "learning" | "mastered";
 
 export interface MapKnowledgePoint {
+  planning_status?: string;
+  mastery_requirement?: string;
   id: string;
   name: string;
   type: string;
@@ -132,6 +134,8 @@ export interface MasteryMapResult {
 // ── Visual learning board ─────────────────────────────────────────────────
 
 export interface BoardCard {
+  planning_status?: string;
+  mastery_requirement?: string;
   id: string;
   name: string;
   type: string;
@@ -283,6 +287,8 @@ export interface ObjectiveErrorRecord {
 }
 
 export interface ObjectiveReport {
+  planning_status?: string;
+  mastery_requirement?: string;
   id: string;
   name: string;
   type: string;

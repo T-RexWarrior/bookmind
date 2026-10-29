@@ -34,6 +34,7 @@ import {
   masterySessionRoute,
 } from '@/lib/mastery-mode'
 import { LearnerProfileCard } from '@/components/space/learning/LearnerProfileCard'
+import { LearningPlan } from '@/components/bookmind/LearningPlan'
 import { ModuleOutline } from '@/components/space/learning/ModuleOutline'
 import { ConfirmDialog } from '@/components/space/learning/ConfirmDialog'
 import { EditTopicRouteDialog } from '@/components/space/learning/EditTopicRouteDialog'
@@ -392,6 +393,7 @@ export default function MasteryTopicPage() {
             </div>
           </div>
         </header>
+        <LearningPlan pathId={pathId} objectiveId={selectedId} onApplied={async id => { await refresh(); setSelectedId(id) }} />
 
         <section className="fixed bottom-3 left-4 right-4 z-20 flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)]/95 p-4 backdrop-blur sm:static sm:mt-6 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:rounded-none sm:border-0 sm:border-y sm:border-[var(--border)] sm:bg-transparent sm:px-0 sm:py-4 sm:backdrop-blur-none">
           <div className="flex min-w-0 items-baseline gap-3">

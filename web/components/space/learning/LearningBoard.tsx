@@ -114,7 +114,7 @@ export function LearningBoard({
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
                     <span className="rounded-full bg-[var(--muted)] px-1.5 py-0.5 text-[var(--muted-foreground)]">
-                      {knowledgeTypeLabel(card.type, t)}
+                      {knowledgeTypeLabel(card.type, t, card.planning_status)}
                     </span>
                     <span className="shrink-0 tabular-nums text-[var(--muted-foreground)]">
                       {Math.round(card.mastery_level * 100)}%

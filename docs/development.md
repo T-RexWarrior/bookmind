@@ -68,7 +68,7 @@ npm.cmd run dev -- --hostname 127.0.0.1 --port 8018
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install pytest pytest-asyncio
-.\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_native.py tests/test_bookmind_diagrams_outline.py tests/test_bookmind_brand_migration.py bookmind/learning/tests/test_mastery_state_integrity.py bookmind/learning/tests/test_mastery_choices.py bookmind/learning/tests/test_scheduler.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_bookmind_native.py tests/test_bookmind_learning_plan.py tests/test_bookmind_diagrams_outline.py tests/test_bookmind_brand_migration.py bookmind/learning/tests/test_mastery_state_integrity.py bookmind/learning/tests/test_mastery_choices.py bookmind/learning/tests/test_scheduler.py
 .\.venv\Scripts\python.exe -m bookmind.api.contracts.export --check
 ```
 

@@ -84,6 +84,9 @@ class KnowledgePoint(BaseModel):
     name: str
     type: KnowledgeType
     module_id: str
+    planning_status: Literal["manual", "outline", "planned", "legacy"] = "manual"
+    mastery_requirement: str = ""
+    source_section_id: str = ""
     # Required objectives, not a presentation order. Empty on legacy paths.
     prerequisite_ids: list[str] = Field(default_factory=list)
     # Selected non-goal sources that justify this objective. They are curriculum
@@ -641,6 +644,7 @@ class LearningProgress(BaseModel):
     # The quantitative ``mastery_levels`` gate covers MEMORY / PROCEDURE.
     qualitative_mastery: dict[str, bool] = Field(default_factory=dict)
     knowledge_types: dict[str, KnowledgeType] = Field(default_factory=dict)
+    curriculum_plans: dict[str, dict[str, Any]] = Field(default_factory=dict)
     lesson_evidence: dict[str, dict[str, Any]] = Field(default_factory=dict)
     source_grounded: bool = False
     # Exact pages authorized for learner display, kept with the native path.

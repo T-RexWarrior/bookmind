@@ -231,6 +231,19 @@
         "title": "AdminCreateUserRequest",
         "type": "object"
       },
+      "AdoptPlanRequest": {
+        "properties": {
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id"
+        ],
+        "title": "AdoptPlanRequest",
+        "type": "object"
+      },
       "AnnotationInfo": {
         "properties": {
           "annotation_id": {
@@ -5347,6 +5360,31 @@
           "book_id"
         ],
         "title": "PauseBookRequest",
+        "type": "object"
+      },
+      "PlanRequest": {
+        "properties": {
+          "goal": {
+            "default": "",
+            "maxLength": 1500,
+            "title": "Goal",
+            "type": "string"
+          },
+          "objective_id": {
+            "title": "Objective Id",
+            "type": "string"
+          },
+          "prior_knowledge": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Prior Knowledge",
+            "type": "string"
+          }
+        },
+        "required": [
+          "objective_id"
+        ],
+        "title": "PlanRequest",
         "type": "object"
       },
       "PositionInfo": {
@@ -12152,6 +12190,170 @@
           }
         },
         "summary": "Get Book",
+        "tags": [
+          "BookMind"
+        ]
+      }
+    },
+    "/api/bookmind/books/{book_id}/learning-plan/apply": {
+      "post": {
+        "operationId": "adopt_learning_plan_api_bookmind_books__book_id__learning_plan_apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "dt_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dt Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdoptPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Adopt Learning Plan",
+        "tags": [
+          "BookMind"
+        ]
+      }
+    },
+    "/api/bookmind/books/{book_id}/learning-plan/preview": {
+      "post": {
+        "operationId": "preview_learning_plan_api_bookmind_books__book_id__learning_plan_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "dt_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dt Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Learning Plan",
         "tags": [
           "BookMind"
         ]

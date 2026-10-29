@@ -551,6 +551,40 @@ export interface paths {
     readonly patch?: never;
     readonly trace?: never;
   };
+  readonly "/api/bookmind/books/{book_id}/learning-plan/apply": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** Adopt Learning Plan */
+    readonly post: operations["adopt_learning_plan_api_bookmind_books__book_id__learning_plan_apply_post"];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
+  readonly "/api/bookmind/books/{book_id}/learning-plan/preview": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** Preview Learning Plan */
+    readonly post: operations["preview_learning_plan_api_bookmind_books__book_id__learning_plan_preview_post"];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
   readonly "/api/bookmind/books/{book_id}/practice/session": {
     readonly parameters: {
       readonly query?: never;
@@ -7413,6 +7447,11 @@ export interface components {
       /** Username */
       readonly username: string;
     };
+    /** AdoptPlanRequest */
+    readonly AdoptPlanRequest: {
+      /** Plan Id */
+      readonly plan_id: string;
+    };
     /** AnnotationInfo */
     readonly AnnotationInfo: {
       /** Annotation Id */
@@ -9923,6 +9962,21 @@ export interface components {
       /** Expected Revision */
       readonly expected_revision?: number | null;
     };
+    /** PlanRequest */
+    readonly PlanRequest: {
+      /**
+       * Goal
+       * @default
+       */
+      readonly goal: string;
+      /** Objective Id */
+      readonly objective_id: string;
+      /**
+       * Prior Knowledge
+       * @default
+       */
+      readonly prior_knowledge: string;
+    };
     /** PositionInfo */
     readonly PositionInfo: {
       /** Locator */
@@ -12101,6 +12155,7 @@ export type SchemaAdminBatchDeleteRequest =
   components["schemas"]["AdminBatchDeleteRequest"];
 export type SchemaAdminCreateUserRequest =
   components["schemas"]["AdminCreateUserRequest"];
+export type SchemaAdoptPlanRequest = components["schemas"]["AdoptPlanRequest"];
 export type SchemaAnnotationInfo = components["schemas"]["AnnotationInfo"];
 export type SchemaAnnotationPayload =
   components["schemas"]["AnnotationPayload"];
@@ -12340,6 +12395,7 @@ export type SchemaPageChatSessionRequest =
 export type SchemaPageIndexConfigUpdate =
   components["schemas"]["PageIndexConfigUpdate"];
 export type SchemaPauseBookRequest = components["schemas"]["PauseBookRequest"];
+export type SchemaPlanRequest = components["schemas"]["PlanRequest"];
 export type SchemaPositionInfo = components["schemas"]["PositionInfo"];
 export type SchemaPositionPayload = components["schemas"]["PositionPayload"];
 export type SchemaPracticeAnalytics =
@@ -13668,6 +13724,84 @@ export interface operations {
       };
     };
     readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly adopt_learning_plan_api_bookmind_books__book_id__learning_plan_apply_post: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path: {
+        readonly book_id: string;
+      };
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["AdoptPlanRequest"];
+      };
+    };
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly preview_learning_plan_api_bookmind_books__book_id__learning_plan_preview_post: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path: {
+        readonly book_id: string;
+      };
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["PlanRequest"];
+      };
+    };
     readonly responses: {
       /** @description Successful Response */
       readonly 200: {

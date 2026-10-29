@@ -16,6 +16,10 @@ export type Objective = {
   mastery: number
   next_review: number | null
   level: number
+  type?: string
+  planning_status?: string
+  mastery_requirement?: string
+  source_section_id?: string
 }
 export type Textbook = {
   id: string
@@ -28,6 +32,8 @@ export type Textbook = {
   learning_goal?: string
   note_count: number
   objectives: Objective[]
+  sections?: { knowledge_point_id: string; name: string; start: number; end: number; module_id: string }[]
+  learning_plans?: Record<string, { goal: string; prior_knowledge?: string }>
   current_objective_id: string
   locator: number
   unit: string

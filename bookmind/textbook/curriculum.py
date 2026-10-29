@@ -44,7 +44,8 @@ def build_curriculum(material_id, store, path_id):
         digest = hashlib.sha256(f'{material_id}:{start}:{heading.title}:{index}'.encode()).hexdigest()[:12]
         kp_id, source_id = f'kp_{digest}', f'rs_{digest}'
         point = KnowledgePoint(id=kp_id, name=heading.title[:200], type=KnowledgeType.CONCEPT,
-                               module_id=module.id, topic_source_ids=[source_id])
+                               module_id=module.id, topic_source_ids=[source_id],
+                               planning_status='outline', source_section_id=kp_id)
         module.knowledge_points.append(point)
         ranges.append({'knowledge_point_id': kp_id, 'module_id': module.id, 'name': point.name,
                        'start': start, 'end': max(start, end), 'level': heading.level})
