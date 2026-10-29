@@ -380,6 +380,7 @@ class ReadingStore:
                 has_raw_view=extraction.render_mode == "pdf",
                 render_mode=extraction.render_mode,
                 media_count=len(media_rows),
+                content_format='web_markdown' if Path(display_name).suffix.lower() in {'.md', '.markdown'} else 'plain_text',
             )
             # Manifest last: its presence is the "this material is usable"
             # signal, so it must not appear before the units it describes.

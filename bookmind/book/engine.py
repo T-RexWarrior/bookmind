@@ -1637,6 +1637,7 @@ class BookEngine:
             block=block,
             language=book.language,
             knowledge_bases=book.knowledge_bases,
+            extra={'writing_context': self.compiler.writing_context(book_id, chapter)},
         )
         # Resolve previous block by planning order so the bridge text can be
         # refreshed alongside the block itself.
@@ -1845,6 +1846,7 @@ class BookEngine:
                     block=block,
                     language=book.language,
                     knowledge_bases=book.knowledge_bases,
+                    extra={'writing_context': self.compiler.writing_context(book_id, chapter)},
                 )
                 bus = stream or get_book_bus(book_id)
                 bstream = BookStream(bus)

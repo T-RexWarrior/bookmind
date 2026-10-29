@@ -90,7 +90,8 @@ def _render_section(payload: dict[str, Any], labels: dict[str, str]) -> str:
                 continue
             heading = _payload_text(sub, "heading")
             body = _payload_text(sub, "body")
-            if heading:
+            first_heading = re.match(r'^\s*#{1,6}\s+(.+?)(?:\r?\n|$)', body)
+            if heading and not (first_heading and first_heading[1].strip().rstrip('#').strip() == heading):
                 parts.append(f"### {heading}")
             if body:
                 parts.append(body)
@@ -183,6 +184,8 @@ def _render_visual(payload: dict[str, Any], kind: str, labels: dict[str, str]) -
     if isinstance(code, dict):
         content = _payload_text(code, "content")
         language = _payload_text(code, "language")
+        if payload.get('render_type') == 'chartjs':
+            language = 'chartjs'
         if content:
             parts.append(f"```{language}\n{content}\n```")
     elif _payload_text(payload, "mermaid"):

@@ -545,7 +545,8 @@ export interface paths {
     readonly get: operations["get_book_api_bookmind_books__book_id__get"];
     readonly put?: never;
     readonly post?: never;
-    readonly delete?: never;
+    /** Remove Book */
+    readonly delete: operations["remove_book_api_bookmind_books__book_id__delete"];
     readonly options?: never;
     readonly head?: never;
     readonly patch?: never;
@@ -596,6 +597,23 @@ export interface paths {
     readonly put?: never;
     /** Practice Session */
     readonly post: operations["practice_session_api_bookmind_books__book_id__practice_session_post"];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
+  readonly "/api/bookmind/books/{book_id}/restore": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** Restore Book */
+    readonly post: operations["restore_book_api_bookmind_books__book_id__restore_post"];
     readonly delete?: never;
     readonly options?: never;
     readonly head?: never;
@@ -13642,7 +13660,9 @@ export interface operations {
   };
   readonly list_books_api_bookmind_books_get: {
     readonly parameters: {
-      readonly query?: never;
+      readonly query?: {
+        readonly include_removed?: boolean;
+      };
       readonly header?: {
         readonly Authorization?: string | null;
       };
@@ -13711,6 +13731,41 @@ export interface operations {
     };
   };
   readonly get_book_api_bookmind_books__book_id__get: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path: {
+        readonly book_id: string;
+      };
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly remove_book_api_bookmind_books__book_id__delete: {
     readonly parameters: {
       readonly query?: never;
       readonly header?: {
@@ -13824,6 +13879,41 @@ export interface operations {
     };
   };
   readonly practice_session_api_bookmind_books__book_id__practice_session_post: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path: {
+        readonly book_id: string;
+      };
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly restore_book_api_bookmind_books__book_id__restore_post: {
     readonly parameters: {
       readonly query?: never;
       readonly header?: {

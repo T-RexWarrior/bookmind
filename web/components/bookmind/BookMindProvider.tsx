@@ -40,22 +40,27 @@ export type Textbook = {
   unit_count: number
   links: { learn: string; guide: string; practice: string; notes: string }
 }
+export type RemovedTextbook = { id: string; title: string; removed_at: number; generated_book_id?: string }
 const Context = createContext<{
   books: Textbook[]
+  removedBooks: RemovedTextbook[]
   activeBook?: Textbook
   refresh: () => Promise<void>
   error: string
-}>({ books: [], refresh: async () => {}, error: '' })
+}>({ books: [], removedBooks: [], refresh: async () => {}, error: '' })
 
 export function BookMindProvider({ children }: { children: React.ReactNode }) {
   const path = usePathname()
   const [books, setBooks] = useState<Textbook[]>([])
+  const [removedBooks, setRemovedBooks] = useState<RemovedTextbook[]>([])
   const [error, setError] = useState('')
   const refresh = useCallback(async () => {
     try {
-      const response = await apiFetch('/api/bookmind/books', { cache: 'no-store' })
+      const response = await apiFetch('/api/bookmind/books?include_removed=true', { cache: 'no-store' })
       if (!response.ok) throw new Error('教材列表加载失败，请检查本机服务。')
-      setBooks(await response.json())
+      const rows: (Textbook & { removed_at?: number })[] = await response.json()
+      setBooks(rows.filter(row => !row.removed_at))
+      setRemovedBooks(rows.filter(row => row.removed_at) as RemovedTextbook[])
       setError('')
     } catch (reason) {
       setError(String(reason))
@@ -72,7 +77,7 @@ export function BookMindProvider({ children }: { children: React.ReactNode }) {
     [book.workspace_id, book.path_id, book.notebook_id].some(id => path.split('/').includes(id))
   )
   return (
-    <Context.Provider value={{ books, activeBook, refresh, error }}>{children}</Context.Provider>
+    <Context.Provider value={{ books, removedBooks, activeBook, refresh, error }}>{children}</Context.Provider>
   )
 }
 

@@ -2,15 +2,17 @@ outline_system: |
   你是 BookMind BookEngine 的 Section Architect。请基于章节信息以及检索证据，
   规划 1 个 section 的结构。输出严格 JSON：
   {
-    "intro": "≤ 80 字的开场短段",
+    "intro": "≤ 50 字的开场短段，不要重复正文",
+    "shared_example": "本节统一使用的具体例子、变量、数据、单位及约定",
     "subsections": [
       {"heading": "二级标题", "role": "core | example | derivation | application | comparison",
        "focus": "本段聚焦点 ≤ 1 句", "target_words": 280-360}
     ],
     "key_takeaway": "≤ 50 字的核心要点提炼"
   }
-  原则：3-5 个 subsection；总字数 1500-2500；标题精炼；与章节学习目标对齐；
-  不要在 outline 内写正文，只列 plan。
+  小节数量和总字数以用户提供的本 section 预算为准；只讲本 section 的聚焦点，
+  不要把整章目标在每个 section 里重复讲一遍。给各小节分配不同任务，使用同一个
+  shared_example。标题精炼，不要在 outline 内写正文，只列 plan。
 
 outline_user: |
   章节：{chapter_title}

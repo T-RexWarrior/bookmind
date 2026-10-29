@@ -226,19 +226,25 @@ export function ReadingWorkspacePage() {
   const [showRename, setShowRename] = useState(false);
   const [showMastery, setShowMastery] = useState(false);
   const { activeBook: bookMindBook } = useBookMind();
+  const [documentJump, setDocumentJump] = useState<JumpRequest | null>(null);
   const appliedBookMindJump = useRef("");
   useEffect(() => {
-    const key = `${workspaceId}:${bookMindLocator}`;
-    if (workspace && bookMindLocator >= 1 && appliedBookMindJump.current !== key) {
+    const key = `${workspaceId}:${material?.material_id}:${bookMindLocator}`;
+    if (workspace && material && bookMindLocator >= 1 && appliedBookMindJump.current !== key) {
       appliedBookMindJump.current = key;
       setActiveLocator(bookMindLocator);
       reportViewport({locator: bookMindLocator});
+      setDocumentJump(current => ({ locator: bookMindLocator, nonce: (current?.nonce ?? 0) + 1 }));
     }
-  }, [workspace, workspaceId, bookMindLocator, setActiveLocator, reportViewport]);
+  }, [workspace, material, workspaceId, bookMindLocator, setActiveLocator, reportViewport]);
   useEffect(() => {
     const navigate = (event: Event) => {
       const detail = (event as CustomEvent<{ locator: number }>).detail;
-      if (detail?.locator >= 1) { setActiveLocator(detail.locator); reportViewport({ locator: detail.locator }); }
+      if (detail?.locator >= 1) {
+        setActiveLocator(detail.locator);
+        reportViewport({ locator: detail.locator });
+        setDocumentJump(current => ({ locator: detail.locator, nonce: (current?.nonce ?? 0) + 1 }));
+      }
     };
     window.addEventListener("bookmind-reader-jump", navigate);
     return () => window.removeEventListener("bookmind-reader-jump", navigate);
@@ -295,7 +301,6 @@ export function ReadingWorkspacePage() {
     [exitFocus, setPreferredCompanionOpen],
   );
 
-  const [documentJump, setDocumentJump] = useState<JumpRequest | null>(null);
   const [pageHeadings, setPageHeadings] = useState<ReaderHeading[]>([]);
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const [headingJump, setHeadingJump] = useState<{

@@ -200,6 +200,11 @@ class SectionGenerator(BlockGenerator):
             target_words=target_words,
             rag_section=rag_section,
         )
+        user_prompt += ('\nThis section must cover ONLY its assigned focus, not all chapter objectives. '
+                        f'Use {max(1, min(5, round(target_words / 320)))} subsections for a TOTAL of {target_words} words/Chinese characters. '
+                        'Return a shared_example string defining the concrete example, data, names, '
+                        'and notation every subsection must reuse. Respect examples already established. '
+                        'Do not reintroduce the same definition in each subsection.')
         try:
             payload = await llm_json(
                 user_prompt=user_prompt,
@@ -222,7 +227,7 @@ class SectionGenerator(BlockGenerator):
             return _fallback_outline(focus_topic, objectives, target_words, ctx.language)
 
         subs: list[dict[str, Any]] = []
-        for item in subs_raw[:6]:
+        for item in subs_raw[:max(1, min(5, round(target_words / 320)))]:
             if not isinstance(item, dict):
                 continue
             heading = _clip(str(item.get("heading") or ""), 80)
@@ -233,7 +238,7 @@ class SectionGenerator(BlockGenerator):
                 tw = int(item.get("target_words") or _DEFAULT_SUBSECTION_WORDS)
             except (TypeError, ValueError):
                 tw = _DEFAULT_SUBSECTION_WORDS
-            tw = max(160, min(520, tw))
+            tw = max(80, min(1000, tw))
             subs.append(
                 {
                     "heading": heading,
@@ -244,6 +249,14 @@ class SectionGenerator(BlockGenerator):
             )
         if not subs:
             return _fallback_outline(focus_topic, objectives, target_words, ctx.language)
+
+        # The old 3–5 x minimum-160 rule expanded even a short intro into a
+        # full chapter. Normalize the outline to the actual section budget.
+        weight = sum(sub['target_words'] for sub in subs)
+        for sub in subs:
+            sub['target_words'] = max(80, round(target_words * sub['target_words'] / weight))
+            sub['section_plan'] = '\n'.join(f"- {s['heading']}: {s['focus']}" for s in subs)
+            sub['shared_example'] = _clip(str(payload.get('shared_example') or ''), 2200)
 
         return {
             "intro": _clip(str(payload.get("intro") or ""), 600),
@@ -301,6 +314,12 @@ class SectionGenerator(BlockGenerator):
             target_words=target_words,
             evidence_section=evidence_section,
         )
+        user_prompt += ('\n[Section outline — write only the assigned subsection]\n'
+                        + str(sub.get('section_plan', ''))
+                        + '\n[Shared example and notation]\n' + str(sub.get('shared_example', ''))
+                        + '\nReuse this example. Do not repeat neighboring subsections. '
+                        'For an example, show the steps and expected result; for an algorithm, '
+                        'explain why it works and its boundary cases.')
         try:
             body = await llm_text(
                 user_prompt=user_prompt,
@@ -309,6 +328,7 @@ class SectionGenerator(BlockGenerator):
                 temperature=0.5,
                 language=ctx.language,
                 reasoning_effort="none",
+                require_complete=True,
             )
         except Exception as exc:
             logger.warning(f"SectionGenerator subsection LLM failed: {exc}")
@@ -349,7 +369,8 @@ def _fallback_outline(
         intro = f"This section unpacks **{focus_topic}** in three steps."
         takeaway = "Hold on to the definition, then recognise it in real cases."
 
-    per = max(220, target_words // len(roles))
+    roles = roles[:max(1, min(3, round(target_words / 320)))]
+    per = max(80, target_words // len(roles))
     subs = [
         {
             "heading": h,

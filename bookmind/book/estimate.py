@@ -17,7 +17,8 @@ retyped without a round trip per keystroke.
 from __future__ import annotations
 
 from .agents.page_planner import _TEMPLATES_V2
-from .models import BlockType, ContentType, depth_scale
+from .models import BlockType, ContentType
+from .writing import chapter_prose_budget
 
 # Rough throughput of one block, end to end (prompt + generation + persist).
 # Prose blocks dominate; the small structured ones are far quicker.
@@ -32,16 +33,12 @@ def chapter_basis(depth: str | None = None) -> dict[str, dict[str, float]]:
 
     Returns ``{content_type: {"blocks": n, "words": n, "seconds": n}}``.
     """
-    scale = depth_scale(depth)
     basis: dict[str, dict[str, float]] = {}
 
     for content_type, template in _TEMPLATES_V2.items():
-        words = 0.0
+        words = float(chapter_prose_budget(depth))
         seconds = 0.0
         for block_type, params in template:
-            target = params.get("target_words")
-            if isinstance(target, (int, float)):
-                words += float(target) * scale
             seconds += (
                 _SECONDS_PER_PROSE_BLOCK
                 if block_type in _PROSE_TYPES

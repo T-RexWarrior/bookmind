@@ -31,6 +31,8 @@ class QuizGenerator(BlockGenerator):
         extra_context = "; ".join(filter(None, [chapter_summary, *objectives]))
         if extra_context:
             topic = f"{topic}\n\n[Chapter context: {extra_context}]"
+        from ..writing import block_writing_context
+        topic += '\n\n' + block_writing_context(ctx) + '\nAssess only material actually taught in this chapter.'
         question_types = [question_type] if question_type else []
 
         # Straight to QuestionPipeline. AgentCoordinator is a documented legacy

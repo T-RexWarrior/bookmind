@@ -21,9 +21,10 @@ def bind_material(material_id):
     """Idempotently create the three native aggregates for one existing material."""
     from bookmind.services.notebook import notebook_manager
     with repository.binding_lock:
-        existing = find_book(material_id=material_id)
+        existing = find_book(material_id=material_id, include_removed=True)
         if existing:
-            return overview(existing)
+            repository.set_removed(existing['id'], None)
+            return overview(find_book(id=existing['id']))
         reading, catalog, learning = ReadingStore(), ReadingCatalogStore(), LearningStore()
         manifest = reading.manifest(material_id)
         if catalog.get_material(material_id) is None:
@@ -130,6 +131,25 @@ def overview(book):
         'guide': f"/learning/mastery/{book['path_id']}",
         'practice': f"/learning/practice/{book['path_id']}", 'notes': f"/notebooks/{book['notebook_id']}"}
     return result
+
+
+def remove_book(book_id):
+    """Remove from the shelf without destroying notes, evidence or source files."""
+    with repository.binding_lock:
+        book = find_book(id=book_id, include_removed=True)
+        if not book:
+            raise FileNotFoundError('教材不存在')
+        repository.set_removed(book_id, book.get('removed_at') or time.time())
+    return {'removed': True, 'book_id': book_id}
+
+
+def restore_book(book_id):
+    with repository.binding_lock:
+        book = find_book(id=book_id, include_removed=True)
+        if not book:
+            raise FileNotFoundError('教材不存在')
+        repository.set_removed(book_id, None)
+        return overview(find_book(id=book_id))
 
 
 def enrich_note(notebook_ids, metadata):

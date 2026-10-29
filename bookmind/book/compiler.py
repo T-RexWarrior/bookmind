@@ -38,6 +38,7 @@ from .models import (
     PageStatus,
 )
 from .storage import BookStorage, get_book_storage
+from .writing import allocate_prose_budget, book_writing_context
 from .streaming import STAGE_BLOCK, STAGE_COMPILATION, STAGE_PAGE_PLAN, BookStream
 
 logger = logging.getLogger(__name__)
@@ -147,6 +148,9 @@ class BookCompiler:
             llm_enabled=self.options.architect_llm_enabled,
         )
 
+    def writing_context(self, book_id, chapter):
+        return book_writing_context(self.storage, book_id, chapter)
+
     # ── Public API ───────────────────────────────────────────────────────
 
     async def compile_page(
@@ -190,6 +194,7 @@ class BookCompiler:
         page.updated_at = time.time()
         self.storage.save_page(page)
 
+        writing_context = self.writing_context(book_id, chapter)
         ctx_factory = lambda block: BlockContext(  # noqa: E731
             book_id=book_id,
             chapter=chapter,
@@ -199,6 +204,7 @@ class BookCompiler:
             knowledge_bases=knowledge_bases or [],
             rag_enabled=self.options.rag_enabled,
             exploration=exploration,
+            extra={'writing_context': writing_context},
         )
 
         sem = asyncio.Semaphore(max(1, self.options.block_concurrency))
@@ -430,7 +436,10 @@ class BookCompiler:
             language=language,
             depth=depth,
             allowed=allowed,
+            writing_context=self.writing_context(book_id, chapter),
         )
+        inputs = self.storage.load_inputs(book_id)
+        allocate_prose_budget(planned, depth, inputs.user_intent if inputs else '')
         page.blocks = planned
         if not page.content_type:
             page.content_type = chapter.content_type

@@ -24,7 +24,7 @@ def import_generated_book(native_book_id, engine):
             raise FileNotFoundError('生成的学习资料不存在')
         previous = repository.generated_source(native_book_id=book.id)
         if previous:
-            return service.overview(service.find_book(material_id=previous['material_id']))
+            return service.bind_material(previous['material_id'])
 
         pages = engine.list_pages(book.id)
         spine = engine.load_spine(book.id)

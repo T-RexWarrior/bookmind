@@ -10,7 +10,7 @@ import { useBookMind } from './BookMindProvider'
 const LABELS: Record<string, string> = { draft: '确认学习方案', spine_ready: '确认章节目录', compiling: '正在生成资料', paused: '生成已暂停', ready: '已生成，开始学习', error: '查看生成记录' }
 
 export default function GoalDrafts() {
-  const { books } = useBookMind()
+  const { books, removedBooks } = useBookMind()
   const [drafts, setDrafts] = useState<Book[]>([])
   const [error, setError] = useState('')
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function GoalDrafts() {
     void load()
     return () => { active = false; clearTimeout(timer) }
   }, [])
-  const pending = drafts.filter(draft => draft.status !== 'archived' && !books.some(book => book.generated_book_id === draft.id))
+  const pending = drafts.filter(draft => draft.status !== 'archived' && ![...books, ...removedBooks].some(book => book.generated_book_id === draft.id))
   if (!pending.length && !error) return null
   return <section className="bm-goal-drafts" aria-label="目标学习生成记录">
     <div className="bm-section-heading"><h2>从目标开始的学习</h2><span>方案与生成记录会保留</span></div>

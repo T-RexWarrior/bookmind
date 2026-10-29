@@ -32,7 +32,9 @@ architect_system: |
 
   {block_catalog}
   Design principles:
-  - 5-10 blocks. Prefer variety — avoid repeating the same type.
+  - Use 3-8 blocks as needed, each with a distinct teaching purpose. Do not add cards just for variety.
+  - Honor learner background, length, example and language requirements. Never invent textbook citations.
+  - Reuse one concrete example across prose, diagrams, code and self-checks; explain steps, results and pitfalls.
   - **Interleave** different block types naturally: explanation → example →
     practice → deeper insight → another angle, like a great textbook.
   - Each block should connect logically to the previous one via transition_in.

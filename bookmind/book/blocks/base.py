@@ -133,7 +133,16 @@ class BlockGenerator(ABC):
     block_type: BlockType  # subclasses MUST override
 
     async def generate(self, ctx: BlockContext) -> Block:
-        """Public entry point. Wraps ``_generate`` with status book-keeping."""
+        """Generate one block with task-local editorial context and status handling."""
+        from ..writing import active_writing_context, block_writing_context
+        token = active_writing_context.set(block_writing_context(ctx))
+        try:
+            return await self._generate_with_status(ctx)
+        finally:
+            active_writing_context.reset(token)
+
+    async def _generate_with_status(self, ctx: BlockContext) -> Block:
+        """Wrap ``_generate`` with status book-keeping."""
         block = ctx.block
         block.status = BlockStatus.GENERATING
         block.error = ""

@@ -53,6 +53,7 @@ const LazyCodeBlock = dynamic(() => import("./RichCodeBlock"), {
   ssr: false,
   loading: () => null,
 });
+const LazyBookFigure = dynamic(() => import('@/components/visualize/VisualizationViewer').then(module => module.MarkdownFigure), { ssr: false });
 
 const GeogebraOpenCTA = dynamic(
   () => import("@/components/common/GeogebraOpenCTA"),
@@ -435,6 +436,9 @@ export default function RichMarkdownRenderer({
             <LazyMermaid chart={raw} className={gap} />
           </div>
         );
+      }
+      if ((lang === 'svg' && /<svg[\s>]/i.test(raw) && /<\/svg>/i.test(raw)) || lang === 'chartjs') {
+        return <div {...lineProps}><LazyBookFigure type={lang as 'svg' | 'chartjs'} code={raw} /></div>;
       }
 
       // editor.md style fences. With `trackSourceLines` the preprocess

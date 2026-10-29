@@ -10,7 +10,7 @@ import { randomUuid } from '@/lib/random-uuid'
 import { apiFetch } from '@/shared/api/client'
 import { useBookMind, type Textbook } from './BookMindProvider'
 
-const TEXT_BLOCKS = ['section', 'text', 'callout', 'quiz', 'code', 'flash_cards', 'timeline']
+const LEARNING_BLOCKS = ['section', 'text', 'callout', 'quiz', 'code', 'flash_cards', 'timeline', 'figure']
 const STATUS: Record<string, string> = { pending: '等待生成', planning: '组织内容', generating: '正在生成', ready: '已完成', partial: '部分内容未完成', error: '生成失败' }
 
 export async function importGoalBook(bookId: string): Promise<Textbook> {
@@ -36,7 +36,7 @@ function GoalWorkspace({ bookId }: { bookId: string }) {
   const { books, refresh } = useBookMind()
   const [goal, setGoal] = useState('')
   const [background, setBackground] = useState('')
-  const [depth, setDepth] = useState<BookDepth>('brief')
+  const [depth, setDepth] = useState<BookDepth>('standard')
   const [detail, setDetail] = useState<BookDetail | null>(null)
   const [loading, setLoading] = useState(Boolean(bookId))
   const [busy, setBusy] = useState(false)
@@ -114,7 +114,7 @@ function GoalWorkspace({ bookId }: { bookId: string }) {
   function generate(spine: Spine) {
     if (!book) return
     void run(async () => {
-      await bookApi.confirmSpine(book.id, spine, true, book.revision, TEXT_BLOCKS)
+      await bookApi.confirmSpine(book.id, spine, true, book.revision, LEARNING_BLOCKS)
       await load()
     }, '正在安排逐章生成…')
   }
