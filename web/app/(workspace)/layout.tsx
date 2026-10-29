@@ -1,4 +1,3 @@
-import TaskBoardRuntime from '@/components/tasks/TaskBoardRuntime'
 import { BookMindSidebar, BookMindFrame } from '@/components/bookmind/BookMindShell'
 import AppShell from '@/components/layout/AppShell'
 import { CapabilityAccessProvider } from '@/components/access/CapabilityAccessContext'
@@ -14,7 +13,6 @@ export default function WorkspaceLayout({
   children: React.ReactNode
 }>) {
   return (
-    <TaskBoardRuntime>
       <CapabilityAccessProvider>
         <Suspense>
           <WorkspaceRuntimeBoundary>
@@ -33,6 +31,5 @@ export default function WorkspaceLayout({
           </WorkspaceRuntimeBoundary>
         </Suspense>
       </CapabilityAccessProvider>
-    </TaskBoardRuntime>
   )
 }

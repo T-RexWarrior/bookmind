@@ -3792,6 +3792,11 @@ class MasteryPrepareLessonTool(BaseTool):
         try:
             from bookmind.runtime.stream_bus import get_bus
 
+            from bookmind.textbook.planning import PlanningError, prepare_objective
+            objective_id, planned = await prepare_objective(
+                path_id, str(kwargs.get("knowledge_point_id") or ""), turn_id=_resolve_turn_id(kwargs)
+            )
+            kwargs["knowledge_point_id"] = objective_id
             evidence = await prepare_lesson(
                 service.store,
                 path_id,
@@ -3805,12 +3810,15 @@ class MasteryPrepareLessonTool(BaseTool):
             )
         except LessonUnavailable as exc:
             return ToolResult(content=str(exc), success=False)
+        except PlanningError as exc:
+            return ToolResult(content=str(exc), success=False)
         bind = kwargs.get("_bind_lesson_objective")
         if callable(bind):
             bind(str(kwargs.get("knowledge_point_id") or ""))
         return ToolResult(
-            content=lesson_context(evidence)
+            content=(("本节已结合教材与学习目的生成目标：" + json.dumps(planned, ensure_ascii=False)
+                      + "。请通过 mastery_status 查看更新后的路线，按目标及检查标准教学。\n") if planned else "") + (lesson_context(evidence)
             if evidence
-            else "This objective has no selected PDF materials.",
-            public_result={"content": "Lesson source evidence prepared privately."},
+            else "No PDF-specific visual packet is required. Use the attached textbook sources through read_source or read_material."),
+            public_result={"content": "Learning objective prepared."},
         )

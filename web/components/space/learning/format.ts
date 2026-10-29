@@ -10,7 +10,8 @@ const KNOWLEDGE_TYPE_LABELS: Record<string, string> = {
   design: "Design",
 };
 
-export function knowledgeTypeLabel(type: string, t: Translate): string {
+export function knowledgeTypeLabel(type: string, t: Translate, planningStatus?: string): string {
+  if (planningStatus === 'outline') return '待规划';
   const label = KNOWLEDGE_TYPE_LABELS[type];
   return label ? t(label) : type;
 }

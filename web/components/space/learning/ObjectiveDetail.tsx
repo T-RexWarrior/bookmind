@@ -29,7 +29,8 @@ export function ObjectiveDetail({
   const evidenceCount = report.evidence_count ?? evidence.length;
   return (
     <div className="mt-1 mb-2 ml-5 space-y-3 border-l border-[var(--border)] pl-3">
-      <GateBar report={report} />
+      {report.planning_status === 'outline' ? <p className="text-xs text-[var(--muted-foreground)]">{t('这是教材目录定位。AI 会结合原文和学习目的，进一步规划学习目标与检查标准。')}</p> : <GateBar report={report} />}
+      {report.mastery_requirement && <div className="rounded-lg bg-[var(--muted)]/50 p-3 text-xs leading-relaxed"><strong>{t('掌握要求')}</strong><p className="mt-1">{report.mastery_requirement}</p></div>}
 
       {report.review && (
         <Row label={t("Spaced review")}>

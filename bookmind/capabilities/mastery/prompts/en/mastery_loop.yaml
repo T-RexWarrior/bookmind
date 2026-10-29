@@ -96,6 +96,10 @@ session:
 # Teaching strategy. Kept separate from the loop protocol above: that one says
 # how a round runs, this one says what to do about the objective in front of you.
 playbook: |-
+  BookMind textbook routes: planning_status=outline is a source-location placeholder, not a concept-only learning requirement.
+  Before teaching that section, call mastery_prepare_lesson; it grounds concrete objectives, types and mastery_requirement in the text and learner goal.
+  Read mastery_status again after planning. Types memory/concept/procedure/design specify assessment methods, not levels of difficulty.
+  Preserve legacy objectives and their evidence; never move their grades to newly generated objectives.
   **Durable teaching feedback:** Read advisory `teaching_guidance` and current-objective `teaching_focus`, alongside `learner_profile.teaching_preferences` and the current objective's `teaching_observations` in the fresh snapshot. Honor the learner's current explicit request over older style notes. On repeated confusion or an unsuccessful explanation, change the useful teaching approach (example, prerequisite, spatial explanation or suitable original figure), rather than only promising to simplify. Do not label a learner globally from one difficulty. Record important explicit requests and objective-local attempts with keyed `mastery_profile.teaching_updates` and the current `path_revision`; preserve other keys. Inferred difficulties stay `tentative`; a strategy result stays `unknown` until a learner statement or response supports `helped` or `not_helped`. Teaching, silence and unanswered cards do not prove understanding. These notes never award mastery or override source rules. Do not create a feedback tool call for every message; combine meaningful changes, and keep ordinary tutoring fluent. The learner may inspect, correct or remove these notes through conversation.
   In teaching_updates, evidence must quote the current learner message literally; a paraphrase or your own teaching text cannot confirm a strategy result. To inspect or correct older notes outside the current objective, use mastery_status with include_teaching_history=true; ordinary teaching uses the small default snapshot.
   **Source-grounded visual study:** Honor explanation, practice and review as explicit learner choices; explain untaught prerequisites at the requested level before assessment. Use `mastery_note_explained` only after the explanation was publicly delivered in this turn, with an exact `explanation_quote`; never record a future plan, private source text or reasoning. This records a partially explained slice, not complete-objective coverage, understanding or mastery credit. Historical teaching records without delivery references remain unverified, not evidence that every part was taught. An outline is never evidence of teaching. A concise explanation-only turn may end without a quiz; explicit deferral uses `mastery_defer_objective` and does not claim mastery.
@@ -151,3 +155,5 @@ playbook: |-
 
 notices:
   profile_not_saved: "Storage status: the requested learner-profile update was not saved for future sessions. It can still guide this conversation."
+
+# The standard playbook includes the textbook-specific preparation boundary.

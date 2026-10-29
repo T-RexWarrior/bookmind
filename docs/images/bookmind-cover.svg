@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="440" viewBox="0 0 1440 440" role="img" aria-labelledby="title desc">
+  <title id="title">BookMind · 学迹 — AI 教材学习助手</title>
+  <desc id="desc">从教材或学习目标出发，连接阅读、AI 导学、练习与笔记。</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#f3f5eb"/><stop offset="1" stop-color="#e7f0e9"/></linearGradient></defs>
+  <rect width="1440" height="440" rx="24" fill="url(#bg)"/>
+  <circle cx="1350" cy="20" r="220" fill="#d6e5d8" opacity=".5"/>
+  <g transform="translate(64 61)">
+    <rect width="64" height="64" rx="16" fill="#175b4b"/>
+    <path d="M32 47V30M32 34C18 34 14 26 16 17c12-2 18 3 16 17ZM32 29c0-12 7-17 17-15 0 11-5 16-17 15Z" fill="none" stroke="#eef8ec" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g font-family="Arial, 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif">
+    <text x="147" y="105" fill="#173e34" font-size="42" font-weight="700">BookMind <tspan font-size="25" font-weight="400">· 学迹</tspan></text>
+    <text x="64" y="195" fill="#173e34" font-size="39" font-weight="650">让教材，成为你的 AI 学习空间。</text>
+    <text x="64" y="246" fill="#51695f" font-size="21">从一份资料或一个学习目标出发，读懂原理，练习应用，积累知识。</text>
+    <rect x="64" y="296" width="425" height="50" rx="25" fill="#175b4b"/>
+    <text x="276" y="328" text-anchor="middle" fill="#f3f7ee" font-size="18">自主学习 · AI 导学 · 练习巩固 · 学习笔记</text>
+    <text x="64" y="392" fill="#74867b" font-size="14" letter-spacing="2">LEARN WITH YOUR MATERIALS. BUILD YOUR UNDERSTANDING.</text>
+    <g transform="translate(917 72)">
+      <rect width="450" height="303" rx="18" fill="#fff" stroke="#d4dfd5"/>
+      <path d="M0 51h450" stroke="#e6ece5"/>
+      <circle cx="23" cy="26" r="4" fill="#bacdc0"/><circle cx="39" cy="26" r="4" fill="#d6e2d8"/><circle cx="55" cy="26" r="4" fill="#e5ece6"/>
+      <text x="85" y="31" fill="#476052" font-size="13">YOUR LEARNING WORKSPACE</text>
+      <g transform="translate(26 77)">
+        <rect width="398" height="44" rx="9" fill="#edf3ea"/>
+        <text x="16" y="28" fill="#175b4b" font-size="16">01　读懂：原文与讨论并排</text>
+        <rect y="57" width="398" height="44" rx="9" fill="#f3f5ef"/>
+        <text x="16" y="85" fill="#3f5a4a" font-size="16">02　学会：明确目标，循序导学</text>
+        <rect y="114" width="398" height="44" rx="9" fill="#f3f5ef"/>
+        <text x="16" y="142" fill="#3f5a4a" font-size="16">03　练习：独立作答，查看反馈</text>
+        <rect y="171" width="398" height="44" rx="9" fill="#f3f5ef"/>
+        <text x="16" y="199" fill="#3f5a4a" font-size="16">04　沉淀：笔记与知识点关联</text>
+      </g>
+    </g>
+  </g>
+</svg>

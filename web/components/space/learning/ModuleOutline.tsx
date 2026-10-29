@@ -262,7 +262,7 @@ function ObjectiveDrawer({
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 text-[11px] text-[var(--muted-foreground)]">
-                <span>{knowledgeTypeLabel(report.type, t)}</span>
+                <span>{knowledgeTypeLabel(report.type, t, report.planning_status)}</span>
                 {report.mastery_source === "learner" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-[var(--muted-foreground)]/10 px-2 py-0.5 text-[var(--muted-foreground)]">
                     <Sparkles className="h-3 w-3" />

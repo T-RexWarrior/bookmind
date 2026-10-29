@@ -660,6 +660,7 @@ async def prepare_lesson(
     module = next(m for m in progress.modules if m.id == module_id)
     learning_context = {
         "objective": kp.name,
+        "mastery_requirement": kp.mastery_requirement,
         "module": module.name,
         "purpose": module.objective,
         **course_intent,

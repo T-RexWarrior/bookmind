@@ -44,7 +44,7 @@ def bind_material(material_id):
         if not learning.exists(path_id):
             LearningService(learning).create_topic(path_id, name=title, modules=modules,
                 metadata=TopicMetadata(path_id=path_id, goal=f'理解并掌握《{title}》',
-                    description='根据教材目录初始化；阅读、练习和笔记共用本路线。可使用原版路线编辑器细化学习目标。'),
+                    description='围绕教材原文与学习目的规划目标，阅读、AI 导学、练习和笔记共用这条学习路线。'),
                 sources=sources)
         elif prior_topic and not any(source.kind == TopicSourceKind.NOTEBOOK and source.source_id == notebook['id'] for source in prior_topic.sources):
             prior_topic.sources.append(sources[-1])
@@ -70,8 +70,8 @@ def objectives(book):
     result = []
     for module in progress.modules:
         for point in module.knowledge_points:
-            span = ranges.get(point.id)
-            if not span:
+            span = ranges.get(point.source_section_id or point.id)
+            if not span or point.planning_status == 'planned':
                 ref = next((sources[s] for s in point.topic_source_ids if s in sources and sources[s].kind == TopicSourceKind.READING), None)
                 if ref:
                     span = {'start': ref.metadata.get('locator_start', 1), 'end': ref.metadata.get('locator_end', 1), 'level': 2}
@@ -81,6 +81,9 @@ def objectives(book):
             result.append({'id': point.id, 'name': point.name, 'module_id': module.id, 'module_name': module.name,
                 'start': span['start'] if span else None, 'end': span['end'] if span else None,
                 'level': span.get('level', 2) if span else 2,
+                'type': point.type.value, 'planning_status': point.planning_status,
+                'mastery_requirement': point.mastery_requirement,
+                'source_section_id': point.source_section_id or point.id,
                 'evidence_count': len(evidence), 'attempt_count': len(attempts),
                 'mastery': progress.mastery_levels.get(point.id, 0),
                 'next_review': state.next_review_at if state and hasattr(state, 'next_review_at') else None})
@@ -111,10 +114,12 @@ def overview(book):
         result['generated_book_id'] = generated['native_book_id']
         result['learning_goal'] = generated['goal']
     result['objectives'] = objectives(book)
+    result['sections'] = json.loads(book['ranges_json'])
     notebook = notebook_manager.get_notebook(book['notebook_id']) or {}
     result['note_count'] = len(notebook.get('records', []))
     progress = LearningStore().load(book['path_id'])
     module = next((m for m in progress.modules if m.id == progress.current_module_id), None) if progress else None
+    result['learning_plans'] = progress.curriculum_plans if progress else {}
     result['current_objective_id'] = (module.knowledge_points[progress.current_kp_index].id
         if module and 0 <= progress.current_kp_index < len(module.knowledge_points) else '')
     result['locator'] = ReadingStore().position(book['material_id']).locator

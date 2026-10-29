@@ -967,6 +967,8 @@ async def get_progress_board(book_id: str):
                 "id": kp["id"],
                 "name": kp["name"],
                 "type": kp["type"],
+                "planning_status": kp["planning_status"],
+                "mastery_requirement": kp["mastery_requirement"],
                 "module_id": module["id"],
                 "module_name": module["name"],
                 "status": kp["status"],
