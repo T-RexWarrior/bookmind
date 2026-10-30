@@ -17,12 +17,45 @@ from . import repository
 from .curriculum import build_curriculum
 from .repository import books as books, find_book as find_book
 
+
+def ensure_learning_path(book, *, store=None):
+    """Repair a missing bound route using its saved, stable source identities.
+
+    This fallback rebuilds the route only. Historical scores are never guessed.
+    """
+    with repository.binding_lock:
+        learning = store or LearningStore()
+        if learning.exists(book['path_id']):
+            return False
+        from bookmind.learning.models import KnowledgePoint, KnowledgeType, LearningModule
+        rows = json.loads(book['ranges_json'])
+        modules, sources = [], []
+        for index, row in enumerate(rows):
+            module = next((m for m in modules if m.id == row['module_id']), None)
+            if module is None:
+                module = LearningModule(id=row['module_id'], name=row['name'], order=len(modules))
+                modules.append(module)
+            source_id = f"rs_{row['knowledge_point_id'].removeprefix('kp_')}"
+            module.knowledge_points.append(KnowledgePoint(id=row['knowledge_point_id'], name=row['name'],
+                module_id=module.id, type=KnowledgeType.CONCEPT, planning_status='outline',
+                source_section_id=row['knowledge_point_id'], topic_source_ids=[source_id]))
+            sources.append(TopicSource(id=source_id, kind=TopicSourceKind.READING, source_id=book['material_id'],
+                label=f"{row['name']} · {row['start']}–{row['end']}", position=index,
+                metadata={'locator_start': row['start'], 'locator_end': row['end'], 'knowledge_point_id': row['knowledge_point_id']}))
+        sources.append(TopicSource(id=f"notes_{book['material_id']}", kind=TopicSourceKind.NOTEBOOK,
+            source_id=book['notebook_id'], label=f"学习者笔记 · {book['title']}", position=len(sources)))
+        LearningService(learning).create_topic(book['path_id'], name=book['title'], modules=modules,
+            metadata=TopicMetadata(path_id=book['path_id'], goal=f"理解并掌握《{book['title']}》",
+                description='学习路径已按教材目录重新建立。原有笔记与对话保留，掌握程度由后续学习与作答记录判断。'), sources=sources)
+        return True
+
 def bind_material(material_id):
     """Idempotently create the three native aggregates for one existing material."""
     from bookmind.services.notebook import notebook_manager
     with repository.binding_lock:
         existing = find_book(material_id=material_id, include_removed=True)
         if existing:
+            ensure_learning_path(existing)
             repository.set_removed(existing['id'], None)
             return overview(find_book(id=existing['id']))
         reading, catalog, learning = ReadingStore(), ReadingCatalogStore(), LearningStore()
@@ -108,6 +141,7 @@ def verified_practice_objective(material_id, objective_id, locator):
 def overview(book):
     if not book:
         raise ValueError('Textbook not found')
+    ensure_learning_path(book)
     from bookmind.services.notebook import notebook_manager
     result = {key: value for key, value in book.items() if key != 'ranges_json'}
     generated = repository.generated_source(material_id=book['material_id'])

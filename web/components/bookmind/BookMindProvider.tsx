@@ -44,15 +44,17 @@ export type RemovedTextbook = { id: string; title: string; removed_at: number; g
 const Context = createContext<{
   books: Textbook[]
   removedBooks: RemovedTextbook[]
+  loaded: boolean
   activeBook?: Textbook
   refresh: () => Promise<void>
   error: string
-}>({ books: [], removedBooks: [], refresh: async () => {}, error: '' })
+}>({ books: [], removedBooks: [], loaded: false, refresh: async () => {}, error: '' })
 
 export function BookMindProvider({ children }: { children: React.ReactNode }) {
   const path = usePathname()
   const [books, setBooks] = useState<Textbook[]>([])
   const [removedBooks, setRemovedBooks] = useState<RemovedTextbook[]>([])
+  const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
   const refresh = useCallback(async () => {
     try {
@@ -61,6 +63,7 @@ export function BookMindProvider({ children }: { children: React.ReactNode }) {
       const rows: (Textbook & { removed_at?: number })[] = await response.json()
       setBooks(rows.filter(row => !row.removed_at))
       setRemovedBooks(rows.filter(row => row.removed_at) as RemovedTextbook[])
+      setLoaded(true)
       setError('')
     } catch (reason) {
       setError(String(reason))
@@ -77,7 +80,7 @@ export function BookMindProvider({ children }: { children: React.ReactNode }) {
     [book.workspace_id, book.path_id, book.notebook_id].some(id => path.split('/').includes(id))
   )
   return (
-    <Context.Provider value={{ books, removedBooks, activeBook, refresh, error }}>{children}</Context.Provider>
+    <Context.Provider value={{ books, removedBooks, loaded, activeBook, refresh, error }}>{children}</Context.Provider>
   )
 }
 

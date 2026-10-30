@@ -637,6 +637,23 @@ export interface paths {
     readonly patch?: never;
     readonly trace?: never;
   };
+  readonly "/api/bookmind/generated/clear": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** Clear Generated Records */
+    readonly post: operations["clear_generated_records_api_bookmind_generated_clear_post"];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
   readonly "/api/bookmind/settings": {
     readonly parameters: {
       readonly query?: never;
@@ -8091,6 +8108,11 @@ export interface components {
       /** Trace Count */
       readonly trace_count: number;
     };
+    /** ClearGeneratedRequest */
+    readonly ClearGeneratedRequest: {
+      /** Book Ids */
+      readonly book_ids: readonly string[];
+    };
     /** CodexOAuthCallbackPayload */
     readonly CodexOAuthCallbackPayload: {
       /** Callback Url */
@@ -12234,6 +12256,8 @@ export type SchemaChatResponseTimeoutUpdate =
   components["schemas"]["ChatResponseTimeoutUpdate"];
 export type SchemaChatStarterSettingsUpdate =
   components["schemas"]["ChatStarterSettingsUpdate"];
+export type SchemaClearGeneratedRequest =
+  components["schemas"]["ClearGeneratedRequest"];
 export type SchemaCodexOAuthCallbackPayload =
   components["schemas"]["CodexOAuthCallbackPayload"];
 export type SchemaCodexReasoningEffortUpdate =
@@ -13962,6 +13986,43 @@ export interface operations {
       };
     };
     readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly clear_generated_records_api_bookmind_generated_clear_post: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path?: never;
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["ClearGeneratedRequest"];
+      };
+    };
     readonly responses: {
       /** @description Successful Response */
       readonly 200: {

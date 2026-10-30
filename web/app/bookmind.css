@@ -700,3 +700,5 @@
 .bm-removed-books { margin-top: 28px; color: #617167; font-size: 13px; }
 .bm-removed-books summary { cursor: pointer; padding: 12px 0; }
 .bm-removed-books > div { display: flex; align-items: center; justify-content: space-between; gap: 15px; border-bottom: 1px solid #e6ebe3; padding: 10px 0; }
+.bm-goal-draft-card { display: flex; align-items: center; min-width: 0; border: 1px solid #dce3d8; border-radius: 12px; background: white; padding-right: 9px; }
+.bm-goal-draft-list .bm-goal-draft-card a { flex: 1; min-width: 0; border: 0; background: transparent; }

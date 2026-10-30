@@ -25,6 +25,25 @@ class AdoptPlanRequest(BaseModel):
     plan_id: str
 
 
+class ClearGeneratedRequest(BaseModel):
+    book_ids: list[str] = Field(min_length=1, max_length=100)
+
+
+@router.post('/generated/clear')
+async def clear_generated_records(body: ClearGeneratedRequest):
+    from bookmind.api.routers.book import _resolve_book_or_404
+    from .repository import generated_source
+    targets = []
+    for native_id in dict.fromkeys(body.book_ids):
+        resolved = _resolve_book_or_404(native_id, delete=True)
+        if await asyncio.to_thread(generated_source, native_book_id=native_id):
+            raise HTTPException(409, '已加入教材的资料请从书架管理，此处只清理独立的生成记录。')
+        targets.append((native_id, resolved.engine))
+    for native_id, engine in targets:
+        await engine.archive_book(native_id)
+    return {'removed': [native_id for native_id, _ in targets]}
+
+
 @router.post('/books/{book_id}/learning-plan/preview')
 async def preview_learning_plan(book_id: str, body: PlanRequest):
     from .planning import PlanningError, generate_plan
