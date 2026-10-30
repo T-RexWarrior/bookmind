@@ -30,18 +30,22 @@ try {
   await page.getByRole('heading', { name: '学习记录', exact: true }).waitFor();
   assert.equal(await page.getByText('找不到这张地图', { exact: true }).count(), 0);
   pass('guidance-route-and-learning-records-render');
+  assert.equal(await page.getByRole('region', { name: 'AI 学习目标规划' }).count(), 0);
+  assert.equal(await page.getByText('这一节，需要学会什么？', { exact: true }).count(), 0);
+  pass('guidance-opens-without-a-separate-planning-form');
   await page.locator('main.mastery-shell details').first().locator('summary').click();
   assert.equal(await page.getByRole('button', { name: /删除主题|Delete topic/ }).count(), 0);
   await page.locator('main.mastery-shell details').first().locator('summary').click();
   pass('bound-textbook-has-no-independent-delete-topic-action');
   await screenshot('01-restored-guidance');
-  const demo = page.getByRole('button').filter({ hasText: '演示｜二叉树深度与高度导学' });
-  if (await demo.count()) {
-    await demo.click();
-    await page.getByText(/【演示学习】/).first().waitFor();
-    await page.getByText(/【演示小结】/).first().waitFor();
-    await screenshot('02-guidance-demo-conversation');
-    pass('saved-demonstration-conversation-is-readable');
+  const conversation = page.getByRole('button').filter({ hasText: '二叉树深度与高度导学' });
+  if (await conversation.count()) {
+    await conversation.click();
+    await page.getByText(/我正在学二叉树，知道每个结点至多有两个孩子/).first().waitFor();
+    await page.getByText(/我记住了：结点深度从根往下数/).first().waitFor();
+    assert.equal(await page.getByText(/【演示学习】|【演示作答】|【演示小结】/).count(), 0);
+    await screenshot('02-guidance-conversation');
+    pass('saved-guidance-conversation-is-readable-without-demo-labels');
   }
   if (clear) {
     const allBooks = await (await page.request.get(base + '/api/bookmind/books?include_removed=true')).json();
