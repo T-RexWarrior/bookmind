@@ -557,10 +557,13 @@ export function ReaderPane({
     // Claimed before awaiting: this render is not the last one before the
     // request comes back.
     resumedMaterialRef.current = materialId;
+    const navigationAtLoad = nonceRef.current;
     let cancelled = false;
     void getReadingPosition(materialId)
       .then((position) => {
-        if (cancelled || position.locator <= 1) return;
+        // A citation, outline entry or URL may have requested a destination
+        // while the saved position was loading. That explicit jump wins.
+        if (cancelled || position.locator <= 1 || nonceRef.current !== navigationAtLoad) return;
         requestJump(position.locator);
       })
       .catch(() => {
@@ -630,12 +633,12 @@ export function ReaderPane({
   );
 
   useEffect(() => {
-    if (!externalJump) return;
+    if (!externalJump || !historyReady || !material) return;
     if (externalJumpNonceRef.current === externalJump.nonce) return;
     externalJumpNonceRef.current = externalJump.nonce;
     rememberExplicitLocation(externalJump.locator);
     requestJump(externalJump.locator, externalJump.quote);
-  }, [externalJump, rememberExplicitLocation, requestJump]);
+  }, [externalJump, historyReady, material, rememberExplicitLocation, requestJump]);
 
   useEffect(() => {
     headingLocatorRef.current = currentLocator;
