@@ -39,11 +39,11 @@
 
 ![BookMind 自主学习：教材、讨论与图解](docs/images/self-directed-learning.png)
 
-### 学习目标，有明确的掌握要求
+### AI 导学，沿知识点逐步推进
 
-同一小节可以包含理解原理、手工推演、独立实现等不同目标。AI 结合原文和学习目的规划目标，并说明每个目标怎样才算学会。
+从教材知识点进入导学，AI 按需规划学习目标，通过讲解、提问与练习逐步推进。学习路线、掌握情况和历史对话持续保留。
 
-![BookMind AI 导学：不同类型的学习目标与掌握要求](docs/images/ai-learning-plan.png)
+![BookMind AI 导学：学习路线与学习记录](docs/images/ai-learning-plan.png)
 
 ### 按知识点练习，查看作答与解析
 
