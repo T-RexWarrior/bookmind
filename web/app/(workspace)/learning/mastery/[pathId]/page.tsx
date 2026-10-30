@@ -35,6 +35,7 @@ import {
 } from '@/lib/mastery-mode'
 import { LearnerProfileCard } from '@/components/space/learning/LearnerProfileCard'
 import { LearningPlan } from '@/components/bookmind/LearningPlan'
+import { useBookMind } from '@/components/bookmind/BookMindProvider'
 import { ModuleOutline } from '@/components/space/learning/ModuleOutline'
 import { ConfirmDialog } from '@/components/space/learning/ConfirmDialog'
 import { EditTopicRouteDialog } from '@/components/space/learning/EditTopicRouteDialog'
@@ -63,6 +64,8 @@ import { NEXT_CTA_LABELS, NEXT_LABELS } from '@/components/space/learning/next-s
 export default function MasteryTopicPage() {
   const params = useParams<{ pathId: string }>()
   const pathId = String(params.pathId || '')
+  const { books } = useBookMind()
+  const isTextbook = books.some(book => book.path_id === pathId)
   const bookMindObjective = useSearchParams().get('objective')
   const router = useRouter()
   const { t, i18n } = useTranslation()
@@ -227,6 +230,7 @@ export default function MasteryTopicPage() {
   }
 
   const handleDelete = async () => {
+    if (isTextbook) return
     setMutationBusy(true)
     try {
       await deleteProgress(pathId)
@@ -336,13 +340,13 @@ export default function MasteryTopicPage() {
                 >
                   <RotateCcw className="h-3.5 w-3.5" /> {t('Reset progress')}
                 </button>
-                <button
+                {!isTextbook && <button
                   type="button"
                   onClick={event => openConfirmation('delete', event.currentTarget)}
                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-red-600 hover:bg-red-500/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> {t('Delete topic')}
-                </button>
+                </button>}
               </div>
             </details>
           </div>
@@ -600,6 +604,7 @@ export default function MasteryTopicPage() {
           <div className="flex min-h-0 flex-col gap-5 lg:h-full">
             <LearnerProfileCard profile={topic.learner_profile} />
             <SessionCamp
+          title={isTextbook && zh ? '学习记录' : undefined}
               pathId={pathId}
               sessions={sessions}
               loading={sessionsLoading}

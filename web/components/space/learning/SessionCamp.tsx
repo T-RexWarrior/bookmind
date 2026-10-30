@@ -17,6 +17,7 @@ export function SessionCamp({
   stale = false,
   onRetry,
   zh,
+  title,
 }: {
   pathId: string;
   sessions: TopicSession[];
@@ -25,6 +26,7 @@ export function SessionCamp({
   stale?: boolean;
   onRetry?: () => void;
   zh: boolean;
+  title?: string;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -45,7 +47,7 @@ export function SessionCamp({
         <div className="relative z-[1] flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="text-[12px] font-semibold text-[var(--foreground)]">
-              {t("Mastery sessions")}
+              {title || t("Mastery sessions")}
             </h2>
             {stale && (
               <button

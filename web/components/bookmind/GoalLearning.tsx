@@ -142,7 +142,8 @@ function GoalWorkspace({ bookId }: { bookId: string }) {
           <label>资料深度<select aria-label="资料深度" value={depth} onChange={event => setDepth(event.target.value as BookDepth)} disabled={busy}><option value="brief">精简入门 · 先建立框架</option><option value="standard">标准学习 · 讲解与示例</option><option value="deep">深入学习 · 更充分的推导与细节</option></select></label>
           <div className="bm-goal-actions"><p>先生成学习方案和目录，由你确认后再生成正文。</p><button className="bm-primary" type="submit" disabled={busy || !goal.trim()}><Sparkles size={16} />生成学习方案</button></div>
         </form>
-      ) : book?.status === 'draft' && book.proposal ? <ProposalEditor key={`${book.id}.${book.revision}`} proposal={book.proposal} busy={busy} onConfirm={confirmProposal} />
+      ) : book?.status === 'archived' ? <section className="bm-goal-card"><h2>生成记录已删除</h2><p>可以从新的学习目标开始，已加入书架的教材与学习记录仍保留。</p><Link className="bm-secondary" href="/">返回我的教材</Link></section>
+        : book?.status === 'draft' && book.proposal ? <ProposalEditor key={`${book.id}.${book.revision}`} proposal={book.proposal} busy={busy} onConfirm={confirmProposal} />
         : book?.status === 'spine_ready' && detail?.spine ? <OutlineEditor key={`${book.id}.${book.revision}`} spine={detail.spine} busy={busy} onGenerate={generate} />
           : book && detail ? (
             <section className="bm-goal-card">

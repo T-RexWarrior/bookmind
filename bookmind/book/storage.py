@@ -150,6 +150,11 @@ class BookStorage:
 
     def save_book(self, book: Book) -> None:
         book_id = _safe_book_id(book.id)
+        existing = self.load_book(book_id)
+        if existing is not None and existing.status.value == 'archived' and book.status.value != 'archived':
+            # A model request that began before deletion must not overwrite
+            # the archived manifest when its late result arrives.
+            raise ValueError('This generation record has been deleted.')
         self.ensure_book_root(book_id)
         _atomic_write_json(
             self.path_service.get_book_manifest_file(book_id), book.model_dump(mode="json")

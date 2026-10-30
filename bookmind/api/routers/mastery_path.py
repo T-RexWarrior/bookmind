@@ -435,6 +435,14 @@ def _topic_payload_from_snapshot(
 def _topic_payload(store: LearningStore, path_id: str) -> dict:
     progress = store.load(path_id)
     if progress is None:
+        from bookmind.textbook.policy import text_only_app
+        if text_only_app():
+            from bookmind.textbook.service import ensure_learning_path, find_book
+            book = find_book(path_id=path_id)
+            if book:
+                ensure_learning_path(book, store=store)
+                progress = store.load(path_id)
+    if progress is None:
         raise HTTPException(status_code=404, detail="Mastery topic not found")
     topic = store.get_topic(path_id, progress=progress)
     if topic is None:  # pragma: no cover - a loaded path always synthesizes metadata
@@ -1136,6 +1144,9 @@ async def rename_progress(book_id: str, body: RenamePathRequest):
 @router.delete("/progress/{book_id}")
 async def delete_progress(book_id: str):
     _validate_book_id(book_id)
+    from bookmind.textbook.repository import find_book
+    if await asyncio.to_thread(find_book, path_id=book_id, include_removed=True):
+        raise HTTPException(409, '该导学路径关联教材，不能单独删除。请在“我的教材”移除教材，学习记录会保留。')
     store = LearningStore()
     if not await asyncio.to_thread(store.exists, book_id):
         raise HTTPException(status_code=404, detail="Progress not found")

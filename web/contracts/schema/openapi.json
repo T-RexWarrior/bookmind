@@ -1388,6 +1388,24 @@
         "title": "ChatStarterSettingsUpdate",
         "type": "object"
       },
+      "ClearGeneratedRequest": {
+        "properties": {
+          "book_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Book Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "book_ids"
+        ],
+        "title": "ClearGeneratedRequest",
+        "type": "object"
+      },
       "CodexOAuthCallbackPayload": {
         "properties": {
           "callback_url": {
@@ -12578,6 +12596,79 @@
           }
         },
         "summary": "Restore Book",
+        "tags": [
+          "BookMind"
+        ]
+      }
+    },
+    "/api/bookmind/generated/clear": {
+      "post": {
+        "operationId": "clear_generated_records_api_bookmind_generated_clear_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "dt_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dt Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearGeneratedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Generated Records",
         "tags": [
           "BookMind"
         ]

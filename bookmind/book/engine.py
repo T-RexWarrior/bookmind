@@ -349,6 +349,8 @@ class BookEngine:
         current = book or self.storage.load_book(book_id)
         if current is None:
             raise ValueError(f"Book {book_id} not found")
+        if current.status == BookStatus.ARCHIVED:
+            raise ValueError('This generation record has been deleted.')
         if current.status == BookStatus.PAUSED:
             raise BookPausedError(
                 "Book generation is paused. Resume it explicitly before generating content."
@@ -911,6 +913,8 @@ class BookEngine:
             raise ValueError(f"Book {book_id} not found")
 
         spine = edited_spine or self.storage.load_spine(book_id)
+        if book.status == BookStatus.ARCHIVED:
+            raise ValueError('This generation record has been deleted.')
         if spine is None:
             raise ValueError(f"No spine for book {book_id}")
         if edited_spine is not None:
@@ -1073,6 +1077,27 @@ class BookEngine:
         )
         return self.storage.list_pages(book_id)
 
+    async def archive_book(self, book_id: str) -> None:
+        """Remove a generation record while retaining an auditable source copy."""
+        book = self.storage.load_book(book_id)
+        if book is None:
+            raise ValueError(f'Book {book_id} not found')
+        if book.status == BookStatus.ARCHIVED:
+            return
+        previous = book.status.value
+        book.revision += 1
+        book.status = BookStatus.ARCHIVED
+        book.updated_at = time.time()
+        book.metadata = {**book.metadata, 'archived_from_status': previous,
+                         'archived_at': book.updated_at, 'archive_reason': 'generation_record_removed'}
+        self.storage.save_book(book)
+        await self._halt_compilation(book_id)
+        # Cancellation must not turn a deleted record back into READY/PAUSED.
+        settled = self.storage.load_book(book_id) or book
+        settled.status = BookStatus.ARCHIVED
+        self.storage.save_book(settled)
+        self.storage.append_log(book_id, 'generation record archived', op='archived')
+
     async def resume_book(
         self,
         *,
@@ -1094,6 +1119,8 @@ class BookEngine:
         book = self.storage.load_book(book_id)
         if book is None:
             raise ValueError(f"Book {book_id} not found")
+        if book.status == BookStatus.ARCHIVED:
+            raise ValueError('This generation record has been deleted.')
         if self.storage.load_spine(book_id) is None:
             raise ValueError(f"No spine for book {book_id}")
 
@@ -1565,7 +1592,7 @@ class BookEngine:
 
     async def _maybe_finalize_book(self, book_id: str) -> None:
         book = self.storage.load_book(book_id)
-        if book is None:
+        if book is None or book.status == BookStatus.ARCHIVED:
             return
         pages = self.storage.list_pages(book_id)
         if not pages:
