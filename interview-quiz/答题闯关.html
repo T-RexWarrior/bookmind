@@ -1,0 +1,3898 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BookMind 面试闯关 · Agent 学习地图</title>
+<style>
+  :root {
+    --paper: #f6f2e8;
+    --paper-2: #fbf8f1;
+    --ink: #1e2a24;
+    --ink-soft: #52605a;
+    --green: #175b4b;
+    --green-2: #2d7a67;
+    --green-3: #dfece7;
+    --gold: #c98a3f;
+    --gold-soft: #f3e2c8;
+    --line: #dcd5c6;
+    --danger: #a8483f;
+    --danger-soft: #f5e2de;
+    --ok: #2f6b4f;
+    --ok-soft: #e1efe6;
+    --shadow: 0 10px 30px rgba(44, 54, 48, 0.08);
+    --radius: 18px;
+    --serif: "Noto Serif SC", "Songti SC", "SimSun", Georgia, serif;
+    --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: var(--sans);
+    background:
+      radial-gradient(circle at 12% 8%, rgba(201, 138, 63, 0.10), transparent 32%),
+      radial-gradient(circle at 88% 18%, rgba(23, 91, 75, 0.08), transparent 30%),
+      linear-gradient(180deg, var(--paper-2), var(--paper));
+    background-attachment: fixed;
+  }
+
+  button, input { font: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+    outline: 3px solid rgba(201, 138, 63, 0.55);
+    outline-offset: 2px;
+  }
+
+  .app { max-width: 1240px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 18px; padding: 14px 18px; margin-bottom: 22px;
+    background: rgba(251, 248, 241, 0.88);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 12px; z-index: 20;
+  }
+
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-mark {
+    width: 38px; height: 38px; border-radius: 12px;
+    background: var(--green); color: #fff;
+    display: grid; place-items: center; flex: 0 0 auto;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.12);
+  }
+  .brand-mark svg { width: 22px; height: 22px; }
+  .brand-title { font-family: var(--serif); font-weight: 700; font-size: 17px; line-height: 1.1; white-space: nowrap; }
+  .brand-sub { font-size: 11px; letter-spacing: 0.16em; color: var(--ink-soft); text-transform: uppercase; }
+
+  .stats { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .stat {
+    display: flex; align-items: center; gap: 7px;
+    padding: 7px 12px; border-radius: 999px;
+    background: var(--paper); border: 1px solid var(--line);
+    font-size: 13px; color: var(--ink-soft); white-space: nowrap;
+  }
+  .stat strong { color: var(--ink); font-size: 14px; }
+  .timer-btn {
+    border: 1px solid var(--green); color: var(--green); background: transparent;
+    padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  }
+  .timer-btn:hover { background: var(--green-3); }
+
+  .storage-badge {
+    border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft);
+    padding: 7px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap;
+  }
+  .storage-badge:hover { border-color: var(--green); color: var(--green); }
+  .storage-badge.remote { background: var(--ok-soft); border-color: #b7d8c4; color: var(--ok); }
+  .storage-badge.error { background: var(--danger-soft); border-color: #e2bdb6; color: var(--danger); }
+
+  .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 22px; align-items: start; }
+
+  .sidebar {
+    position: sticky; top: 92px;
+    background: rgba(251, 248, 241, 0.76);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; box-shadow: var(--shadow);
+  }
+
+  .nav-title {
+    font-size: 11px; letter-spacing: 0.18em; color: var(--ink-soft);
+    text-transform: uppercase; margin: 0 0 10px 6px;
+  }
+
+  .mode-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 18px; }
+  .mode-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 10px 12px; border-radius: 12px;
+    border: 1px solid transparent; background: transparent;
+    color: var(--ink-soft); text-align: left; font-size: 14px;
+  }
+  .mode-btn:hover { background: var(--green-3); color: var(--green); }
+  .mode-btn.active { background: var(--green); color: #fff; box-shadow: 0 6px 16px rgba(23,91,75,0.22); }
+  .mode-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.7; flex: 0 0 auto; }
+
+  .level-list { display: grid; gap: 7px; max-height: 46vh; overflow: auto; padding-right: 2px; }
+  .level-item {
+    display: grid; grid-template-columns: 28px 1fr auto; gap: 9px; align-items: center;
+    padding: 9px 10px; border-radius: 12px; border: 1px solid transparent;
+    background: transparent; text-align: left; color: var(--ink); width: 100%;
+  }
+  .level-item:hover { background: var(--green-3); }
+  .level-item.active { border-color: var(--green); background: var(--green-3); }
+  .level-num {
+    width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--paper); border: 1px solid var(--line);
+    font-size: 12px; font-weight: 700; color: var(--ink-soft);
+  }
+  .level-item.done .level-num { background: var(--green); color: #fff; border-color: var(--green); }
+  .level-item.active .level-num { border-color: var(--green); }
+  .level-name { font-size: 13px; font-weight: 600; line-height: 1.25; }
+  .level-meta { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  .level-best { font-size: 11px; color: var(--green); font-weight: 700; }
+
+  .sidebar-note {
+    margin-top: 16px; padding: 12px; border-radius: 12px;
+    background: var(--gold-soft); color: #6a4a20; font-size: 12px; line-height: 1.6;
+  }
+
+  .main { min-width: 0; }
+
+  .hero {
+    position: relative; overflow: hidden;
+    padding: 34px 32px; border-radius: 26px;
+    background: linear-gradient(135deg, #123f35, #1d6a55 62%, #2f8a70);
+    color: #fff; box-shadow: 0 18px 44px rgba(18, 63, 53, 0.22);
+    margin-bottom: 20px;
+  }
+  .hero::after {
+    content: ""; position: absolute; right: -80px; top: -100px;
+    width: 300px; height: 300px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.14), transparent 65%);
+  }
+  .hero-kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.78; margin-bottom: 10px; }
+  .hero h1 { font-family: var(--serif); font-size: clamp(26px, 4vw, 40px); line-height: 1.22; margin: 0 0 10px; font-weight: 700; }
+  .hero p { margin: 0; max-width: 640px; color: rgba(255,255,255,0.84); line-height: 1.7; font-size: 14px; }
+  .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; position: relative; z-index: 1; }
+
+  .btn {
+    border: 1px solid transparent; border-radius: 12px; padding: 11px 18px;
+    font-weight: 650; font-size: 14px; transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn-primary { background: var(--gold); color: #2a1b07; box-shadow: 0 6px 16px rgba(0,0,0,0.16); }
+  .btn-primary:hover { background: #d99a4e; }
+  .btn-light { background: rgba(255,255,255,0.14); color: #fff; border-color: rgba(255,255,255,0.25); }
+  .btn-light:hover { background: rgba(255,255,255,0.22); }
+  .btn-ghost { background: transparent; color: var(--green); border-color: var(--green); }
+  .btn-ghost:hover { background: var(--green-3); }
+  .btn-soft { background: var(--paper); color: var(--ink); border-color: var(--line); }
+  .btn-soft:hover { background: #efe9db; }
+  .btn-danger-soft { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+  .grid { display: grid; gap: 16px; }
+  .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .card {
+    background: var(--paper-2); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow);
+  }
+  .card h2, .card h3 { font-family: var(--serif); margin: 0 0 8px; line-height: 1.3; }
+  .card h2 { font-size: 20px; }
+  .card h3 { font-size: 16px; }
+  .muted { color: var(--ink-soft); }
+  .small { font-size: 12px; line-height: 1.6; }
+
+  .progress-line { height: 9px; border-radius: 999px; background: #e7e0d1; overflow: hidden; }
+  .progress-line > span { display: block; height: 100%; background: linear-gradient(90deg, var(--green-2), var(--green)); border-radius: inherit; transition: width 0.4s ease; }
+
+  .stat-big { font-family: var(--serif); font-size: 30px; font-weight: 700; line-height: 1; }
+  .stat-label { font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+
+  .level-card {
+    display: flex; flex-direction: column; gap: 10px; text-align: left;
+    background: var(--paper-2); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow);
+    transition: transform 0.14s ease, border-color 0.14s ease;
+  }
+  .level-card:hover { transform: translateY(-2px); border-color: var(--green-2); }
+  .level-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .level-card h3 { margin: 0; font-size: 17px; }
+  .level-card p { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.55; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 650;
+    background: var(--green-3); color: var(--green); white-space: nowrap;
+  }
+  .pill.gold { background: var(--gold-soft); color: #7a531e; }
+  .pill.grey { background: #ece7db; color: var(--ink-soft); }
+
+  .plan-list { display: grid; gap: 10px; }
+  .plan-item {
+    display: grid; grid-template-columns: 26px 92px 1fr; gap: 12px; align-items: start;
+    padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper-2);
+  }
+  .plan-item.done { opacity: 0.62; }
+  .plan-check {
+    width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--line);
+    background: #fff; display: grid; place-items: center; margin-top: 1px; padding: 0;
+  }
+  .plan-check.checked { background: var(--green); border-color: var(--green); }
+  .plan-check.checked::after {
+    content: ""; width: 6px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translateY(-1px);
+  }
+  .plan-time { font-size: 12px; font-weight: 700; color: var(--green); }
+  .plan-title { font-size: 14px; font-weight: 650; }
+  .plan-desc { font-size: 12px; color: var(--ink-soft); line-height: 1.6; margin-top: 2px; }
+
+  .quiz-wrap { max-width: 860px; margin: 0 auto; }
+  .quiz-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+  .quiz-top-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .quiz-title { font-family: var(--serif); font-size: 20px; font-weight: 700; }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ddd5c6; }
+  .dot.current { background: var(--green); transform: scale(1.25); }
+  .dot.correct { background: var(--green-2); }
+  .dot.wrong { background: var(--danger); }
+
+  .question-card { background: var(--paper-2); border: 1px solid var(--line); border-radius: 22px; padding: 28px; box-shadow: var(--shadow); }
+  .q-tag { display: inline-block; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; }
+  .q-prompt { font-family: var(--serif); font-size: clamp(20px, 2.6vw, 26px); line-height: 1.5; margin: 0 0 20px; font-weight: 700; }
+
+  .options { display: grid; gap: 10px; }
+  .option {
+    display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: center;
+    width: 100%; text-align: left; padding: 14px 16px;
+    border-radius: 14px; border: 1.5px solid var(--line); background: #fff;
+    color: var(--ink); line-height: 1.55; font-size: 14px;
+    transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+  }
+  .option:hover { border-color: var(--green-2); background: #f3faf7; transform: translateX(2px); }
+  .option.selected { border-color: var(--green); background: var(--green-3); }
+  .option.correct { border-color: var(--ok); background: var(--ok-soft); }
+  .option.wrong { border-color: var(--danger); background: var(--danger-soft); }
+  .option:disabled { cursor: default; transform: none; }
+  .option-key {
+    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--paper); border: 1px solid var(--line); font-size: 12px; font-weight: 700; color: var(--ink-soft);
+  }
+  .option.selected .option-key { background: var(--green); color: #fff; border-color: var(--green); }
+  .option.correct .option-key { background: var(--ok); color: #fff; border-color: var(--ok); }
+  .option.wrong .option-key { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+  .quiz-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
+
+  .feedback {
+    margin-top: 20px; border-radius: 16px; padding: 18px;
+    border: 1px solid var(--line); background: var(--paper);
+  }
+  .feedback.ok { border-color: #b7d8c4; background: #f0f8f3; }
+  .feedback.bad { border-color: #e2bdb6; background: #fbf1ee; }
+  .feedback-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 8px; }
+  .feedback-head .mark {
+    width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+    color: #fff; font-size: 12px; background: var(--ok);
+  }
+  .feedback.bad .mark { background: var(--danger); }
+  .feedback p { margin: 6px 0; line-height: 1.7; font-size: 14px; }
+  .feedback .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .mini-card { background: rgba(255,255,255,0.7); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .mini-card .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 4px; }
+  .mini-card .text { font-size: 13px; line-height: 1.6; }
+
+  .result-card { text-align: center; max-width: 720px; margin: 0 auto; }
+  .score-ring {
+    width: 150px; height: 150px; border-radius: 50%; margin: 6px auto 16px;
+    display: grid; place-items: center; position: relative;
+    background: conic-gradient(var(--green) 0deg, var(--green) var(--deg), #e7e0d1 var(--deg));
+  }
+  .score-ring::before { content: ""; position: absolute; inset: 12px; border-radius: 50%; background: var(--paper-2); }
+  .score-inner { position: relative; z-index: 1; }
+  .score-num { font-family: var(--serif); font-size: 36px; font-weight: 700; line-height: 1; }
+  .score-sub { font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
+
+  .badge-banner {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 999px; background: var(--gold-soft); color: #6a4a20;
+    font-weight: 700; font-size: 13px; margin: 6px 0 14px;
+  }
+  .badge-shape { width: 14px; height: 14px; background: var(--gold); transform: rotate(45deg); border-radius: 3px; }
+
+  .review-list { display: grid; gap: 8px; text-align: left; margin-top: 14px; }
+  .review-row { padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); font-size: 13px; line-height: 1.5; }
+
+  .flash-stage { max-width: 760px; margin: 0 auto; }
+  .flash-card {
+    min-height: 320px; border-radius: 24px; border: 1px solid var(--line);
+    background: linear-gradient(160deg, #fffdf8, #f1eadb);
+    box-shadow: var(--shadow); padding: 30px; display: flex; flex-direction: column;
+    justify-content: center; cursor: pointer; user-select: none;
+  }
+  .flash-card:hover { border-color: var(--green-2); }
+  .flash-term { font-family: var(--serif); font-size: clamp(28px, 5vw, 44px); font-weight: 700; text-align: center; }
+  .flash-en { text-align: center; color: var(--ink-soft); font-size: 13px; margin-top: 4px; }
+  .flash-hint { text-align: center; color: var(--ink-soft); font-size: 12px; margin-top: 24px; }
+  .flash-back { display: none; }
+  .flash-card.flipped .flash-front { display: none; }
+  .flash-card.flipped .flash-back { display: block; }
+  .flash-back p { line-height: 1.75; font-size: 15px; margin: 8px 0; }
+  .flash-back .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin-top: 14px; }
+  .flash-controls { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+
+  .glossary-search {
+    width: 100%; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line);
+    background: #fff; color: var(--ink); margin-bottom: 14px;
+  }
+  .glossary-list { display: grid; gap: 8px; }
+  .glossary-item { border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); overflow: hidden; }
+  .glossary-head {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 13px 15px; background: transparent; border: 0; text-align: left; color: var(--ink);
+  }
+  .glossary-head:hover { background: var(--green-3); }
+  .glossary-term { font-weight: 700; font-size: 14px; }
+  .glossary-en { font-size: 11px; color: var(--ink-soft); margin-left: 8px; font-weight: 400; }
+  .glossary-cat { font-size: 10px; padding: 3px 8px; border-radius: 999px; background: var(--gold-soft); color: #6a4a20; white-space: nowrap; }
+  .glossary-body { display: none; padding: 0 15px 15px; }
+  .glossary-item.open .glossary-body { display: block; }
+  .glossary-body p { margin: 8px 0; font-size: 13px; line-height: 1.7; }
+  .glossary-body .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); }
+
+  .timer-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+  .timer-display { font-family: var(--serif); font-size: 44px; font-weight: 700; letter-spacing: 0.04em; }
+
+  .checklist { display: grid; gap: 9px; }
+  .check-row {
+    display: grid; grid-template-columns: 24px 1fr; gap: 11px; align-items: start;
+    padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2);
+    cursor: pointer;
+  }
+  .check-row.checked { background: var(--ok-soft); border-color: #b7d8c4; }
+  .check-box { width: 21px; height: 21px; border-radius: 6px; border: 1.5px solid var(--line); background: #fff; display: grid; place-items: center; margin-top: 1px; }
+  .check-row.checked .check-box { background: var(--green); border-color: var(--green); }
+  .check-row.checked .check-box::after { content: ""; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-1px); }
+  .check-text { font-size: 13px; line-height: 1.6; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--ink-soft); }
+  .empty-state h3 { font-family: var(--serif); color: var(--ink); }
+
+  /* ---------- 进阶训练 ---------- */
+  .stage-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stage-card {
+    border: 1px solid var(--line); border-radius: 16px; padding: 15px;
+    background: var(--paper-2); text-align: left; color: var(--ink);
+  }
+  .stage-card:hover { border-color: var(--green-2); }
+  .stage-card.active { border-color: var(--green); background: var(--green-3); }
+  .stage-card .stage-num { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+  .stage-card h3 { font-family: var(--serif); font-size: 17px; margin: 4px 0 6px; }
+  .stage-card p { margin: 0; font-size: 12px; color: var(--ink-soft); line-height: 1.55; }
+  .stage-card .stage-meta { margin-top: 9px; font-size: 11px; color: var(--green); font-weight: 700; }
+
+  .type-badge {
+    display: inline-block; padding: 3px 8px; border-radius: 999px;
+    background: var(--gold-soft); color: #6a4a20; font-size: 10px; font-weight: 700;
+    margin-left: 6px; vertical-align: middle;
+  }
+  .type-badge.green { background: var(--green-3); color: var(--green); }
+  .type-badge.red { background: var(--danger-soft); color: var(--danger); }
+
+  .multi-mark {
+    width: 20px; height: 20px; border-radius: 5px; border: 1.5px solid var(--line);
+    display: inline-block; flex: 0 0 auto; background: #fff;
+  }
+  .option.selected .multi-mark { background: var(--green); border-color: var(--green); }
+  .option.selected .multi-mark::after {
+    content: ""; display: block; width: 5px; height: 9px; margin: 3px auto 0;
+    border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+  }
+
+  .order-list { display: grid; gap: 8px; }
+  .order-item {
+    display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: center;
+    width: 100%; text-align: left; padding: 12px 14px;
+    border: 1.5px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink);
+  }
+  .order-item:hover { border-color: var(--green-2); background: #f3faf7; }
+  .order-item.picked, .order-item.selected { border-color: var(--green); background: var(--green-3); }
+  .order-seq {
+    width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--paper); border: 1px solid var(--line); font-size: 12px; font-weight: 700; color: var(--ink-soft);
+  }
+  .order-item.picked .order-seq, .order-item.selected .order-seq { background: var(--green); color: #fff; border-color: var(--green); }
+  .order-hint { font-size: 12px; color: var(--ink-soft); margin: 8px 0 0; }
+
+  .rate-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line);
+  }
+  .rate-label { font-size: 12px; color: var(--ink-soft); margin-right: 2px; }
+  .rate-btn {
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+    padding: 7px 11px; border-radius: 999px; font-size: 12px;
+  }
+  .rate-btn:hover { border-color: var(--green); background: var(--green-3); }
+  .rate-btn.chosen { background: var(--green); color: #fff; border-color: var(--green); }
+  .rate-note { width: 100%; font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
+
+  .open-card { background: var(--paper-2); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: var(--shadow); }
+  .open-prompt { font-family: var(--serif); font-size: 22px; line-height: 1.5; margin: 0 0 14px; }
+  .open-textarea {
+    width: 100%; min-height: 150px; resize: vertical; padding: 13px 14px;
+    border: 1.5px solid var(--line); border-radius: 12px; background: #fff;
+    color: var(--ink); font-size: 14px; line-height: 1.7;
+  }
+  .open-textarea:focus { outline: 3px solid rgba(201,138,63,0.35); border-color: var(--green); }
+  .rubric { display: grid; gap: 8px; margin-top: 12px; }
+  .rubric-row {
+    display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff;
+    cursor: pointer; font-size: 13px; line-height: 1.6;
+  }
+  .rubric-row.checked { background: var(--ok-soft); border-color: #b7d8c4; }
+  .rubric-box { width: 19px; height: 19px; border-radius: 5px; border: 1.5px solid var(--line); background: #fff; margin-top: 1px; }
+  .rubric-row.checked .rubric-box { background: var(--green); border-color: var(--green); }
+  .rubric-row.checked .rubric-box::after { content: ""; display: block; width: 5px; height: 8px; margin: 3px auto 0; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .reference {
+    margin-top: 12px; padding: 14px; border-radius: 12px;
+    background: var(--green-3); border: 1px solid #c8ded6; font-size: 13px; line-height: 1.75;
+  }
+  .reference .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--green); margin-bottom: 6px; }
+
+  .tag-bars { display: grid; gap: 9px; }
+  .tag-bar { display: grid; grid-template-columns: 92px 1fr 44px; gap: 10px; align-items: center; }
+  .tag-name { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag-track { height: 8px; border-radius: 999px; background: #e7e0d1; overflow: hidden; }
+  .tag-track > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green-2), var(--green)); }
+  .tag-track > span.weak { background: linear-gradient(90deg, #d08a5a, #b5623b); }
+  .tag-pct { font-size: 11px; color: var(--ink-soft); text-align: right; }
+
+  .detail-list { display: grid; gap: 8px; margin-top: 14px; text-align: left; }
+  .detail-row {
+    border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px;
+    background: var(--paper); font-size: 13px; line-height: 1.6;
+  }
+  .detail-row .detail-head { display: flex; justify-content: space-between; gap: 10px; font-weight: 700; }
+  .detail-row .detail-explain { color: var(--ink-soft); margin-top: 5px; }
+  .timer-warning { color: var(--danger); }
+
+  @media (max-width: 760px) {
+    .stage-strip { grid-template-columns: 1fr; }
+    .tag-bar { grid-template-columns: 76px 1fr 38px; }
+  }
+
+  .confetti-layer { position: fixed; inset: 0; pointer-events: none; z-index: 100; overflow: hidden; }
+  .confetti-piece { position: absolute; width: 8px; height: 12px; border-radius: 2px; animation: fall 1.6s ease-out forwards; }
+  @keyframes fall {
+    0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate3d(var(--dx), 105vh, 0) rotate(var(--rot)); opacity: 0; }
+  }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 999px;
+    font-size: 13px; opacity: 0; pointer-events: none; transition: all 0.25s ease; z-index: 200;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.22); max-width: min(90vw, 520px); text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .hide { display: none !important; }
+
+  @media (max-width: 980px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { position: static; }
+    .level-list { max-height: none; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .mode-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .app { padding: 12px 12px 60px; }
+    .topbar { border-radius: 18px; padding: 12px; align-items: flex-start; }
+    .brand-sub { display: none; }
+    .stat { padding: 6px 9px; font-size: 12px; }
+    .hero { padding: 26px 20px; }
+    .question-card { padding: 20px; }
+    .two-col, .feedback .two-col, .grid-2 { grid-template-columns: 1fr; }
+    .level-list { grid-template-columns: 1fr; }
+    .mode-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .plan-item { grid-template-columns: 26px 1fr; }
+    .plan-time { grid-column: 2; }
+    .quiz-title { font-size: 17px; }
+    .timer-display { font-size: 36px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/>
+          <path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/>
+          <path d="M8 7h8M8 11h6"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">BookMind 面试闯关</div>
+        <div class="brand-sub">Agent Learning Map</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat" title="经验值"><strong id="xpValue">0</strong> XP</div>
+      <div class="stat" title="连续学习天数"><strong id="streakValue">0</strong> 天</div>
+      <button class="storage-badge" id="storageBadge" type="button" title="点击检查 SQLite 同步状态">本地存储</button>
+      <button class="timer-btn" id="focusBtn" type="button">专注 10:00</button>
+      <button class="btn btn-soft" id="resetBtn" type="button" title="清空本机学习进度">重置</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="nav-title">学习模式</div>
+      <nav class="mode-nav" id="modeNav" aria-label="学习模式">
+        <button class="mode-btn active" data-view="dashboard" type="button"><span class="mode-dot"></span>地图</button>
+        <button class="mode-btn" data-view="quiz" type="button"><span class="mode-dot"></span>一刷</button>
+        <button class="mode-btn" data-view="advanced" type="button"><span class="mode-dot"></span>进阶</button>
+        <button class="mode-btn" data-view="review" type="button"><span class="mode-dot"></span>复习</button>
+        <button class="mode-btn" data-view="flashcards" type="button"><span class="mode-dot"></span>闪卡</button>
+        <button class="mode-btn" data-view="glossary" type="button"><span class="mode-dot"></span>词典</button>
+        <button class="mode-btn" data-view="plan" type="button"><span class="mode-dot"></span>计划</button>
+        <button class="mode-btn" data-view="boss" type="button"><span class="mode-dot"></span>Boss</button>
+      </nav>
+
+      <div class="nav-title">关卡</div>
+      <div class="level-list" id="levelList"></div>
+
+      <div class="sidebar-note">
+        一次只做一关。选项顺序会随机打乱，不要背字母。答错不扣分，错题自动进入复习队列。每 20 分钟起身走两分钟。
+      </div>
+    </aside>
+
+    <main class="main" id="main"></main>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="confetti-layer" id="confetti" aria-hidden="true"></div>
+
+<script>
+"use strict";
+
+const STORAGE_KEY = "bookmind_interview_v1";
+const QUIZ_API = location.protocol === "file:" ? "http://127.0.0.1:8021" : location.origin;
+let storageMode = "local";
+let syncState = "local";
+let syncTimer = null;
+
+const LEVELS = [
+  {
+    id: "l0",
+    title: "术语觉醒",
+    subtitle: "RAG、向量、BM25 到底是什么",
+    minutes: 6,
+    badge: "术语破壁",
+    desc: "先把最容易混淆的四个词分开：RAG、向量检索、BM25、Agent。",
+    questions: [
+      {
+        id: "l0q1", tag: "RAG",
+        prompt: "RAG 最准确的含义是什么？",
+        options: ["检索增强生成：先查资料，再让模型回答", "随机对抗生成：用两个模型互相攻击", "递归自动分组：把文档自动分类", "强化学习：让模型在环境里试错"],
+        answer: 0,
+        explain: "RAG 是 Retrieval-Augmented Generation。核心是“检索 + 生成”：先从资料里找相关证据，再把证据放进提示词，让模型带着依据回答。",
+        project: "BookMind 的阅读模式会先检索原文位置，再把命中片段交给模型。",
+        interview: "RAG 是一套流程，不是某个数据库；它解决的是“模型没有依据”的问题。"
+      },
+      {
+        id: "l0q2", tag: "RAG",
+        prompt: "RAG 主要想解决什么问题？",
+        options: ["模型没见过私有资料，或知识过时、回答不可追溯", "让模型训练速度更快", "减少显卡显存占用", "自动生成前端页面"],
+        answer: 0,
+        explain: "大模型的知识来自训练数据，既可能过时，也可能没有你的私有文档。RAG 通过外部检索补足事实依据，并让引用可追溯。",
+        project: "教材、讲义、笔记都是模型训练时没见过的私有资料。",
+        interview: "RAG 不是让模型变聪明，而是让回答有证据。"
+      },
+      {
+        id: "l0q3", tag: "向量",
+        prompt: "向量检索主要靠什么判断两段文字相似？",
+        options: ["把文字变成向量后，看距离或方向是否接近", "数关键词出现了几次", "看文件的修改时间", "看代码有多少行"],
+        answer: 0,
+        explain: "Embedding 把文字映射到高维空间，语义相近的文字坐标更近。检索时找距离最近或夹角最小的向量。",
+        project: "知识库场景会用到 embedding + FAISS；阅读场景刻意不用。",
+        interview: "向量检索擅长语义泛化，但定位信息是后补的，不一定适合需要精确出处的场景。"
+      },
+      {
+        id: "l0q4", tag: "BM25",
+        prompt: "BM25 更擅长下面哪类问题？",
+        options: ["精确的关键词、专有名词、代码标识符", "同义改写很重的自然语言问题", "跨语言语义匹配", "图片内容理解"],
+        answer: 0,
+        explain: "BM25 是关键词检索，靠词频、逆文档频率和文档长度打分。它不理解“意思”，但精确词面匹配时非常可靠。",
+        project: "项目保留 BM25 作为混合检索的关键词分支。",
+        interview: "BM25 和向量检索的失败模式不同，所以可以混合，而不是互相替代。"
+      },
+      {
+        id: "l0q5", tag: "概念辨析",
+        prompt: "“RAG 就是向量数据库”这句话对吗？",
+        options: ["不对：RAG 是流程，向量库只是检索的一种实现", "对：没有向量库就没有 RAG", "对：RAG 必须使用 FAISS", "不对：RAG 只能用于图片"],
+        answer: 0,
+        explain: "RAG 还可以用关键词检索、全文检索、结构化查询、PageIndex 等。BookMind 的阅读模式甚至完全不用向量库。",
+        project: "阅读用 locator 全文扫描；知识库才用向量/BM25/混合检索。",
+        interview: "面试时先讲流程，再讲检索方式，不要一上来就说“向量库”。"
+      }
+    ]
+  },
+  {
+    id: "l1",
+    title: "检索两条路",
+    subtitle: "BM25 与向量检索的取舍",
+    minutes: 8,
+    badge: "检索分岔口",
+    desc: "理解关键词检索和语义检索各自强在哪、弱在哪，以及混合检索怎么融合。",
+    questions: [
+      {
+        id: "l1q1", tag: "BM25",
+        prompt: "BM25 里的 IDF 主要衡量什么？",
+        options: ["一个词在整个语料里有多稀有、多有区分度", "文档有多少页", "查询有多少个字符", "向量有多少维"],
+        answer: 0,
+        explain: "IDF 是逆文档频率。越罕见的词权重越高，例如“拓扑排序”比“的”更有区分度。",
+        project: "BM25 分支会优先把罕见专有名词的匹配排上来。",
+        interview: "TF 看局部相关，IDF 看全局区分度，长度归一化防止长文档占便宜。"
+      },
+      {
+        id: "l1q2", tag: "BM25",
+        prompt: "BM25 里词频 TF 的增长为什么要“饱和”？",
+        options: ["避免一个词重复堆砌就把分数无限刷高", "为了节省磁盘空间", "为了让分词更快", "为了让长文档占优势"],
+        answer: 0,
+        explain: "一个词出现 100 次不一定比出现 10 次相关 10 倍。BM25 让 TF 的增长逐渐变平，抑制关键词堆砌。",
+        project: "这也是 BM25 比简单词频统计更稳的原因。",
+        interview: "BM25 的三个核心：TF 饱和、IDF 加权、文档长度归一化。"
+      },
+      {
+        id: "l1q3", tag: "BM25",
+        prompt: "中文场景使用 BM25，最常见的工程问题是什么？",
+        options: ["分词：分错了，关键词匹配就会错", "GPU 不够", "向量维度太高", "浏览器不兼容"],
+        answer: 0,
+        explain: "中文没有天然空格，需要分词。分词粒度会直接影响召回。项目在阅读搜索里用重叠 bigram 做兜底。",
+        project: "reading/search.py 会把长中文串拆成重叠 bigram。",
+        interview: "中文检索不是把英文 BM25 直接用上就行，分词和标点归一化都是关键细节。"
+      },
+      {
+        id: "l1q4", tag: "混合检索",
+        prompt: "混合检索里 RRF 的主要作用是什么？",
+        options: ["按排名融合多路结果，避免不同检索器的分数尺度不可比", "把向量转成文本", "训练一个新的 embedding 模型", "压缩索引体积"],
+        answer: 0,
+        explain: "向量分数和 BM25 分数不在一个尺度，直接相加没有意义。RRF 只看名次，用 1/(k+rank) 累加，简单稳健。",
+        project: "项目用 QueryFusionRetriever，默认 RRF 融合向量和 BM25。",
+        interview: "RRF 是无监督融合，适合分数不可比的场景；也可以先融合再 rerank。"
+      },
+      {
+        id: "l1q5", tag: "Rerank",
+        prompt: "Rerank 的主要代价是什么？",
+        options: ["延迟更高，所以通常只精排少量候选", "召回率必然下降", "必须重建整个数据库", "只能用于英文"],
+        answer: 0,
+        explain: "Cross-Encoder 要把“问题 + 文档”一起送进模型，比向量点积慢很多。常见做法是粗筛 20 到 100 条，再精排。",
+        project: "项目的 rerank 是可选的，配置模型才启用。",
+        interview: "Rerank 用延迟换准确率；没有 rerank 时，检索器 top-k 就是最终结果。"
+      },
+      {
+        id: "l1q6", tag: "选型",
+        prompt: "下面哪类问题，向量检索最容易吃亏？",
+        options: ["精确的错误码、API 名称、代码标识符", "同义改写很重的概念问题", "跨语言的语义匹配", "自然语言描述的相似案例"],
+        answer: 0,
+        explain: "向量检索偏向语义相似，精确字符串可能被“意思相近”的结果挤掉。这类问题 BM25 往往更稳。",
+        project: "所以项目保留 BM25，而不是只上向量。",
+        interview: "检索选型要看查询类型：精确匹配、语义匹配、还是两者混合。"
+      }
+    ]
+  },
+  {
+    id: "l2",
+    title: "Agent 循环",
+    subtitle: "模型提议，系统执行",
+    minutes: 8,
+    badge: "循环掌控者",
+    desc: "搞懂 Tool Calling、Agent Loop、终止条件和预算。",
+    questions: [
+      {
+        id: "l2q1", tag: "Agent",
+        prompt: "Agent 和普通聊天机器人最大的区别是什么？",
+        options: ["能在循环里调用工具，并根据工具结果决定下一步", "参数更多", "回答一定更长", "一定要用多智能体"],
+        answer: 0,
+        explain: "Agent 的关键是“观察—决策—行动”的循环：模型可以选择工具、读取结果、继续或结束。",
+        project: "BookMind 的 AgentLoop 就是一轮 LLM + 一轮工具 dispatch。",
+        interview: "Agent 的核心不是多智能体，而是模型能否在循环里根据反馈做决策。"
+      },
+      {
+        id: "l2q2", tag: "Tool Calling",
+        prompt: "Tool Calling 中，真正执行工具的是谁？",
+        options: ["后端运行时：模型只输出调用意图和参数", "模型自己直接执行代码", "浏览器自动执行", "数据库触发器"],
+        answer: 0,
+        explain: "模型输出结构化的 tool_call，后端校验参数和权限后执行，再把结果作为 role=tool 消息放回对话。",
+        project: "dispatch_tool_calls 负责并行执行，augment_kwargs 负责注入服务端上下文。",
+        interview: "模型只提议，系统来执行和校验；这是安全边界。"
+      },
+      {
+        id: "l2q3", tag: "Agent Loop",
+        prompt: "BookMind 的 Agent 循环，正常情况什么时候结束？",
+        options: ["某一轮模型没有调用任何工具，这一轮就是最终回答", "每一轮结束都重新开始", "固定只跑一轮", "用户关闭页面才结束"],
+        answer: 0,
+        explain: "有工具调用就继续，没有工具调用就是 finish。第一轮就不调用工具，说明模型认为不需要探索。",
+        project: "agent_loop.py 的注释写得很清楚：one chat turn = one agent loop。",
+        interview: "循环必须有明确终止条件：无工具调用、达到预算、或工具要求终止。"
+      },
+      {
+        id: "l2q4", tag: "预算",
+        prompt: "为什么要给 Agent 设置最大轮数？",
+        options: ["控制成本和延迟，并保证循环一定终止", "让模型更聪明", "提高检索召回率", "减少 token 计费错误"],
+        answer: 0,
+        explain: "没有上限，模型可能一直调用工具或反复推理。轮数、token、超时都是产品化必须的预算。",
+        project: "默认 8 轮探索、3 轮结算，最后强制一次无工具收尾。",
+        interview: "预算不是限制能力，而是让系统可预测、可运营。"
+      },
+      {
+        id: "l2q5", tag: "交互",
+        prompt: "ask_user 工具的作用是什么？",
+        options: ["暂停循环，等用户回答后继续", "直接结束对话", "清空历史", "切换模型"],
+        answer: 0,
+        explain: "ask_user 把问题展示给用户，回合保持存活；用户回答后，答案被放进对应的 tool 消息，循环继续。",
+        project: "这是 human-in-the-loop 的一种实现。",
+        interview: "Agent 不是必须全自动；关键节点停下来问人，往往比硬猜更可靠。"
+      },
+      {
+        id: "l2q6", tag: "架构",
+        prompt: "这个项目为什么优先选择单 Agent，而不是多 Agent？",
+        options: ["任务边界清晰、上下文统一、成本低、容易调试", "单 Agent 的效果一定比多 Agent 好", "多 Agent 不能调用工具", "单 Agent 不需要预算"],
+        answer: 0,
+        explain: "多 Agent 会带来通信成本、状态一致性和错误传播。学习场景边界清晰，单 Agent + capability 插件已经够用。",
+        project: "项目用 capability 插件扩展阅读、导学、练习等能力。",
+        interview: "架构选择看任务，不看热度；能单 Agent 解决就不要为了复杂而复杂。"
+      }
+    ]
+  },
+  {
+    id: "l3",
+    title: "项目全景",
+    subtitle: "技术栈与四个页面",
+    minutes: 7,
+    badge: "全局视角",
+    desc: "记住技术栈、端口、四页面和共享数据模型。",
+    questions: [
+      {
+        id: "l3q1", tag: "技术栈",
+        prompt: "BookMind 的前端使用什么框架？",
+        options: ["Next.js + React", "Vue + Nuxt", "Django 模板", "Flutter"],
+        answer: 0,
+        explain: "前端是 Next.js 16 + React 19 + TypeScript，负责阅读器、流式对话和图解渲染。",
+        project: "web/ 目录就是前端工程。",
+        interview: "选择 Next.js 是因为阅读器、PDF 渲染和复杂组件生态更成熟。"
+      },
+      {
+        id: "l3q2", tag: "技术栈",
+        prompt: "BookMind 的后端使用什么框架？",
+        options: ["FastAPI", "Spring Boot", "Ruby on Rails", "Laravel"],
+        answer: 0,
+        explain: "后端是 FastAPI + Uvicorn，提供 HTTP API 和 WebSocket 流式事件。",
+        project: "入口是 bookmind.main:app，端口 8019。",
+        interview: "Python 侧有文档解析、检索和模型调用生态，FastAPI 的异步能力适合流式接口。"
+      },
+      {
+        id: "l3q3", tag: "数据模型",
+        prompt: "四个学习页面主要靠什么共享同一份内容？",
+        options: ["稳定的 material_id、workspace_id、path_id、notebook_id", "浏览器 cookie", "模型参数", "端口号"],
+        answer: 0,
+        explain: "四个页面共享 stable ID 和学习证据，但各自保存自己的交互状态与对话。",
+        project: "教材、阅读工作区、学习路径、笔记本各有独立 ID。",
+        interview: "共享 ID 让“读—学—练—记”能闭环，同时避免对话串味。"
+      },
+      {
+        id: "l3q4", tag: "运行",
+        prompt: "项目默认的前后端端口是？",
+        options: ["前端 8018，后端 8019", "前端 3000，后端 8000", "前端 8080，后端 8081", "前端 5173，后端 5000"],
+        answer: 0,
+        explain: "start.ps1 会启动 API 8019 和页面 8018，打开 http://127.0.0.1:8018。",
+        project: "健康检查是 GET /health/ready，返回 status=ready。",
+        interview: "端口只是表象，关键是前后端通过 HTTP + WebSocket 解耦。"
+      },
+      {
+        id: "l3q5", tag: "存储",
+        prompt: "项目主要用什么存储学习数据？",
+        options: ["SQLite + 文件", "仅内存", "MongoDB 集群", "浏览器 localStorage"],
+        answer: 0,
+        explain: "SQLite 存会话、教材关联、学习状态和练习记录；文件存原文单元、索引、标注和笔记。",
+        project: "data/user/ 是运行数据根目录。",
+        interview: "单机场景下 SQLite + 文件简单可靠，代价是跨存储一致性要靠应用层保证。"
+      },
+      {
+        id: "l3q6", tag: "来源",
+        prompt: "BookMind 基于哪个上游项目开发？",
+        options: ["HKUDS/DeepTutor", "LangChain", "AutoGPT", "Dify"],
+        answer: 0,
+        explain: "README 明确说明基于 HKUDS/DeepTutor，复用并改造其阅读、导学、资料生成、练习、笔记与会话引擎。",
+        project: "内部包名是 bookmind，保留 Apache 2.0 许可与第三方声明。",
+        interview: "面试时可以说“基于开源项目做了产品化和架构重构”，不要回避上游。"
+      }
+    ]
+  },
+  {
+    id: "l4",
+    title: "一次提问的旅程",
+    subtitle: "从输入到流式回答",
+    minutes: 8,
+    badge: "链路侦探",
+    desc: "把一次阅读提问的完整链路讲清楚。",
+    questions: [
+      {
+        id: "l4q1", tag: "请求链路",
+        prompt: "用户在阅读页提问后，后端首先做什么？",
+        options: ["验证会话归属和教材权限，整理上下文", "直接调用模型", "先重新训练模型", "先删除旧索引"],
+        answer: 0,
+        explain: "进入模型之前，后端要先确认“这个用户能不能访问这份资料”，并把经过验证的上下文组织好。",
+        project: "教材权限和会话归属是工具边界的一部分。",
+        interview: "安全边界要在模型之前，而不是靠模型自觉。"
+      },
+      {
+        id: "l4q2", tag: "pre_loop",
+        prompt: "阅读能力的 pre_loop 确定性检索有什么作用？",
+        options: ["把问题可能命中的原文位置提前注入，不花 LLM 调用", "生成最终答案", "训练 embedding", "压缩图片"],
+        answer: 0,
+        explain: "pre_loop 用本地全文搜索定位用户问题，把 top 命中作为 seed 放进本轮上下文。它不调用 LLM，不增加首字延迟。",
+        project: "capability.py 的 _locate 会返回最多 4 条命中。",
+        interview: "这是“弱模型也能被正确接地”的工程手段：不依赖模型主动调用工具。"
+      },
+      {
+        id: "l4q3", tag: "工具结果",
+        prompt: "工具执行结果如何回到模型？",
+        options: ["作为 role=tool 消息追加到对话，模型继续推理", "写进数据库就结束", "只显示给用户，不回模型", "转成图片再发回去"],
+        answer: 0,
+        explain: "工具结果作为 role=tool 消息进入同一个对话，模型在下一轮就能看到并据此决定继续还是结束。",
+        project: "AgentLoop 会把 assistant 的 tool_calls 和 tool 结果都保留在消息列表里。",
+        interview: "工具结果不是日志，而是模型下一轮推理的输入。"
+      },
+      {
+        id: "l4q4", tag: "安全",
+        prompt: "阅读工具的 material_id 由谁提供？",
+        options: ["服务端注入，模型不能自己填", "模型自由填写", "用户手动输入", "随机生成"],
+        answer: 0,
+        explain: "capability 在 augment_kwargs 里注入 material_id 和 workspace_id，模型无法读取用户没打开的资料。",
+        project: "这是 capability 的参数注入机制。",
+        interview: "关键参数服务端注入，是防止越权和参数错误的有效办法。"
+      },
+      {
+        id: "l4q5", tag: "流式",
+        prompt: "前端如何显示模型的流式回答？",
+        options: ["按流式事件增量渲染文字、工具调用和引用", "等全部生成完再一次性显示", "轮询数据库", "不断刷新页面"],
+        answer: 0,
+        explain: "后端把文字、工具调用、引用、图解作为事件推给前端，前端增量渲染。",
+        project: "FastAPI 的 WebSocket/流式事件配合 Next.js 前端。",
+        interview: "流式输出改善首字延迟，但前后端都要能处理半成品状态。"
+      },
+      {
+        id: "l4q6", tag: "防幻觉",
+        prompt: "模型声称“第 12 页写了 X”，系统靠什么降低风险？",
+        options: ["工具返回带 locator 的原文，并对引用/quote 做校验", "完全相信模型", "把 temperature 调高", "把提示词写得更长"],
+        answer: 0,
+        explain: "工具结果天然带 locator；跳转/高亮前校验 quote 是否真实存在；未验证内容不能写学习状态。",
+        project: "reader_goto 和 reader_annotate 都会校验 quote。",
+        interview: "防幻觉要把证据做成系统能力：能检索、能定位、能校验、能拒绝。"
+      }
+    ]
+  },
+  {
+    id: "l5",
+    title: "证据与防幻觉",
+    subtitle: "locator、引用校验、写入边界",
+    minutes: 7,
+    badge: "证据守门人",
+    desc: "理解为什么阅读场景选择定位检索，以及系统如何拒绝不实引用。",
+    questions: [
+      {
+        id: "l5q1", tag: "定位检索",
+        prompt: "BookMind 阅读搜索的三层匹配顺序是？",
+        options: ["exact → normalised → terms", "terms → vector → rerank", "BM25 → FAISS → LLM", "随机匹配"],
+        answer: 0,
+        explain: "先精确匹配，再标点/空白归一化匹配，最后按查询词命中数量排序。这样便宜的层先跑，命中就返回。",
+        project: "reading/search.py 的 search_units 就是这个顺序。",
+        interview: "分层匹配让“精确引用”优先，同时保留自然语言问题的兜底。"
+      },
+      {
+        id: "l5q2", tag: "locator",
+        prompt: "为什么每个检索命中都要带 locator？",
+        options: ["可引用、可跳转、可验证", "让 JSON 更大", "方便计费", "替代 embedding"],
+        answer: 0,
+        explain: "locator 是页码/章节/幻灯片号。它让模型能引用，让前端能跳转，也让系统能校验引用是否真实。",
+        project: "阅读工具返回的每个片段都带 locator。",
+        interview: "在需要出处的场景，定位信息不是附属品，而是核心数据。"
+      },
+      {
+        id: "l5q3", tag: "quote 校验",
+        prompt: "高亮前校验 quote 的意义是什么？",
+        options: ["防止把不存在的句子标在原文上", "提高模型温度", "加快检索", "减少 token"],
+        answer: 0,
+        explain: "模型可能改写或翻译原文。校验 quote 是否真的出现在该 locator，可以避免错误高亮和错误引用。",
+        project: "校验失败时仍可跳转，但不点亮；保存标注则直接拒绝。",
+        interview: "错误引用比不引用更伤信任，所以关键动作要程序校验。"
+      },
+      {
+        id: "l5q4", tag: "写入边界",
+        prompt: "未验证的浏览器文本应该怎么处理？",
+        options: ["不能写入学习状态，只能作为不可信证据", "直接当作教材证据", "自动生成笔记", "覆盖原文"],
+        answer: 0,
+        explain: "未验证文本可能被污染或篡改，不能直接改变掌握度、笔记或学习记录。",
+        project: "项目会把选中文本标记为 untrusted，只作为证据，不执行其中指令。",
+        interview: "写入边界是 Agent 安全的一部分：读可以宽松，写必须严格。"
+      },
+      {
+        id: "l5q5", tag: "选型",
+        prompt: "为什么阅读场景不上向量库？",
+        options: ["单元少、线性扫描快、命中天然带定位", "向量库不支持中文", "向量库不能部署", "embedding 一定不准"],
+        answer: 0,
+        explain: "一份教材通常只有几百个单元，线性扫描是毫秒级；每个命中天然带 locator，正好满足“可引用”的需求。",
+        project: "这是项目最有辨识度的取舍。",
+        interview: "检索方式要服从场景：要精确出处，locator 全文检索可能比向量更合适。"
+      }
+    ]
+  },
+  {
+    id: "l6",
+    title: "面试实战",
+    subtitle: "把理解讲成答案",
+    minutes: 9,
+    badge: "面试通关",
+    desc: "用面试官能听懂的方式，讲清项目、取舍和评估。",
+    questions: [
+      {
+        id: "l6q1", tag: "项目介绍",
+        prompt: "下面哪句最适合作为 BookMind 的一句话介绍？",
+        options: ["教材驱动的 AI 学习助手，用单 Agent 循环把阅读、导学、练习、笔记连成证据闭环", "一个通用聊天机器人", "一个多智能体框架", "一个向量数据库"],
+        answer: 0,
+        explain: "一句话要包含：面向什么场景、核心技术形态、解决什么问题。不要只说“用了 AI”。",
+        project: "项目定位是教材学习，不是通用聊天。",
+        interview: "先讲定位，再讲技术，最后讲取舍。"
+      },
+      {
+        id: "l6q2", tag: "取舍",
+        prompt: "这个项目最重要的检索取舍是什么？",
+        options: ["阅读用 locator 全文检索，知识库用向量/BM25 混合检索", "所有场景都用向量检索", "所有场景都用 BM25", "完全不用检索"],
+        answer: 0,
+        explain: "阅读要可定位的证据，知识库要大规模语义召回；不同场景用不同检索方式。",
+        project: "这也是面试最能体现你理解深度的一点。",
+        interview: "不要背“用了 RAG”，要讲“为什么这里用这种检索”。"
+      },
+      {
+        id: "l6q3", tag: "评估",
+        prompt: "评估 RAG 效果，比较合理的一组指标是？",
+        options: ["Recall@K + Faithfulness + 引用准确率", "只看回答长度", "只看模型参数", "只看延迟"],
+        answer: 0,
+        explain: "检索层看召回，生成层看回答是否有证据支持，产品层看引用是否准确、用户是否真的学会。",
+        project: "项目有引用校验和测试，但大规模线上指标还可以继续补。",
+        interview: "分层评估，避免只看“回答像不像”。"
+      },
+      {
+        id: "l6q4", tag: "上下文",
+        prompt: "上下文超限时，优先怎么做？",
+        options: ["做预算，按优先级裁剪/压缩，并控制检索条数", "无限加大上下文窗口", "删除系统提示词", "把全部历史都塞进去"],
+        answer: 0,
+        explain: "先算预算，再保留系统规则和当前问题，压缩历史，限制检索条数和单条长度。",
+        project: "阅读定位只注入 4 条命中，每条 260 字符，就是主动控制上下文。",
+        interview: "上下文不是越大越好，关键是相关信息密度。"
+      },
+      {
+        id: "l6q5", tag: "扩展",
+        prompt: "如果要把项目扩展到多用户，最先应该补什么？",
+        options: ["权限隔离、跨存储一致性和并发协调", "换更花哨的前端", "增加 temperature", "删除 SQLite"],
+        answer: 0,
+        explain: "多用户会带来数据隔离、权限、并发写入和一致性问题，这是单机 SQLite + 文件架构首先要补的。",
+        project: "现有代码已有会话归属和教材权限，但并发协调仍是单机假设。",
+        interview: "扩展要先找架构瓶颈，不要先换技术栈。"
+      },
+      {
+        id: "l6q6", tag: "诚实",
+        prompt: "面试官问“你负责什么”，最稳妥的原则是？",
+        options: ["按真实参与说，不熟的说读过/了解设计", "把所有模块都说成自己做的", "拒绝回答", "只背术语"],
+        answer: 0,
+        explain: "面试官更在意你是否真的理解取舍。夸大职责很容易在追问中露馅，诚实反而更稳。",
+        project: "可以说“我主要参与 X，Y 我读过代码，Z 是团队做的”。",
+        interview: "不熟不可怕，装懂才可怕。"
+      }
+    ]
+  }
+];
+
+const ADVANCED_LEVELS = [
+  {
+    id: "a1",
+    stage: "apply",
+    title: "二刷·场景诊断",
+    subtitle: "把知识放进真实故障里",
+    minutes: 10,
+    desc: "多选、排序、找错、故障诊断。不是背定义，而是判断下一步怎么做。",
+    questions: [
+      {
+        id: "a1q1", tag: "选型", type: "multi",
+        prompt: "下面哪些场景更适合 locator 全文检索，而不是向量检索？",
+        options: [
+          "单份教材，要求每句话都能引用到页/节",
+          "精确查找错误码、API 名称或代码标识符",
+          "十万篇文档，用户经常换一种说法问同一概念",
+          "需要跨语言找语义相近的案例"
+        ],
+        answer: [0, 1],
+        explain: "locator 全文检索的强项是精确匹配和天然定位。数据量小、要求出处、查精确字符串时最合适。大规模语义召回、跨语言、重改写的问题才更适合向量检索。",
+        project: "BookMind 阅读模式用 locator 搜索；向量/BM25 留给知识库场景。",
+        interview: "先说场景需求：要精确出处还是语义召回，再谈检索方案。"
+      },
+      {
+        id: "a1q2", tag: "诊断", type: "single",
+        prompt: "用户问“栈和队列的区别”，检索同时命中第 4 章两节，但模型只引用了栈。最合理的修复是？",
+        options: [
+          "在 pre_loop 中保留两个主题的命中，并要求分别取证",
+          "提高 temperature，让回答更灵活",
+          "把整本教材塞进上下文",
+          "换一个更大的模型"
+        ],
+        answer: 0,
+        explain: "问题包含两个主题，检索和提示都要覆盖两个主题。只引一个，说明定位或取证约束不足；提高 temperature 只会让回答更飘。",
+        project: "阅读能力会把命中按 locator 注入 seed，并要求引用读过的原文。",
+        interview: "多主题问题要分别检索、分别取证，不能用一个片段代表全部。"
+      },
+      {
+        id: "a1q3", tag: "找错", type: "spot",
+        prompt: "下面哪句话是错的？",
+        options: [
+          "BM25 能理解同义词，所以中文不需要分词",
+          "向量检索擅长语义相近的内容",
+          "locator 命中天然带页码或章节号",
+          "混合检索可以用 RRF 融合两路排名"
+        ],
+        answer: 0,
+        explain: "BM25 是词面匹配，不理解同义词；中文必须处理分词，否则关键词匹配会直接失效。",
+        project: "阅读搜索用重叠 bigram 兜底中文；BM25 分支依赖分词质量。",
+        interview: "BM25 的优点是精确可解释，不是语义理解。"
+      },
+      {
+        id: "a1q4", tag: "链路", type: "order",
+        prompt: "把一次阅读提问的处理步骤排成正确顺序。点击步骤，按顺序排列。",
+        options: [
+          "模型调用 search_material / read_material",
+          "后端验证会话归属与教材权限",
+          "前端把答案和引用流式渲染",
+          "pre_loop 用本地检索定位问题",
+          "工具结果作为 role=tool 消息回到模型",
+          "对 reader_goto 的 quote 做存在性校验"
+        ],
+        answer: [1, 3, 0, 4, 5, 2],
+        explain: "先验证权限，再做本地定位；模型根据 seed 决定是否调用工具，工具结果回到对话；引用前校验 quote，最后才流式渲染。",
+        project: "这条链路分别对应权限校验、pre_loop、工具 dispatch、role=tool 消息和 verify_quote。",
+        interview: "能排出这条链路，说明你不是只记得“用了 RAG”，而是理解系统怎么跑。"
+      },
+      {
+        id: "a1q5", tag: "护栏", type: "multi",
+        prompt: "下面哪些属于这个项目的 Agent 护栏？",
+        options: [
+          "material_id 由服务端注入，模型不能自己填",
+          "quote 不真实就不高亮、不保存标注",
+          "让模型自己决定读哪一份文档",
+          "未验证的文本可以直接写进掌握度",
+          "给循环设置轮数和 token 预算"
+        ],
+        answer: [0, 1, 4],
+        explain: "护栏的核心是“权限、校验、预算”。让模型自由选文档和把未验证文本写进学习状态，都是反例。",
+        project: "augment_kwargs、verify_quote、AgentLoop 预算分别对应这三类护栏。",
+        interview: "护栏要写成代码，不能只写在提示词里。"
+      },
+      {
+        id: "a1q6", tag: "失败恢复", type: "single",
+        prompt: "模型连续 3 轮只输出“我需要先查资料”但不调用工具。最合理的处理是？",
+        options: [
+          "注入修复指令并用 pre_loop 提供 seed",
+          "直接把最大轮数调高到 50 轮",
+          "关闭全部工具让它不再调用",
+          "让用户反复重问直到它命中"
+        ],
+        answer: 0,
+        explain: "这是典型的“只推理不行动”。应该用协议修复消息、明确行动指令和预检索 seed 把它推回工具调用；单纯加轮数只会烧钱。",
+        project: "AgentLoop 有 reasoning-only 恢复策略和强制收尾。",
+        interview: "Agent 失败要可诊断：是没工具、不会用工具，还是工具结果没回到上下文。"
+      }
+    ]
+  },
+  {
+    id: "a2",
+    stage: "apply",
+    title: "二刷·架构取舍",
+    subtitle: "选型、代价、扩展",
+    minutes: 10,
+    desc: "面试官最爱追问的“为什么这样选”，以及“如果规模变大怎么办”。",
+    questions: [
+      {
+        id: "a2q1", tag: "选型", type: "single",
+        prompt: "一份教材只有 300 个单元，产品要求每句话都能引用到页码。最合适的检索方案是？",
+        options: [
+          "locator 全文检索：线性扫描 + 天然定位",
+          "纯向量检索：先 embedding 再找近邻",
+          "纯 BM25，但不要任何定位信息",
+          "知识图谱：先把概念抽成图"
+        ],
+        answer: 0,
+        explain: "300 个单元的线性扫描是毫秒级，命中天然带 locator，正好满足“可引用”。向量检索的定位是后补的，反而增加引用错误风险。",
+        project: "这是 BookMind 阅读模式的核心取舍。",
+        interview: "小数据量 + 强定位需求，往往不需要向量库。"
+      },
+      {
+        id: "a2q2", tag: "选型", type: "multi",
+        prompt: "哪些情况应该考虑引入向量检索？",
+        options: [
+          "数万篇文档，语义召回是瓶颈",
+          "用户经常换一种说法问同一个概念",
+          "只需要精确查错误码",
+          "需要跨语言找语义相近的案例",
+          "单份 PDF，只要求页码引用"
+        ],
+        answer: [0, 1, 3],
+        explain: "向量检索适合大规模、语义泛化、跨语言。精确错误码更适合 BM25；单份 PDF 要求页码引用更适合 locator。",
+        project: "项目的知识库场景保留向量/混合检索，阅读场景不用。",
+        interview: "选型不是“先进与否”，而是“查询类型 + 数据规模 + 定位需求”。"
+      },
+      {
+        id: "a2q3", tag: "索引", type: "single",
+        prompt: "换了一个更强的 embedding 模型后，检索结果反而变差。最可能的原因是？",
+        options: [
+          "没有重建索引，旧向量和新模型不在同一向量空间",
+          "模型参数太大",
+          "浏览器缓存没清",
+          "文档数量太少"
+        ],
+        answer: 0,
+        explain: "不同 embedding 模型的向量空间不可比。换模型必须重建索引，否则查询向量和文档向量不在同一坐标体系。",
+        project: "项目用 embedding signature 和 index versioning 记录索引与模型的绑定。",
+        interview: "换 embedding 模型 = 重建索引 + 重新评估召回。"
+      },
+      {
+        id: "a2q4", tag: "BM25", type: "single",
+        prompt: "中文教材上 BM25 召回很差，最先应该检查什么？",
+        options: [
+          "分词和标点归一化",
+          "GPU 显存型号不够",
+          "向量维度设得太高",
+          "浏览器版本不兼容"
+        ],
+        answer: 0,
+        explain: "中文没有空格，分词粒度直接影响关键词匹配；PDF 里的弯引号、破折号、换行也会破坏精确匹配。",
+        project: "阅读搜索会做空白折叠、标点弱化和中文 bigram 扩展。",
+        interview: "中文 BM25 的第一性问题不是调参，而是分词和文本归一化。"
+      },
+      {
+        id: "a2q5", tag: "存储", type: "multi",
+        prompt: "这个项目为什么选择 SQLite + 文件，而不是分布式存储？",
+        options: [
+          "本地优先、零运维、部署简单",
+          "单机数据量和个人使用场景足够",
+          "需要跨机房强一致",
+          "单机场景下可以接受跨存储一致性由应用层保证",
+          "多进程并发写入完全不需要协调"
+        ],
+        answer: [0, 1, 3],
+        explain: "这是单机本地应用的合理取舍：简单、可控、零运维。代价是跨存储一致性和并发写入要靠应用层保证，不是“完全不需要协调”。",
+        project: "SQLite 存会话/学习状态，文件存原文/索引/笔记，靠稳定 ID 和进程锁连接。",
+        interview: "主动说出代价，比只夸技术选型更加分。"
+      },
+      {
+        id: "a2q6", tag: "扩展", type: "single",
+        prompt: "如果用户量涨 100 倍，最先应该补什么？",
+        options: [
+          "权限/会话隔离、存储并发、索引与缓存、可观测性",
+          "直接上多智能体",
+          "换一个前端框架",
+          "把 temperature 调高"
+        ],
+        answer: 0,
+        explain: "先找架构瓶颈：多用户隔离、SQLite 并发、索引规模、缓存和日志指标。多智能体不是扩容手段。",
+        project: "现有代码有会话归属和教材权限，但仍是单机假设。",
+        interview: "扩展先量化瓶颈，再谈技术升级。"
+      }
+    ]
+  },
+  {
+    id: "a3",
+    stage: "interview",
+    title: "三刷·白板口述",
+    subtitle: "说出来才算会",
+    minutes: 15,
+    desc: "没有选项。先自己讲 60 到 90 秒，再对照评分标准和参考答案。",
+    questions: [
+      {
+        id: "a3q1", tag: "表达", type: "open",
+        prompt: "用 90 秒介绍 BookMind。请包含：它是什么、技术形态、一个关键取舍、你的收获。",
+        rubric: [
+          "说清了定位：教材驱动的 AI 学习助手，阅读/导学/练习/笔记闭环",
+          "说清了技术形态：Next.js + FastAPI + 单 Agent 循环 + 工具调用",
+          "说清了一个关键取舍：阅读用 locator 全文检索，知识库才用向量/BM25",
+          "说清了收获：Agent 产品化的难点是边界、预算、证据和失败恢复"
+        ],
+        reference: "BookMind 是一个教材驱动的 AI 学习助手，用户导入教材后，可以在同一组知识点上完成阅读、目标导学、练习和笔记。技术上前端是 Next.js 16，后端是 FastAPI，核心是一个单 Agent 循环：模型每轮可以调用阅读、出题、笔记等工具，工具结果回到对话，直到它不再调用工具。最有意思的取舍是阅读场景不用向量库，而是用带 locator 的全文检索，因为学习更关心“这句话在哪一页”，而不是语义相似；向量和 BM25 混合检索保留在知识库场景。我的收获是：Agent 产品化的难点不是调模型，而是工具边界、上下文预算、证据校验和失败恢复。"
+      },
+      {
+        id: "a3q2", tag: "链路", type: "open",
+        prompt: "在白板上画出一次阅读提问的完整链路，并标出至少两个护栏。",
+        rubric: [
+          "画出了权限校验和会话归属",
+          "画出了 pre_loop 确定性检索或工具调用",
+          "画出了 role=tool 结果回到模型",
+          "标出了 quote 校验或 material_id 服务端注入"
+        ],
+        reference: "用户输入 → 前端带 material_id/workspace_id → 后端验证会话归属和教材权限 → ReadingCapability 注入当前资料和页码 → pre_loop 用本地全文检索定位问题，把命中作为 seed → AgentLoop 调模型 → 模型调用 material_outline/search_material/read_material → 服务端执行工具，material_id 由服务端注入 → 结果作为 role=tool 消息回到模型 → 模型输出答案 → 若 reader_goto，校验 quote 是否存在 → 流式渲染并保存引用。护栏：material_id 服务端注入、quote 校验、未验证内容不写学习状态。"
+      },
+      {
+        id: "a3q3", tag: "选型", type: "open",
+        prompt: "为什么这个项目的阅读场景不用向量库？请说出至少一个代价。",
+        rubric: [
+          "说清了阅读需求是“可定位证据”，不是“语义相似”",
+          "说清了数据规模：几百个单元，线性扫描足够快",
+          "说清了 locator 让命中天然可引用、可跳转",
+          "说出了代价：不懂同义词、依赖原文措辞、中文要分词/bigram"
+        ],
+        reference: "阅读场景的核心需求是“这句话在哪一页”，不是“语义相近的内容有哪些”。一份教材通常只有几百个单元，线性扫描是毫秒级；每个命中天然带 locator，模型可以直接引用，前端可以跳转。向量检索返回的是语义相近的块，定位是后补的，反而容易引用错。代价是它不懂同义词、依赖原文措辞，中文还需要分词或 bigram 兜底；数据量很大或问题改写很重时，就应该换向量或混合检索。"
+      },
+      {
+        id: "a3q4", tag: "Agent", type: "open",
+        prompt: "解释 BookMind 的 Agent Loop：什么时候继续、什么时候结束、预算怎么设。",
+        rubric: [
+          "说清了“有工具调用就继续，没有工具调用就结束”",
+          "说清了工具结果作为 role=tool 消息回到对话",
+          "说清了 8 轮探索 + 3 轮结算 + 强制无工具收尾",
+          "说清了 token/超时预算或 ask_user 暂停"
+        ],
+        reference: "一次提问就是一个不断增长的对话。每一轮调用一次模型；如果这一轮调用了工具，就执行工具，把结果作为 role=tool 消息追加，继续下一轮；如果这一轮没有调用任何工具，这一轮就是最终回答，循环结束。预算上默认 8 轮探索，预算用完还有 3 轮结算，最后强制一次无工具收尾；同时有 token、流式超时和工具超时限制。ask_user 可以暂停循环，等用户回答后继续。"
+      },
+      {
+        id: "a3q5", tag: "证据", type: "open",
+        prompt: "模型说“第 12 页写了 X”，你怎么防止它编造？说出至少三个层次。",
+        rubric: [
+          "工具返回的片段带 locator，不靠模型自己记页码",
+          "提示词要求引用格式，并允许说“资料中没有”",
+          "跳转/高亮前校验 quote 是否真实存在",
+          "未验证内容不能写进学习状态"
+        ],
+        reference: "第一，工具返回的原文片段天然带 locator，模型引用的是它刚读过的内容；第二，提示词要求引用格式，并明确允许说资料中没有；第三，跳转或高亮前做程序校验，quote 不真实就不高亮，保存标注更严格，直接拒绝；第四，未验证的浏览器文本不能写入掌握度或学习记录。核心是：防幻觉不能只靠提示词，要把证据做成系统能力。"
+      },
+      {
+        id: "a3q6", tag: "检索", type: "open",
+        prompt: "比较 BM25、向量检索和混合检索：各自强在哪，什么时候用哪个？",
+        rubric: [
+          "BM25：关键词、TF/IDF、精确、可解释，怕同义词和分词",
+          "向量：语义相近、跨措辞，怕精确名称，需要 embedding",
+          "混合：两路召回 + RRF 融合，失败模式互补",
+          "说出了 rerank 或场景选型（精确出处 vs 大规模语义召回）"
+        ],
+        reference: "BM25 看词面，靠 TF、IDF 和长度归一化打分，精确、可解释、无需 GPU，适合专有名词、代码、错误码，但不懂同义词，中文依赖分词。向量检索把文本变成 embedding，找语义近邻，适合自然语言改写、跨语言和大规模召回，但精确名称可能被语义相近的结果挤掉。混合检索把两路召回用 RRF 融合，因为两者失败模式不同；需要更高准确率时再对少量候选做 rerank。阅读场景要精确出处，所以用 locator 全文检索；知识库要语义召回，才用向量/混合。"
+      }
+    ]
+  }
+];
+
+const GLOSSARY = [
+  { term: "LLM", en: "Large Language Model", cat: "模型", short: "根据上文预测下一个词的大模型。", analogy: "像读过很多书的输入法，能连续生成看似有逻辑的长文本。", project: "项目通过 OpenAI 兼容 API 调用 DeepSeek、OpenAI 等文字模型。" },
+  { term: "Token", en: "Token", cat: "模型", short: "模型处理文本的基本单位，计费和上下文都按它算。", analogy: "把句子切成积木块，英文一个词可能是几块，中文一个字可能是一块。", project: "轮数、输出上限、上下文预算都和 token 有关。" },
+  { term: "Prompt", en: "Prompt", cat: "模型", short: "写给模型的工作说明书。", analogy: "给聪明但不了解你业务的实习生布置任务。", project: "系统提示词由多个 block 拼装，capability 可以插入自己的规则。" },
+  { term: "Context Window", en: "Context Window", cat: "模型", short: "模型一次能看见的 token 总量。", analogy: "一张固定大小的桌子，资料太多就要挑重点。", project: "上下文用到 90% 会压缩/裁剪，阅读只注入少量命中。" },
+  { term: "Hallucination", en: "Hallucination", cat: "模型", short: "模型一本正经地编造事实、引用或页码。", analogy: "爱面子的人不知道答案也现场编一个。", project: "用 locator、quote 校验和写入边界降低风险。" },
+  { term: "RAG", en: "Retrieval-Augmented Generation", cat: "检索", short: "先查资料，再让模型带着证据回答。", analogy: "开卷考试：先翻书找到相关段落，再组织答案。", project: "知识库和 AI 导学会用；阅读模式用定位全文检索。" },
+  { term: "Retrieval", en: "Retrieval", cat: "检索", short: "从资料里找出和问题最相关的几段。", analogy: "在图书馆里按关键词或语义找书。", project: "search_material、RAGService.search 都是检索入口。" },
+  { term: "Chunk", en: "Chunk", cat: "检索", short: "把长文档切成模型能处理的小段。", analogy: "把厚书拆成一页页卡片，每张要能独立读懂。", project: "LlamaIndex 默认 512 字符，重叠 50。" },
+  { term: "Embedding", en: "Embedding", cat: "检索", short: "把文字变成向量，让语义相近变成距离相近。", analogy: "给每段文字在高维地图上标一个坐标。", project: "知识库向量检索使用；阅读模式刻意不用。" },
+  { term: "Vector", en: "Vector", cat: "检索", short: "一串表示语义位置的数字。", analogy: "地图上的坐标，只不过有几百维。", project: "FAISS 存储和检索向量。" },
+  { term: "FAISS", en: "FAISS", cat: "检索", short: "Facebook 开源的向量检索库。", analogy: "一张按语义坐标排好的巨型地图，能快速找邻居。", project: "llama-index-vector-stores-faiss，默认 flat 精确索引。" },
+  { term: "Cosine Similarity", en: "Cosine Similarity", cat: "检索", short: "看两个向量方向像不像，不看长度。", analogy: "两个人描述同一件事，用词多少不同但方向一致。", project: "文本 embedding 常做归一化后用余弦或点积。" },
+  { term: "ANN / HNSW", en: "Approximate Nearest Neighbor", cat: "检索", short: "为了快，允许“差不多最近”。", analogy: "在巨大城市里找最近咖啡店，不必量遍每一家。", project: "支持 flat 和 hnsw 两种向量索引。" },
+  { term: "BM25", en: "Best Matching 25", cat: "检索", short: "按词频、词稀有度和文档长度给关键词打分。", analogy: "查词典：词出现得多、又稀有，就更相关。", project: "混合检索的关键词分支，也用于 legacy page BM25。" },
+  { term: "TF / IDF", en: "Term Frequency / Inverse Document Frequency", cat: "检索", short: "TF 看词在这篇多不多，IDF 看词在全库稀不稀罕。", analogy: "“二叉树”出现很多且不常见，权重高；“的”到处都是，权重低。", project: "BM25 的两个核心因子。" },
+  { term: "Hybrid Retrieval", en: "Hybrid Retrieval", cat: "检索", short: "关键词检索和语义检索一起上。", analogy: "一边按菜名搜，一边按“想吃清淡的”推荐，最后合并名单。", project: "向量 + BM25，用 RRF 融合。" },
+  { term: "RRF", en: "Reciprocal Rank Fusion", cat: "检索", short: "只看排名，把多个榜单合成一个。", analogy: "三个评委分别排名，不比较打分标准，只把名次相加。", project: "QueryFusionRetriever 默认使用 RRF。" },
+  { term: "Rerank", en: "Rerank", cat: "检索", short: "先粗筛候选，再用更贵的模型精排。", analogy: "先按关键词筛简历，再让面试官逐份细看。", project: "可选 cross-encoder 精排，默认关闭。" },
+  { term: "Agent", en: "Agent", cat: "Agent", short: "能自己决定下一步并调用工具完成任务的模型系统。", analogy: "不是只会聊天的客服，而是能查订单、改地址、发邮件。", project: "AgentLoop + capability 工具集。" },
+  { term: "Tool Calling", en: "Tool Calling", cat: "Agent", short: "模型输出调用意图，后端执行工具。", analogy: "经理下指令，助理真正去查系统。", project: "dispatch_tool_calls 并行执行，参数由服务端注入。" },
+  { term: "Agent Loop", en: "Agent Loop", cat: "Agent", short: "有工具就继续，没工具就结束。", analogy: "带预算的 while 循环。", project: "8 轮探索 + 3 轮结算 + 强制收尾。" },
+  { term: "ReAct", en: "Reason + Act", cat: "Agent", short: "让模型交替“想一想”和“做一步”。", analogy: "解数学题：先想思路，再算一步，看结果再想下一步。", project: "每轮文本是 commentary，工具调用是 action。" },
+  { term: "Memory", en: "Memory", cat: "Agent", short: "Agent 记住什么、记多久、怎么取。", analogy: "短期记忆、工作记忆、长期档案分层存放。", project: "会话历史、学习状态、笔记、教材关联。" },
+  { term: "MCP", en: "Model Context Protocol", cat: "Agent", short: "连接 Agent 和外部工具/数据源的标准协议。", analogy: "工具侧的 USB 接口。", project: "依赖里有 MCP，可挂载 MCP 工具。" },
+  { term: "Guardrail", en: "Guardrail", cat: "Agent", short: "给 Agent 设的不能越过的线。", analogy: "高速公路护栏，防止冲出路面。", project: "权限、参数校验、quote 校验、写入边界。" },
+  { term: "Grounding", en: "Grounding", cat: "Agent", short: "回答里的关键结论能指回真实原文。", analogy: "论文脚注：不是“我觉得”，而是“见第 4 章”。", project: "locator + 引用格式 + quote 校验。" },
+  { term: "Multi-Agent", en: "Multi-Agent", cat: "Agent", short: "多个 Agent 分工协作。", analogy: "团队里有人查资料、有人写代码、有人审查。", project: "不是默认架构；项目以单 Agent + capability 为主。" },
+  { term: "PageIndex", en: "PageIndex", cat: "检索", short: "用推理做检索：根据目录/结构决定读哪里。", analogy: "先看目录，再让有经验的编辑判断该翻哪一章。", project: "保留适配器，但不是当前主学习流程的必需依赖。" }
+];
+
+// 基础题干扰项重写：干扰项改成常见误解，正确项不再固定为 A。
+// prepareQuestions() 还会在运行时打乱选项位置，并把正确答案映射到新位置。
+const QUESTION_FIXES = {
+  l0q1: { correct: 1, why: "继续训练是微调，向量化只是建索引，SQL 改写是另一种任务；RAG 的关键是检索后生成。", options: [
+    "用私有语料继续训练模型参数",
+    "先检索资料，再放进上下文生成",
+    "把文档向量化后直接让模型背诵",
+    "把问题改写成 SQL 再查数据库"
+  ]},
+  l0q2: { correct: 2, why: "训练速度、显存和前端生成都不是 RAG 的目标；RAG 解决知识来源和可追溯。", options: [
+    "让模型训练速度更快",
+    "减少显卡显存占用",
+    "补足模型没有的私有资料和依据",
+    "自动生成前端页面"
+  ]},
+  l0q3: { correct: 2, why: "关键词计数是 BM25 一类方法，时间戳和目录都不是语义相似度。", options: [
+    "数关键词出现次数",
+    "看文件修改时间",
+    "把文字变成向量后比较距离",
+    "按目录层级逐页翻找"
+  ]},
+  l0q4: { correct: 2, why: "同义改写和跨语言是向量检索强项，图片理解是视觉模型；BM25 强在词面精确匹配。", options: [
+    "同义改写很重的自然语言",
+    "跨语言的语义匹配",
+    "精确的关键词、专有名词和代码",
+    "图片内容理解"
+  ]},
+  l0q5: { correct: 2, why: "向量库只是检索的一种实现；RAG 还可以用全文检索、BM25、PageIndex 等。", options: [
+    "对，没有向量库就没有 RAG",
+    "对，RAG 必须使用 FAISS",
+    "不对，向量库只是检索实现之一",
+    "不对，RAG 只能用于图片"
+  ]},
+
+  l1q1: { correct: 2, why: "页数、查询长度、向量维度都不是 IDF；IDF 衡量词的区分度。", options: [
+    "文档有多少页",
+    "查询有多少个字符",
+    "一个词在全库中的稀有程度",
+    "向量有多少维"
+  ]},
+  l1q2: { correct: 0, why: "TF 饱和是评分设计，不是存储或分词优化；它也不会让长文档占优势。", options: [
+    "避免关键词重复堆砌刷高分",
+    "节省磁盘空间",
+    "让分词速度更快",
+    "让长文档更占优势"
+  ]},
+  l1q3: { correct: 1, why: "BM25 是关键词检索，最常见的问题是中文分词和 PDF 标点/换行；GPU、向量维度、浏览器都不是首要因素。", options: [
+    "GPU 型号不够",
+    "分词和标点归一化没做好",
+    "向量维度太高",
+    "浏览器不兼容"
+  ]},
+  l1q4: { correct: 2, why: "RRF 只处理排序结果，不训练模型、不转文本、不压缩索引。", options: [
+    "把向量转成文本",
+    "训练一个新的 embedding 模型",
+    "按排名融合多路结果",
+    "压缩索引体积"
+  ]},
+  l1q5: { correct: 3, why: "Rerank 不必然降低召回，也不需要重建库；它是用更高延迟换更准确的排序。", options: [
+    "召回率必然下降",
+    "必须重建整个数据库",
+    "只能用于英文",
+    "延迟更高，只精排少量候选"
+  ]},
+  l1q6: { correct: 0, why: "向量检索的弱项是精确字符串；同义改写、跨语言、相似案例反而是它的强项。", options: [
+    "精确错误码、API 名称",
+    "同义改写的问题",
+    "跨语言的语义匹配",
+    "自然语言的相似案例"
+  ]},
+
+  l2q1: { correct: 2, why: "参数量、回答长度和多智能体都不是 Agent 的定义；关键是循环 + 工具 + 反馈。", options: [
+    "模型参数更多",
+    "回答字数更长",
+    "能在循环里调用工具纠错",
+    "必须使用多智能体"
+  ]},
+  l2q2: { correct: 1, why: "模型只输出调用意图；执行、校验和权限控制在后端运行时。", options: [
+    "模型自己直接执行代码",
+    "后端运行时执行并校验",
+    "浏览器自动执行",
+    "数据库触发器执行"
+  ]},
+  l2q3: { correct: 2, why: "循环不是每轮重置，也不是固定一轮；没有工具调用的那一轮就是最终回答。", options: [
+    "每一轮结束都重新开始",
+    "固定只跑一轮",
+    "某一轮没有调用工具",
+    "用户关闭页面"
+  ]},
+  l2q4: { correct: 2, why: "轮数上限是产品化预算，不是模型能力或检索指标。", options: [
+    "让模型更聪明",
+    "提高检索召回率",
+    "控制成本并保证循环终止",
+    "减少 token 计费错误"
+  ]},
+  l2q5: { correct: 2, why: "ask_user 是 human-in-the-loop 暂停，不是终止、清空或换模型。", options: [
+    "直接结束本轮对话",
+    "清空全部历史",
+    "暂停等待用户回答",
+    "切换成别的模型"
+  ]},
+  l2q6: { correct: 3, why: "单 Agent 不是绝对更好，也需要预算；项目选它是因为任务边界和调试成本。", options: [
+    "单 Agent 效果一定更好",
+    "多 Agent 不能调用工具",
+    "单 Agent 不需要预算",
+    "边界清晰、上下文统一、易调试"
+  ]},
+
+  l3q1: { correct: 1, why: "这是项目事实题；前端是 Next.js 16 + React 19。", options: [
+    "Vue + Nuxt",
+    "Next.js + React",
+    "Django 模板",
+    "Flutter"
+  ]},
+  l3q2: { correct: 3, why: "后端是 FastAPI + Uvicorn；其余是其他语言/框架。", options: [
+    "Spring Boot",
+    "Ruby on Rails",
+    "Laravel",
+    "FastAPI"
+  ]},
+  l3q3: { correct: 2, why: "共享靠稳定业务 ID；cookie、模型参数和端口都不是数据关联键。", options: [
+    "浏览器 cookie",
+    "模型参数",
+    "material_id 等稳定 ID",
+    "端口号"
+  ]},
+  l3q4: { correct: 0, why: "项目默认前端 8018、后端 8019。", options: [
+    "8018 / 8019",
+    "3000 / 8000",
+    "8080 / 8081",
+    "5173 / 5000"
+  ]},
+  l3q5: { correct: 2, why: "项目是单机本地优先：SQLite + 文件；不是内存、MongoDB 或纯前端存储。", options: [
+    "仅内存",
+    "MongoDB 集群",
+    "SQLite + 文件",
+    "浏览器 localStorage"
+  ]},
+  l3q6: { correct: 3, why: "README 明确说明基于 HKUDS/DeepTutor 改造。", options: [
+    "LangChain",
+    "AutoGPT",
+    "Dify 平台",
+    "DeepTutor"
+  ]},
+
+  l4q1: { correct: 3, why: "模型之前先做权限和上下文校验；训练、删索引都不是每次提问的动作。", options: [
+    "不校验直接调用模型",
+    "先重新训练模型参数",
+    "先删除旧索引再重建",
+    "校验会话和教材权限"
+  ]},
+  l4q2: { correct: 2, why: "pre_loop 是本地确定性检索，不生成答案、不训练模型；它把命中位置放进 seed。", options: [
+    "生成最终答案",
+    "训练 embedding",
+    "把可能命中的原文位置提前注入",
+    "压缩图片"
+  ]},
+  l4q3: { correct: 2, why: "工具结果是模型下一轮的输入，不是日志或展示品。", options: [
+    "写进数据库就结束本轮",
+    "只显示给用户不返回",
+    "作为工具消息回到对话",
+    "转成图片再发给模型"
+  ]},
+  l4q4: { correct: 3, why: "material_id 由 capability 在服务端注入，防止模型越权或填错。", options: [
+    "模型自由填写",
+    "用户手动输入",
+    "随机生成",
+    "服务端注入"
+  ]},
+  l4q5: { correct: 0, why: "流式输出靠事件增量渲染；其他方式要么延迟高，要么不是流式。", options: [
+    "按流式事件增量渲染",
+    "等全部生成完再显示",
+    "轮询数据库拿结果",
+    "不断刷新整个页面"
+  ]},
+  l4q6: { correct: 3, why: "防幻觉要靠证据和校验；相信模型、调高温度、堆提示词都不能保证引用真实。", options: [
+    "完全相信模型",
+    "把 temperature 调高",
+    "把提示词写得更长",
+    "返回带 locator 的原文并校验引用"
+  ]},
+
+  l5q1: { correct: 0, why: "阅读搜索先精确，再归一化，最后按词命中排序；不是向量或随机流程。", options: [
+    "exact → normalised → terms",
+    "terms → vector → rerank",
+    "BM25 → FAISS → LLM",
+    "随机匹配"
+  ]},
+  l5q2: { correct: 3, why: "locator 是证据定位信息，不是计费或 JSON 体积问题。", options: [
+    "让 JSON 更大",
+    "方便计费",
+    "替代 embedding",
+    "可引用、可跳转、可验证"
+  ]},
+  l5q3: { correct: 3, why: "quote 校验是正确性护栏，不是性能或生成参数。", options: [
+    "提高模型温度",
+    "加快检索",
+    "减少 token",
+    "防止把不存在的句子标上去"
+  ]},
+  l5q4: { correct: 3, why: "未验证文本不可信，只能作为参考，不能写掌握度、笔记或覆盖原文。", options: [
+    "直接当作教材证据",
+    "自动生成笔记",
+    "覆盖原文",
+    "不能写入学习状态"
+  ]},
+  l5q5: { correct: 3, why: "不是向量库不能用，而是这个场景的规模和要求更适合 locator；代价是不懂同义词。", options: [
+    "向量库不支持中文",
+    "向量库不能部署",
+    "embedding 一定不准",
+    "单元少、扫描快、命中带定位"
+  ]},
+
+  l6q1: { correct: 2, why: "项目定位是教材学习，不是通用聊天、多智能体框架或向量库。", options: [
+    "一个通用聊天机器人",
+    "一个多智能体框架",
+    "教材驱动的 AI 学习助手",
+    "一个向量数据库"
+  ]},
+  l6q2: { correct: 2, why: "项目按场景选型：阅读要定位，知识库要语义召回，所以两条路并存。", options: [
+    "所有场景都用向量检索",
+    "所有场景都只用 BM25",
+    "阅读定位，知识库混合检索",
+    "完全不做任何检索"
+  ]},
+  l6q3: { correct: 3, why: "评估要分层：检索召回、回答有据、引用真实；长度、参数、延迟都不够。", options: [
+    "回答字数与用户点赞率",
+    "模型规模与推理延迟指标",
+    "接口吞吐与平均响应时间",
+    "Recall@K 与引用准确率"
+  ]},
+  l6q4: { correct: 3, why: "上下文管理是预算和优先级问题；加大窗口、删规则、塞满历史都不解决信息密度。", options: [
+    "无限加大上下文窗口",
+    "删除系统提示词",
+    "把全部历史都塞进去",
+    "做预算，按优先级裁剪"
+  ]},
+  l6q5: { correct: 3, why: "多用户首先补隔离、并发和观测；前端、温度和删库都不是扩展方案。", options: [
+    "换更花哨的前端",
+    "增加 temperature",
+    "删除 SQLite",
+    "权限隔离、并发和可观测性"
+  ]},
+  l6q6: { correct: 3, why: "诚实和边界感比夸大更加分；被追问时也不容易露馅。", options: [
+    "把所有模块都说成自己做的",
+    "拒绝回答",
+    "只背术语",
+    "按真实参与说，不熟就说读过"
+  ]}
+};
+
+const COMPACT_CORRECT = {
+  l0q2: "补足私有资料和依据",
+  l0q3: "转成向量后比距离",
+  l0q4: "精确关键词和代码",
+  l1q1: "词的稀有程度",
+  l1q2: "抑制关键词堆砌",
+  l1q3: "中文分词没做好",
+  l1q5: "延迟高，只精排少量",
+  l1q6: "精确错误码和 API",
+  l2q1: "能循环调用工具纠错",
+  l2q5: "暂停等待用户回答",
+  l3q1: "Next.js",
+  l3q3: "稳定业务 ID",
+  l3q6: "DeepTutor",
+  l4q1: "校验会话和教材权限",
+  l4q2: "提前注入命中位置",
+  l4q3: "作为工具消息回到对话",
+  l4q6: "返回原文并校验引用",
+  l5q1: "精确 → 归一化 → 词项",
+  l5q3: "防止误标原文",
+  l6q1: "教材驱动的学习助手",
+  l6q2: "阅读定位，知识库混合检索",
+  l6q3: "Recall@K 和引用准确率",
+  l6q4: "做预算，按优先级裁剪",
+  l6q6: "如实说参与范围",
+  a1q2: "保留两个主题的命中分别取证",
+  a1q3: "BM25 理解同义词，不用分词",
+  a1q6: "修复指令 + pre_loop",
+  a2q1: "locator 全文检索",
+  a2q3: "索引未重建",
+  a2q6: "隔离、并发、缓存和观测"
+};
+
+const PLAN = [
+  { id: "p0", time: "09:50", title: "开机检查", desc: "确认 8018 页面能打开、8019 健康检查为 ready；做 Level 0。", minutes: 10 },
+  { id: "p1", time: "10:00", title: "Level 0 术语觉醒", desc: "只搞懂四件事：RAG、向量、BM25、Agent。答错没关系，看解释。", minutes: 15 },
+  { id: "p2", time: "10:15", title: "Level 1 检索两条路", desc: "重点：BM25 和向量各自强在哪，为什么可以混合。", minutes: 20 },
+  { id: "p3", time: "10:35", title: "休息", desc: "离开屏幕，喝水，走动两分钟。不要刷手机。", minutes: 10 },
+  { id: "p4", time: "10:45", title: "Level 2 Agent 循环", desc: "记住一句话：模型提议，系统执行；有工具就继续，没工具就结束。", minutes: 20 },
+  { id: "p5", time: "11:05", title: "Level 3 项目全景", desc: "技术栈、端口、四页面、共享 ID。", minutes: 20 },
+  { id: "p6", time: "11:25", title: "休息", desc: "站起来，远眺，活动肩颈。", minutes: 10 },
+  { id: "p7", time: "11:35", title: "Level 4 一次提问的旅程", desc: "在白纸上画一遍：输入 → 权限 → pre_loop → 工具 → 回答 → 校验。", minutes: 20 },
+  { id: "p8", time: "11:55", title: "Level 5 证据与防幻觉", desc: "重点：locator、quote 校验、写入边界。", minutes: 20 },
+  { id: "p9", time: "12:15", title: "错题复习", desc: "只做错题，不做新题。错题答对后会从队列移除。", minutes: 15 },
+  { id: "p10", time: "下午", title: "Level 6 + Boss", desc: "过面试实战，然后录音复述 90 秒项目介绍。", minutes: 30 },
+  { id: "p11", time: "二刷", title: "场景诊断 + 架构取舍", desc: "12 道多选/排序/找错/诊断题，练真实取舍，不再背定义。", minutes: 25 },
+  { id: "p12", time: "三刷", title: "白板口述 + 模拟面试", desc: "6 道口述题按评分标准自评，再做一次 12 分钟模拟面试。", minutes: 30 }
+];
+
+const BOSS_ITEMS = [
+  { id: "b1", text: "我能用一句话说清 BookMind 的定位（教材驱动的 AI 学习助手）。" },
+  { id: "b2", text: "我能画出一次阅读提问的链路：输入 → 权限 → pre_loop → 工具 → 回答 → 校验。" },
+  { id: "b3", text: "我能解释为什么阅读场景不用向量库（定位、可引用、几百单元扫描足够快）。" },
+  { id: "b4", text: "我能解释 Agent Loop 的终止条件（无工具调用）和预算（8 轮探索 + 3 轮结算 + 强制收尾）。" },
+  { id: "b5", text: "我能说出至少三个护栏：material_id 注入、quote 校验、未验证内容不写状态。" },
+  { id: "b6", text: "我能诚实说明自己实际参与的部分，不把没做过的说成做过。" }
+];
+
+const defaultState = {
+  xp: 0,
+  completed: {},
+  advCompleted: {},
+  wrong: {},
+  correctOnce: {},
+  ratings: {},
+  schedule: {},
+  openDone: {},
+  mockHistory: [],
+  flash: {},
+  plan: {},
+  boss: {},
+  stats: { answered: 0, correct: 0 },
+  lastStudy: "",
+  streak: 0
+};
+
+function hashString(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function seededRandom(seed) {
+  let value = seed >>> 0;
+  return function next() {
+    value += 0x6D2B79F5;
+    let t = value;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleInPlace(array, rng) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+function prepareQuestions() {
+  const targetDeck = [];
+  function nextTarget(optionCount) {
+    if (!targetDeck.length) {
+      for (let i = 0; i < 4; i++) targetDeck.push(i % optionCount);
+      shuffleInPlace(targetDeck, Math.random);
+    }
+    return targetDeck.pop() % optionCount;
+  }
+  allLevels().forEach(level => {
+    level.questions.forEach(q => {
+      if (q.__prepared) return;
+      q.__prepared = true;
+      const fix = QUESTION_FIXES[q.id];
+      if (fix) {
+        q.options = fix.options.slice();
+        q.answer = fix.correct;
+        q.why = fix.why;
+      }
+      if (COMPACT_CORRECT[q.id] && q.type !== "multi" && q.type !== "order" && q.type !== "open") {
+        q.options[q.answer] = COMPACT_CORRECT[q.id];
+      }
+      if (q.type === "open" || q.type === "order") return;
+
+      const oldOptions = q.options.slice();
+      if (q.type === "multi") {
+        const order = oldOptions.map((_, index) => index);
+        shuffleInPlace(order, seededRandom(hashString(q.id)));
+        q.options = order.map(index => oldOptions[index]);
+        q.answer = q.answer.map(index => order.indexOf(index)).sort((a, b) => a - b);
+        return;
+      }
+
+      const correctText = oldOptions[q.answer];
+      const others = oldOptions.filter((_, index) => index !== q.answer);
+      shuffleInPlace(others, seededRandom(hashString(q.id)));
+      const target = nextTarget(oldOptions.length);
+      const newOptions = others.slice();
+      newOptions.splice(target, 0, correctText);
+      q.options = newOptions;
+      q.answer = target;
+    });
+  });
+}
+
+prepareQuestions();
+
+let state = loadState();
+
+const ui = {
+  view: "dashboard",
+  levelIndex: 0,
+  qIndex: 0,
+  selected: null,
+  answered: false,
+  review: false,
+  reviewQueue: [],
+  runAnswers: {},
+  flashIndex: 0,
+  flashFlipped: false,
+  glossaryQuery: "",
+  result: null,
+  flow: null,
+  advancedStage: "apply",
+  open: null
+};
+
+let focusTimer = {
+  total: 10 * 60,
+  remaining: 10 * 60,
+  running: false,
+  handle: null
+};
+
+let bossTimer = {
+  total: 90,
+  remaining: 90,
+  running: false,
+  handle: null
+};
+
+function normalizeState(parsed) {
+  const source = parsed && typeof parsed === "object" ? parsed : {};
+  const asObject = value => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
+  const asArray = value => (Array.isArray(value) ? value : []);
+  return {
+    ...defaultState,
+    ...source,
+    xp: Number(source.xp) || 0,
+    streak: Number(source.streak) || 0,
+    completed: asObject(source.completed),
+    advCompleted: asObject(source.advCompleted),
+    wrong: asObject(source.wrong),
+    correctOnce: asObject(source.correctOnce),
+    ratings: asObject(source.ratings),
+    schedule: asObject(source.schedule),
+    openDone: asObject(source.openDone),
+    mockHistory: asArray(source.mockHistory),
+    flash: asObject(source.flash),
+    plan: asObject(source.plan),
+    boss: asObject(source.boss),
+    stats: { ...defaultState.stats, ...asObject(source.stats) },
+    lastStudy: typeof source.lastStudy === "string" ? source.lastStudy : "",
+    updatedAt: Number(source.updatedAt) || 0
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return normalizeState(null);
+    return normalizeState(JSON.parse(raw));
+  } catch (err) {
+    return normalizeState(null);
+  }
+}
+
+function persistLocal() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (err) { /* 无痕模式忽略 */ }
+}
+
+function hasProgress(snapshot) {
+  if (!snapshot) return false;
+  return Boolean(
+    (snapshot.xp || 0) > 0 ||
+    Object.keys(snapshot.completed || {}).length ||
+    Object.keys(snapshot.advCompleted || {}).length ||
+    Object.keys(snapshot.wrong || {}).length ||
+    Object.keys(snapshot.correctOnce || {}).length ||
+    Object.keys(snapshot.ratings || {}).length ||
+    Object.keys(snapshot.openDone || {}).length ||
+    (snapshot.mockHistory || []).length
+  );
+}
+
+function saveState() {
+  state.updatedAt = Date.now();
+  persistLocal();
+  if (storageMode === "remote") {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => { pushRemoteState(); }, 350);
+  }
+}
+
+function setStorageBadge() {
+  const badge = document.getElementById("storageBadge");
+  if (!badge) return;
+  badge.classList.remove("remote", "error");
+  if (storageMode === "remote" && syncState === "error") {
+    badge.textContent = "SQLite 同步失败";
+    badge.classList.add("error");
+  } else if (storageMode === "remote") {
+    badge.textContent = "SQLite 已同步";
+    badge.classList.add("remote");
+  } else {
+    badge.textContent = "浏览器本地";
+  }
+}
+
+async function pushRemoteState() {
+  if (storageMode !== "remote") return false;
+  try {
+    const res = await fetch(QUIZ_API + "/api/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state }),
+      keepalive: true
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "save failed");
+    syncState = "synced";
+    setStorageBadge();
+    return true;
+  } catch (err) {
+    syncState = "error";
+    setStorageBadge();
+    return false;
+  }
+}
+
+async function initRemoteSync(force) {
+  try {
+    const res = await fetch(QUIZ_API + "/api/state", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    storageMode = "remote";
+    const remoteRaw = data.state;
+    const remote = remoteRaw ? normalizeState(remoteRaw) : null;
+    const local = state;
+    const remoteHas = !!remoteRaw;
+    const localHas = hasProgress(local);
+
+    if (remote && remoteHas && (!localHas || (remote.updatedAt || 0) > (local.updatedAt || 0))) {
+      state = remote;
+      persistLocal();
+      toast("已从 SQLite 恢复学习记录");
+    } else if (localHas && (!remoteHas || (local.updatedAt || 0) > (remote.updatedAt || 0))) {
+      await pushRemoteState();
+      toast("已把本地记录写入 SQLite");
+    } else if (remote && remoteHas) {
+      state = remote;
+      persistLocal();
+    }
+
+    syncState = "synced";
+    setStorageBadge();
+    render();
+  } catch (err) {
+    storageMode = "local";
+    syncState = "local";
+    setStorageBadge();
+    if (force) toast("未连接 SQLite 服务，当前使用浏览器本地存储");
+  }
+}
+
+function exportBackup() {
+  const payload = {
+    app: "bookmind-interview-quiz",
+    schema: 1,
+    exportedAt: new Date().toISOString(),
+    state
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "bookmind-答题记录-" + todayKey() + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast("已导出 JSON 备份");
+}
+
+function importBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(String(reader.result));
+      const incoming = normalizeState(data.state || data);
+      if (!hasProgress(incoming) && !window.confirm("这个备份看起来没有学习记录，仍要导入吗？")) return;
+      state = incoming;
+      saveState();
+      ui.view = "dashboard";
+      render();
+      toast("备份已导入");
+    } catch (err) {
+      toast("导入失败：文件不是有效的 JSON 备份");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function todayKey() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + m + "-" + day;
+}
+
+function yesterdayKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + m + "-" + day;
+}
+
+function touchStreak() {
+  const today = todayKey();
+  if (state.lastStudy === today) return;
+  if (state.lastStudy === yesterdayKey()) state.streak = (state.streak || 0) + 1;
+  else state.streak = 1;
+  state.lastStudy = today;
+}
+
+function totalQuestions() {
+  return LEVELS.reduce((sum, lv) => sum + lv.questions.length, 0);
+}
+
+function completedCount() {
+  return LEVELS.filter(lv => state.completed[lv.id]).length;
+}
+
+function accuracy() {
+  const a = state.stats.answered || 0;
+  if (!a) return 0;
+  return Math.round((state.stats.correct / a) * 100);
+}
+
+function isPassed(record) {
+  return !!record && record.total > 0 && (record.best / record.total) >= 0.8;
+}
+
+function allLevels() {
+  return [...LEVELS, ...ADVANCED_LEVELS];
+}
+
+function allQuestionsById() {
+  const map = {};
+  allLevels().forEach(lv => lv.questions.forEach(q => { map[q.id] = { level: lv, question: q }; }));
+  return map;
+}
+
+function allObjectiveEntries() {
+  return allLevels().flatMap(lv =>
+    lv.questions
+      .filter(q => q.type !== "open")
+      .map(q => ({ level: lv, question: q }))
+  );
+}
+
+function advancedObjectiveCount() {
+  return ADVANCED_LEVELS
+    .filter(lv => lv.stage === "apply")
+    .reduce((sum, lv) => sum + lv.questions.filter(q => q.type !== "open").length, 0);
+}
+
+function openQuestions() {
+  return ADVANCED_LEVELS.flatMap(lv =>
+    lv.questions.filter(q => q.type === "open").map(q => ({ level: lv, question: q }))
+  );
+}
+
+function isObjective(q) {
+  return q && q.type !== "open";
+}
+
+function dueQuestionIds() {
+  const now = Date.now();
+  const ids = new Set(Object.keys(state.wrong || {}));
+  Object.entries(state.schedule || {}).forEach(([id, item]) => {
+    if (item && typeof item.due === "number" && item.due <= now) ids.add(id);
+  });
+  const map = allQuestionsById();
+  return [...ids].filter(id => map[id] && isObjective(map[id].question));
+}
+
+function dueCount() {
+  return dueQuestionIds().length;
+}
+
+function tagMastery() {
+  const stats = {};
+  allObjectiveEntries().forEach(({ question }) => {
+    const tag = question.tag || "其他";
+    if (!stats[tag]) stats[tag] = { total: 0, correct: 0 };
+    stats[tag].total += 1;
+    if (state.correctOnce[question.id]) stats[tag].correct += 1;
+  });
+  return Object.entries(stats)
+    .map(([tag, value]) => ({
+      tag,
+      total: value.total,
+      correct: value.correct,
+      pct: value.total ? Math.round((value.correct / value.total) * 100) : 0
+    }))
+    .filter(item => item.total >= 2)
+    .sort((a, b) => b.total - a.total || a.pct - b.pct)
+    .slice(0, 10);
+}
+
+function scheduleLabel(qid) {
+  const item = state.schedule[qid];
+  if (!item) return "";
+  const days = Math.max(0, Math.ceil((item.due - Date.now()) / 86400000));
+  if (days <= 0) return "现在复习";
+  return days + " 天后复习";
+}
+
+function applyRating(qid, rating) {
+  const boxTable = [0, 1, 3, 7, 14];
+  const current = state.schedule[qid] || { box: 0 };
+  let box = current.box || 0;
+  if (rating === 0) box = Math.min(box + 1, boxTable.length - 1);
+  else if (rating === 1) box = Math.max(1, box);
+  else box = 0;
+  const days = boxTable[box] || 0;
+  state.ratings[qid] = rating;
+  state.schedule[qid] = {
+    box,
+    due: Date.now() + (rating === 2 ? 0 : days * 86400000),
+    last: Date.now()
+  };
+  saveState();
+  const label = rating === 0 ? "秒懂" : rating === 1 ? "想了一会" : "没思路";
+  toast(label + "，已安排复习：" + scheduleLabel(qid));
+}
+
+function nextLevel() {
+  const unfinished = LEVELS.find(lv => !state.completed[lv.id]);
+  return unfinished || LEVELS[0];
+}
+
+function findLevelIndex(id) {
+  return LEVELS.findIndex(lv => lv.id === id);
+}
+
+function el(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function toast(message) {
+  const node = document.getElementById("toast");
+  node.textContent = message;
+  node.classList.add("show");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => node.classList.remove("show"), 2200);
+}
+
+function confetti() {
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const layer = document.getElementById("confetti");
+  const colors = ["#175b4b", "#2d7a67", "#c98a3f", "#e1b879", "#7aa89a"];
+  for (let i = 0; i < 36; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+    piece.style.left = (Math.random() * 100) + "%";
+    piece.style.top = "-20px";
+    piece.style.background = colors[i % colors.length];
+    piece.style.setProperty("--dx", (Math.random() * 160 - 80) + "px");
+    piece.style.setProperty("--rot", (Math.random() * 720 - 360) + "deg");
+    piece.style.animationDelay = (Math.random() * 0.35) + "s";
+    layer.appendChild(piece);
+    setTimeout(() => piece.remove(), 2200);
+  }
+}
+
+/* ---------- 渲染框架 ---------- */
+
+function render() {
+  if (ui.view !== "flow" && ui.flow && ui.flow.timer) stopFlowTimer();
+  renderTopStats();
+  renderLevelList();
+  renderModeNav();
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  if (ui.view === "dashboard") main.appendChild(renderDashboard());
+  else if (ui.view === "quiz") main.appendChild(renderQuiz());
+  else if (ui.view === "advanced") main.appendChild(renderAdvanced());
+  else if (ui.view === "flow") main.appendChild(renderFlow());
+  else if (ui.view === "review") main.appendChild(renderReview());
+  else if (ui.view === "open") main.appendChild(renderOpen());
+  else if (ui.view === "flashcards") main.appendChild(renderFlashcards());
+  else if (ui.view === "glossary") main.appendChild(renderGlossary());
+  else if (ui.view === "plan") main.appendChild(renderPlan());
+  else if (ui.view === "boss") main.appendChild(renderBoss());
+  updateTimerDisplay();
+  updateBossTimerDisplay();
+  updateFlowTimerDisplay();
+}
+
+function renderTopStats() {
+  document.getElementById("xpValue").textContent = String(state.xp);
+  document.getElementById("streakValue").textContent = String(state.streak || 0);
+}
+
+function renderModeNav() {
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    const view = btn.dataset.view;
+    const flowMode = ui.flow ? ui.flow.mode : "";
+    const active =
+      view === ui.view ||
+      (view === "quiz" && ui.view === "quiz") ||
+      (view === "advanced" && ui.view === "advanced") ||
+      (view === "advanced" && ui.view === "open") ||
+      (view === "advanced" && ui.view === "flow" && flowMode === "advanced") ||
+      (view === "review" && ui.view === "review") ||
+      (view === "review" && ui.view === "flow" && (flowMode === "drill" || flowMode === "mock"));
+    btn.classList.toggle("active", active);
+    btn.onclick = () => {
+      if (view === "quiz") {
+        const idx = ui.review ? 0 : Math.max(0, findLevelIndex(nextLevel().id));
+        startLevel(idx, false);
+      } else {
+        ui.view = view;
+        render();
+      }
+    };
+  });
+}
+
+function renderLevelList() {
+  const list = document.getElementById("levelList");
+  list.innerHTML = "";
+  LEVELS.forEach((lv, idx) => {
+    const done = state.completed[lv.id];
+    const active = ui.view === "quiz" && ui.levelIndex === idx && !ui.review;
+    const btn = el(
+      '<button class="level-item ' + (done ? "done " : "") + (active ? "active" : "") + '" type="button">' +
+        '<span class="level-num">' + (idx + 1) + '</span>' +
+        '<span><span class="level-name">' + escapeHtml(lv.title) + '</span>' +
+        '<span class="level-meta">' + lv.minutes + ' 分钟 · ' + lv.questions.length + ' 题</span></span>' +
+        '<span class="level-best">' + (done ? (done.best + "/" + done.total) : "") + '</span>' +
+      '</button>'
+    );
+    btn.onclick = () => startLevel(idx, false);
+    list.appendChild(btn);
+  });
+}
+
+/* ---------- 地图 ---------- */
+
+function renderDashboard() {
+  const wrap = el('<div></div>');
+  const done = completedCount();
+  const next = nextLevel();
+  const nextIdx = findLevelIndex(next.id);
+  const pct = Math.round((done / LEVELS.length) * 100);
+
+  const hero = el(
+    '<section class="hero">' +
+      '<div class="hero-kicker">北京 10:00 · 从零开始</div>' +
+      '<h1>今天只做一件小事：<br/>搞懂 RAG 和 Agent。</h1>' +
+      '<p>不用先看完整本代码。按关卡走，一次一题，答错看解释。每关 6 到 9 分钟，做完就休息。</p>' +
+      '<div class="hero-actions">' +
+        '<button class="btn btn-primary" id="heroStart">继续：' + escapeHtml(next.title) + '</button>' +
+        '<button class="btn btn-light" id="heroPlan">看 10 点计划</button>' +
+        '<button class="btn btn-light" id="heroGlossary">查术语</button>' +
+      '</div>' +
+    '</section>'
+  );
+  hero.querySelector("#heroStart").onclick = () => startLevel(nextIdx, false);
+  hero.querySelector("#heroPlan").onclick = () => { ui.view = "plan"; render(); };
+  hero.querySelector("#heroGlossary").onclick = () => { ui.view = "glossary"; render(); };
+  wrap.appendChild(hero);
+
+  const summary = el(
+    '<section class="grid grid-3" style="margin-bottom:16px">' +
+      '<div class="card"><div class="stat-big">' + state.xp + '</div><div class="stat-label">累计 XP</div></div>' +
+      '<div class="card"><div class="stat-big">' + done + '/' + LEVELS.length + '</div><div class="stat-label">已练习关卡</div></div>' +
+      '<div class="card"><div class="stat-big">' + accuracy() + '%</div><div class="stat-label">累计正确率</div></div>' +
+    '</section>'
+  );
+  wrap.appendChild(summary);
+
+  const applyLevels = ADVANCED_LEVELS.filter(lv => lv.stage === "apply");
+  const applyDone = applyLevels.filter(lv => state.advCompleted[lv.id]).length;
+  const openDone = openQuestions().filter(item => state.openDone[item.question.id]).length;
+  const training = el(
+    '<section class="grid grid-3" style="margin-bottom:16px">' +
+      '<button class="card" id="dashAdvanced" type="button" style="text-align:left;cursor:pointer">' +
+        '<div class="pill gold">二刷 / 三刷</div>' +
+        '<h3 style="margin-top:10px">进阶训练</h3>' +
+        '<div class="small muted">应用关 ' + applyDone + '/' + applyLevels.length + ' · 口述 ' + openDone + '/' + openQuestions().length + '</div>' +
+        '<div class="small" style="color:var(--green);font-weight:700;margin-top:8px">去做场景与口述</div>' +
+      '</button>' +
+      '<button class="card" id="dashReview" type="button" style="text-align:left;cursor:pointer">' +
+        '<div class="pill ' + (dueCount() ? "gold" : "grey") + '">间隔复习</div>' +
+        '<h3 style="margin-top:10px">今日复习</h3>' +
+        '<div class="small muted">' + dueCount() + ' 道到期 / 错题</div>' +
+        '<div class="small" style="color:var(--green);font-weight:700;margin-top:8px">按 0/1/2 安排下次</div>' +
+      '</button>' +
+      '<button class="card" id="dashMock" type="button" style="text-align:left;cursor:pointer">' +
+        '<div class="pill">12 分钟</div>' +
+        '<h3 style="margin-top:10px">模拟面试</h3>' +
+        '<div class="small muted">8 题 · 4 基础 + 4 进阶</div>' +
+        '<div class="small" style="color:var(--green);font-weight:700;margin-top:8px">交卷后统一复盘</div>' +
+      '</button>' +
+    '</section>'
+  );
+  training.querySelector("#dashAdvanced").onclick = () => { ui.view = "advanced"; render(); };
+  training.querySelector("#dashReview").onclick = () => { ui.view = "review"; render(); };
+  training.querySelector("#dashMock").onclick = () => startMock();
+  wrap.appendChild(training);
+
+  const progressCard = el(
+    '<section class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">学习进度</h2>' +
+        '<span class="muted small">' + pct + '% · 错题 ' + Object.keys(state.wrong).length + ' 道待复习</span>' +
+      '</div>' +
+      '<div class="progress-line" style="margin-top:12px"><span style="width:' + pct + '%"></span></div>' +
+      '<div class="small muted" style="margin-top:10px">建议顺序：术语 → 检索 → Agent → 项目 → 链路 → 证据 → 面试。不要跳着背，先理解取舍。</div>' +
+    '</section>'
+  );
+  wrap.appendChild(progressCard);
+
+  const tags = tagMastery();
+  if (tags.length) {
+    const weak = [...tags].sort((a, b) => a.pct - b.pct)[0];
+    const tagCard = el(
+      '<section class="card" style="margin-bottom:16px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+          '<h2 style="margin:0">弱项雷达</h2>' +
+          '<button class="btn btn-ghost" id="weakDrill" type="button">练最弱：' + escapeHtml(weak.tag) + '</button>' +
+        '</div>' +
+        '<div class="small muted" style="margin:6px 0 12px">按标签统计“曾经答对过”的比例，只展示题量至少 2 的标签。</div>' +
+        '<div class="tag-bars">' +
+          tags.map(item =>
+            '<div class="tag-bar">' +
+              '<span class="tag-name">' + escapeHtml(item.tag) + '</span>' +
+              '<span class="tag-track"><span class="' + (item.pct < 60 ? "weak" : "") + '" style="width:' + item.pct + '%"></span></span>' +
+              '<span class="tag-pct">' + item.pct + '%</span>' +
+            '</div>'
+          ).join("") +
+        '</div>' +
+      '</section>'
+    );
+    tagCard.querySelector("#weakDrill").onclick = () => startWeakTag(weak.tag);
+    wrap.appendChild(tagCard);
+  }
+
+  const levelGrid = el('<section class="grid grid-3" style="margin-bottom:16px"></section>');
+  LEVELS.forEach((lv, idx) => {
+    const doneInfo = state.completed[lv.id];
+    const card = el(
+      '<button class="level-card" type="button">' +
+        '<div class="level-card-top">' +
+          '<span class="pill ' + (doneInfo ? (isPassed(doneInfo) ? "" : "grey") : "gold") + '">' + (doneInfo ? (isPassed(doneInfo) ? "已通关" : "待巩固") : "推荐") + '</span>' +
+          '<span class="muted small">' + lv.minutes + ' 分钟</span>' +
+        '</div>' +
+        '<h3>' + (idx + 1) + '. ' + escapeHtml(lv.title) + '</h3>' +
+        '<p>' + escapeHtml(lv.desc) + '</p>' +
+        '<div class="small muted">' + (doneInfo ? ("最好成绩 " + doneInfo.best + "/" + doneInfo.total) : (lv.questions.length + " 题 · 80% 通关")) + '</div>' +
+      '</button>'
+    );
+    card.onclick = () => startLevel(idx, false);
+    levelGrid.appendChild(card);
+  });
+  wrap.appendChild(levelGrid);
+
+  const planPreview = el(
+    '<section class="card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">10:00 学习计划</h2>' +
+        '<button class="btn btn-ghost" id="openPlan" type="button">打开完整计划</button>' +
+      '</div>' +
+      '<div class="plan-list" style="margin-top:12px">' +
+        PLAN.slice(0, 3).map(item => (
+          '<div class="plan-item">' +
+            '<span class="plan-time">' + item.time + '</span>' +
+            '<span><span class="plan-title">' + escapeHtml(item.title) + '</span>' +
+            '<span class="plan-desc">' + escapeHtml(item.desc) + '</span></span>' +
+          '</div>'
+        )).join("") +
+      '</div>' +
+    '</section>'
+  );
+  planPreview.querySelector("#openPlan").onclick = () => { ui.view = "plan"; render(); };
+  wrap.appendChild(planPreview);
+
+  return wrap;
+}
+
+/* ---------- 闯关 ---------- */
+
+function startLevel(index, review) {
+  ui.view = "quiz";
+  ui.levelIndex = index;
+  ui.qIndex = 0;
+  ui.selected = null;
+  ui.answered = false;
+  ui.review = !!review;
+  ui.result = null;
+  ui.runAnswers = {};
+  ui.reviewQueue = review ? Object.keys(state.wrong) : [];
+  if (review && ui.reviewQueue.length === 0) {
+    toast("没有待复习的错题，先去闯关吧。");
+    ui.view = "dashboard";
+    render();
+    return;
+  }
+  render();
+}
+
+function currentQuestions() {
+  if (ui.review) {
+    const map = allQuestionsById();
+    return ui.reviewQueue.map(id => map[id]).filter(Boolean);
+  }
+  const lv = LEVELS[ui.levelIndex];
+  return lv ? lv.questions.map(q => ({ level: lv, question: q })) : [];
+}
+
+function renderQuiz() {
+  const wrap = el('<div class="quiz-wrap"></div>');
+  const entries = currentQuestions();
+
+  if (ui.result) {
+    wrap.appendChild(renderResult());
+    return wrap;
+  }
+
+  if (!entries.length) {
+    wrap.appendChild(el('<div class="card empty-state"><h3>没有题目</h3><p>返回地图选择一关。</p></div>'));
+    return wrap;
+  }
+
+  const entry = entries[ui.qIndex];
+  const lv = entry.level;
+  const q = entry.question;
+  const total = entries.length;
+
+  const top = el(
+    '<div class="quiz-top">' +
+      '<div class="quiz-top-left">' +
+        '<button class="btn btn-soft" id="exitQuiz" type="button">退出</button>' +
+        '<div><div class="quiz-title">' + escapeHtml(ui.review ? "错题复习" : lv.title) + '</div>' +
+        '<div class="muted small">' + escapeHtml(ui.review ? "只做错题，答对后移出队列" : lv.subtitle) + '</div></div>' +
+      '</div>' +
+      '<div class="dots">' +
+        entries.map((item, i) => {
+          let cls = "dot";
+          if (i === ui.qIndex) cls += " current";
+          return '<span class="' + cls + '" title="第 ' + (i + 1) + ' 题"></span>';
+        }).join("") +
+      '</div>' +
+    '</div>'
+  );
+  top.querySelector("#exitQuiz").onclick = () => { ui.view = "dashboard"; render(); };
+  wrap.appendChild(top);
+
+  const card = el(
+    '<section class="question-card">' +
+      '<div class="q-tag">' + escapeHtml(q.tag) + ' · 第 ' + (ui.qIndex + 1) + '/' + total + ' 题</div>' +
+      '<h2 class="q-prompt">' + escapeHtml(q.prompt) + '</h2>' +
+      '<div class="options" id="options"></div>' +
+      '<div class="quiz-actions">' +
+        '<button class="btn btn-primary" id="submitBtn" type="button" disabled>提交答案</button>' +
+        '<button class="btn btn-soft hide" id="nextBtn" type="button">下一题</button>' +
+      '</div>' +
+      '<div id="feedbackSlot"></div>' +
+    '</section>'
+  );
+  wrap.appendChild(card);
+
+  const optionsBox = card.querySelector("#options");
+  q.options.forEach((opt, i) => {
+    const btn = el(
+      '<button class="option" type="button">' +
+        '<span class="option-key">' + String.fromCharCode(65 + i) + '</span>' +
+        '<span>' + escapeHtml(opt) + '</span>' +
+      '</button>'
+    );
+    btn.dataset.index = String(i);
+    btn.onclick = () => {
+      if (ui.answered) return;
+      ui.selected = i;
+      optionsBox.querySelectorAll(".option").forEach(o => o.classList.remove("selected"));
+      btn.classList.add("selected");
+      card.querySelector("#submitBtn").disabled = false;
+    };
+    optionsBox.appendChild(btn);
+  });
+
+  card.querySelector("#submitBtn").onclick = () => submitAnswer(card, entries);
+  card.querySelector("#nextBtn").onclick = () => nextQuestion(entries);
+
+  return wrap;
+}
+
+function submitAnswer(card, entries) {
+  if (ui.answered || ui.selected === null) return;
+  const entry = entries[ui.qIndex];
+  const q = entry.question;
+  const lv = entry.level;
+  const correct = ui.selected === q.answer;
+
+  ui.answered = true;
+  ui.runAnswers[q.id] = correct;
+  state.stats.answered += 1;
+  if (correct) {
+    state.stats.correct += 1;
+    if (!state.correctOnce[q.id]) {
+      state.correctOnce[q.id] = true;
+      state.xp += 10;
+    }
+    delete state.wrong[q.id];
+    toast("答对了 +10 XP");
+  } else {
+    state.wrong[q.id] = true;
+    toast("已加入错题复习队列");
+  }
+  touchStreak();
+  saveState();
+  renderTopStats();
+
+  card.querySelectorAll(".option").forEach((btn, i) => {
+    btn.disabled = true;
+    if (i === q.answer) btn.classList.add("correct");
+    if (i === ui.selected && !correct) btn.classList.add("wrong");
+  });
+  card.querySelector("#submitBtn").classList.add("hide");
+  card.querySelector("#nextBtn").classList.remove("hide");
+  card.querySelector("#nextBtn").textContent = (ui.qIndex === entries.length - 1) ? "查看结果" : "下一题";
+
+  const fb = el(
+    '<div class="feedback ' + (correct ? "ok" : "bad") + '">' +
+      '<div class="feedback-head"><span class="mark">' + (correct ? "✓" : "!") + '</span>' + (correct ? "答对了" : "还差一点") + '</div>' +
+      '<p>' + escapeHtml(q.explain) + '</p>' +
+      (q.why ? '<p class="small muted">干扰项：' + escapeHtml(q.why) + '</p>' : '') +
+      '<div class="two-col">' +
+        '<div class="mini-card"><div class="label">项目里对应什么</div><div class="text">' + escapeHtml(q.project) + '</div></div>' +
+        '<div class="mini-card"><div class="label">面试一句话</div><div class="text">' + escapeHtml(q.interview) + '</div></div>' +
+      '</div>' +
+    '</div>'
+  );
+  fb.appendChild(buildRatingRow(q.id));
+  card.querySelector("#feedbackSlot").appendChild(fb);
+  card.querySelector("#nextBtn").focus();
+}
+
+function nextQuestion(entries) {
+  if (!ui.answered) return;
+  if (ui.qIndex < entries.length - 1) {
+    ui.qIndex += 1;
+    ui.selected = null;
+    ui.answered = false;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else {
+    finishLevel(entries);
+  }
+}
+
+function finishLevel(entries) {
+  const finalCorrect = entries.filter(item => ui.runAnswers[item.question.id] === true).length;
+  const total = entries.length;
+  const pct = Math.round((finalCorrect / total) * 100);
+  const lv = entries[0].level;
+  const runXp = finalCorrect * 10;
+
+  let badge = "";
+  if (!ui.review) {
+    const previous = state.completed[lv.id];
+    const best = previous ? Math.max(previous.best, finalCorrect) : finalCorrect;
+    state.completed[lv.id] = { best, total, date: todayKey() };
+    if (pct >= 80) badge = lv.badge;
+  }
+
+  saveState();
+  confetti();
+
+  ui.result = {
+    total,
+    correct: finalCorrect,
+    pct,
+    badge,
+    runXp,
+    levelTitle: ui.review ? "错题复习" : lv.title,
+    wrongQuestions: entries.filter(item => ui.runAnswers[item.question.id] === false).map(item => item.question)
+  };
+  render();
+}
+
+function renderResult() {
+  const r = ui.result;
+  const wrap = el('<div class="result-card card"></div>');
+  const deg = Math.round((r.pct / 100) * 360);
+
+  wrap.innerHTML =
+    '<div class="q-tag">' + escapeHtml(r.levelTitle) + ' · 完成</div>' +
+    '<div class="score-ring" style="--deg:' + deg + 'deg">' +
+      '<div class="score-inner"><div class="score-num">' + r.pct + '%</div><div class="score-sub">正确率</div></div>' +
+    '</div>' +
+    (r.badge ? '<div class="badge-banner"><span class="badge-shape"></span>获得徽章：' + escapeHtml(r.badge) + '</div>' : '') +
+    '<h2 style="margin-bottom:4px">' + (r.pct >= 80 ? "这关稳了" : "再看一遍解释") + '</h2>' +
+    '<p class="muted">答对 ' + r.correct + ' / ' + r.total + ' 题，本次获得 ' + r.runXp + ' XP。</p>' +
+    '<div class="quiz-actions" style="justify-content:center">' +
+      '<button class="btn btn-primary" id="againBtn" type="button">再练一次</button>' +
+      (r.wrongQuestions.length ? '<button class="btn btn-soft" id="reviewWrongBtn" type="button">复习本次错题</button>' : '') +
+      '<button class="btn btn-ghost" id="backMapBtn" type="button">回到地图</button>' +
+    '</div>' +
+    (r.wrongQuestions.length ? '<div class="review-list">' + r.wrongQuestions.map(q => '<div class="review-row"><strong>' + escapeHtml(q.tag) + '</strong> · ' + escapeHtml(q.prompt) + '</div>').join("") + '</div>' : '<div class="small muted" style="margin-top:14px">没有错题。可以做下一关，或者去 Boss 练 90 秒讲稿。</div>');
+
+  wrap.querySelector("#againBtn").onclick = () => {
+    if (ui.review) {
+      startLevel(0, true);
+    } else {
+      startLevel(ui.levelIndex, false);
+    }
+  };
+  const reviewBtn = wrap.querySelector("#reviewWrongBtn");
+  if (reviewBtn) {
+    reviewBtn.onclick = () => {
+      ui.review = true;
+      ui.reviewQueue = Object.keys(state.wrong);
+      ui.qIndex = 0;
+      ui.selected = null;
+      ui.answered = false;
+      ui.result = null;
+      if (!ui.reviewQueue.length) {
+        toast("错题已经清空。");
+        ui.view = "dashboard";
+      }
+      render();
+    };
+  }
+  wrap.querySelector("#backMapBtn").onclick = () => { ui.view = "dashboard"; render(); };
+  return wrap;
+}
+
+/* ---------- 进阶训练：二刷 / 三刷 / 模拟面试 / 复习 ---------- */
+
+const TYPE_LABEL = { single: "单选", multi: "多选", spot: "找错", order: "排序", open: "口述" };
+
+function renderAdvanced() {
+  const wrap = el('<div></div>');
+  const basicDone = completedCount();
+  const applyLevels = ADVANCED_LEVELS.filter(lv => lv.stage === "apply");
+  const applyDone = applyLevels.filter(lv => state.advCompleted[lv.id]).length;
+  const openDone = openQuestions().filter(item => state.openDone[item.question.id]).length;
+
+  wrap.appendChild(el(
+    '<div class="hero" style="padding:30px 26px;margin-bottom:16px">' +
+      '<div class="hero-kicker">二刷 · 三刷 · 模拟面试</div>' +
+      '<h1 style="font-size:30px">从“会选答案”，<br/>到“能诊断、能讲清”。</h1>' +
+      '<p>一刷建立词汇，二刷练场景和取舍，三刷用口述题逼自己输出。最后用 12 分钟模拟面试检验。</p>' +
+    '</div>'
+  ));
+
+  const stages = el(
+    '<section class="stage-strip">' +
+      '<button class="stage-card" id="stageBasic" type="button">' +
+        '<div class="stage-num">PASS 1</div><h3>一刷 · 基础</h3>' +
+        '<p>40 道单选，建立 RAG、BM25、Agent 的词汇和直觉。</p>' +
+        '<div class="stage-meta">' + basicDone + '/7 关 · 去一刷</div>' +
+      '</button>' +
+      '<button class="stage-card" id="stageApply" type="button">' +
+        '<div class="stage-num">PASS 2</div><h3>二刷 · 应用</h3>' +
+        '<p>12 道多选/排序/找错/诊断，练真实场景里的判断。</p>' +
+        '<div class="stage-meta">' + applyDone + '/2 关 · 做进阶题</div>' +
+      '</button>' +
+      '<button class="stage-card" id="stageOpen" type="button">' +
+        '<div class="stage-num">PASS 3</div><h3>三刷 · 口述</h3>' +
+        '<p>6 道白板题，自评评分标准，练面试表达。</p>' +
+        '<div class="stage-meta">' + openDone + '/6 题 · 开始口述</div>' +
+      '</button>' +
+    '</section>'
+  );
+  stages.querySelector("#stageBasic").onclick = () => { ui.view = "quiz"; startLevel(Math.max(0, findLevelIndex(nextLevel().id)), false); };
+  stages.querySelector("#stageApply").onclick = () => {
+    const first = applyLevels.find(lv => !state.advCompleted[lv.id]) || applyLevels[0];
+    startAdvanced(first.id);
+  };
+  stages.querySelector("#stageOpen").onclick = () => {
+    const target = openQuestions().find(item => !state.openDone[item.question.id]) || openQuestions()[0];
+    if (target) openQuestion(target);
+  };
+  wrap.appendChild(stages);
+
+  const applyGrid = el('<section class="grid grid-2" style="margin-bottom:16px"></section>');
+  applyLevels.forEach(lv => {
+    const doneInfo = state.advCompleted[lv.id];
+    const card = el(
+      '<button class="level-card" type="button">' +
+        '<div class="level-card-top">' +
+          '<span class="pill ' + (doneInfo ? (isPassed(doneInfo) ? "" : "grey") : "gold") + '">' + (doneInfo ? (isPassed(doneInfo) ? "已通过" : "待巩固") : "二刷") + '</span>' +
+          '<span class="muted small">' + lv.minutes + ' 分钟</span>' +
+        '</div>' +
+        '<h3>' + escapeHtml(lv.title) + '</h3>' +
+        '<p>' + escapeHtml(lv.desc) + '</p>' +
+        '<div class="small muted">' + lv.questions.length + ' 题 · 多选/排序/找错/诊断' + (doneInfo ? ' · 最好 ' + doneInfo.best + '/' + doneInfo.total : '') + '</div>' +
+      '</button>'
+    );
+    card.onclick = () => startAdvanced(lv.id);
+    applyGrid.appendChild(card);
+  });
+  wrap.appendChild(applyGrid);
+
+  const openCard = el(
+    '<section class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">三刷 · 白板口述</h2>' +
+        '<span class="muted small">' + openDone + '/' + openQuestions().length + ' 已完成</span>' +
+      '</div>' +
+      '<p class="small muted" style="margin:6px 0 12px">先自己讲 60 到 90 秒，再展开参考答案和评分标准。不要先看答案。</p>' +
+      '<div class="glossary-list" id="openList"></div>' +
+    '</section>'
+  );
+  const openList = openCard.querySelector("#openList");
+  openQuestions().forEach(({ question }) => {
+    const done = !!state.openDone[question.id];
+    const row = el(
+      '<button class="glossary-head" type="button" style="border:1px solid var(--line);border-radius:12px;background:' + (done ? 'var(--ok-soft)' : 'var(--paper-2)') + '">' +
+        '<span><span class="glossary-term">' + escapeHtml(question.prompt) + '</span></span>' +
+        '<span class="pill ' + (done ? "" : "gold") + '">' + (done ? "已自评" : "去口述") + '</span>' +
+      '</button>'
+    );
+    row.onclick = () => openQuestion({ level: ADVANCED_LEVELS.find(lv => lv.id === "a3"), question });
+    openList.appendChild(row);
+  });
+  wrap.appendChild(openCard);
+
+  const mockCard = el(
+    '<section class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">12 分钟模拟面试</h2>' +
+        '<span class="pill gold">8 题 · 交卷后看解析</span>' +
+      '</div>' +
+      '<p class="small muted" style="margin:8px 0 12px">随机抽 4 道基础题 + 4 道进阶题，限时 12 分钟。提交后不立即显示对错，交卷统一复盘。</p>' +
+      '<button class="btn btn-primary" id="startMock" type="button">开始模拟面试</button>' +
+    '</section>'
+  );
+  mockCard.querySelector("#startMock").onclick = () => startMock();
+  wrap.appendChild(mockCard);
+
+  const reviewCard = el(
+    '<section class="card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">今日复习</h2>' +
+        '<span class="muted small">' + dueCount() + ' 道到期 / 错题</span>' +
+      '</div>' +
+      '<p class="small muted" style="margin:8px 0 12px">按 0/1/2 自评安排复习：秒懂拉长间隔，没思路回到今天。</p>' +
+      '<button class="btn btn-ghost" id="goReview" type="button">打开复习队列</button>' +
+    '</section>'
+  );
+  reviewCard.querySelector("#goReview").onclick = () => { ui.view = "review"; render(); };
+  wrap.appendChild(reviewCard);
+
+  return wrap;
+}
+
+function startAdvanced(levelId) {
+  const level = ADVANCED_LEVELS.find(lv => lv.id === levelId);
+  if (!level) return;
+  const entries = level.questions
+    .filter(isObjective)
+    .map(q => ({ level, question: q }));
+  if (!entries.length) {
+    const target = level.questions.find(q => q.type === "open");
+    if (target) openQuestion({ level, question: target });
+    return;
+  }
+  startFlow(entries, {
+    title: level.title,
+    subtitle: level.subtitle,
+    mode: "advanced",
+    levelId: level.id,
+    showFeedback: true
+  });
+}
+
+function initialSelection(q) {
+  if (q.type === "multi") return [];
+  if (q.type === "order") return [];
+  return null;
+}
+
+function startFlow(entries, options) {
+  if (ui.flow && ui.flow.timer && ui.flow.timer.handle) {
+    clearInterval(ui.flow.timer.handle);
+  }
+  ui.view = "flow";
+  ui.flow = {
+    entries,
+    index: 0,
+    selected: initialSelection(entries[0].question),
+    answered: false,
+    results: {},
+    finished: false,
+    title: options.title || "训练",
+    subtitle: options.subtitle || "",
+    mode: options.mode || "drill",
+    levelId: options.levelId || "",
+    showFeedback: options.showFeedback !== false,
+    timer: options.timerSeconds ? { total: options.timerSeconds, remaining: options.timerSeconds, handle: null } : null
+  };
+  if (ui.flow.timer) startFlowTimer();
+  render();
+}
+
+function stopFlowTimer() {
+  if (ui.flow && ui.flow.timer && ui.flow.timer.handle) {
+    clearInterval(ui.flow.timer.handle);
+    ui.flow.timer.handle = null;
+  }
+}
+
+function startFlowTimer() {
+  if (!ui.flow || !ui.flow.timer) return;
+  stopFlowTimer();
+  ui.flow.timer.handle = setInterval(() => {
+    if (!ui.flow || !ui.flow.timer) return;
+    ui.flow.timer.remaining -= 1;
+    updateFlowTimerDisplay();
+    if (ui.flow.timer.remaining <= 0) {
+      stopFlowTimer();
+      toast("时间到，自动交卷。");
+      finishFlow();
+    }
+  }, 1000);
+}
+
+function updateFlowTimerDisplay() {
+  const timer = ui.flow && ui.flow.timer;
+  if (!timer) return;
+  const text = formatTime(Math.max(0, timer.remaining));
+  document.querySelectorAll("[data-flow-timer]").forEach(node => {
+    node.textContent = text;
+    node.classList.toggle("timer-warning", timer.remaining <= 60);
+  });
+}
+
+function renderFlow() {
+  const wrap = el('<div class="quiz-wrap"></div>');
+  const flow = ui.flow;
+  if (!flow || !flow.entries.length) {
+    wrap.appendChild(el('<div class="card empty-state"><h3>没有题目</h3><p>返回进阶页重新选择。</p></div>'));
+    return wrap;
+  }
+  if (flow.finished) {
+    wrap.appendChild(renderFlowResult());
+    return wrap;
+  }
+
+  const entry = flow.entries[flow.index];
+  const q = entry.question;
+  const total = flow.entries.length;
+
+  const top = el(
+    '<div class="quiz-top">' +
+      '<div class="quiz-top-left">' +
+        '<button class="btn btn-soft" id="exitFlow" type="button">退出</button>' +
+        '<div><div class="quiz-title">' + escapeHtml(flow.title) + '</div>' +
+        '<div class="muted small">' + escapeHtml(flow.subtitle) + '</div></div>' +
+      '</div>' +
+      (flow.timer ? '<div class="pill gold" data-flow-timer>' + formatTime(flow.timer.remaining) + '</div>' : '<div class="dots">' + flow.entries.map((item, i) => {
+        let cls = "dot";
+        if (i === flow.index) cls += " current";
+        const result = flow.results[item.question.id];
+        if (result) cls += result.correct ? " correct" : " wrong";
+        return '<span class="' + cls + '" title="第 ' + (i + 1) + ' 题"></span>';
+      }).join("") + '</div>') +
+    '</div>'
+  );
+  top.querySelector("#exitFlow").onclick = () => {
+    if (flow.mode === "mock" && !window.confirm("退出模拟面试？本次不计入成绩。")) return;
+    stopFlowTimer();
+    ui.view = flow.mode === "advanced" ? "advanced" : "review";
+    render();
+  };
+  wrap.appendChild(top);
+
+  const card = el(
+    '<section class="question-card">' +
+      '<div class="q-tag">' + escapeHtml(q.tag) +
+        '<span class="type-badge ' + (q.type === "multi" ? "green" : q.type === "order" ? "" : "") + '">' + (TYPE_LABEL[q.type] || "单选") + '</span>' +
+        ' · 第 ' + (flow.index + 1) + '/' + total + ' 题' +
+      '</div>' +
+      '<h2 class="q-prompt">' + escapeHtml(q.prompt) + '</h2>' +
+      '<div id="questionBody"></div>' +
+      '<div class="quiz-actions">' +
+        '<button class="btn btn-primary" id="flowSubmit" type="button" disabled>提交答案</button>' +
+        '<button class="btn btn-soft hide" id="flowNext" type="button">下一题</button>' +
+      '</div>' +
+      '<div id="flowFeedback"></div>' +
+    '</section>'
+  );
+  wrap.appendChild(card);
+
+  const body = card.querySelector("#questionBody");
+  const submit = card.querySelector("#flowSubmit");
+
+  if (q.type === "multi") {
+    const box = el('<div class="options"></div>');
+    q.options.forEach((opt, i) => {
+      const btn = el(
+        '<button class="option" type="button">' +
+          '<span class="multi-mark"></span>' +
+          '<span>' + escapeHtml(opt) + '</span>' +
+        '</button>'
+      );
+      btn.dataset.index = String(i);
+      if (flow.selected.includes(i)) btn.classList.add("selected");
+      btn.onclick = () => {
+        if (flow.answered) return;
+        const pos = flow.selected.indexOf(i);
+        if (pos >= 0) flow.selected.splice(pos, 1);
+        else flow.selected.push(i);
+        btn.classList.toggle("selected");
+        submit.disabled = flow.selected.length === 0;
+      };
+      box.appendChild(btn);
+    });
+    body.appendChild(box);
+    body.appendChild(el('<p class="order-hint">多选题：选全才得分，少选/多选都算错。</p>'));
+    submit.disabled = flow.selected.length === 0;
+  } else if (q.type === "order") {
+    const box = el('<div class="order-list"></div>');
+    q.options.forEach((opt, i) => {
+      const btn = el(
+        '<button class="order-item" type="button">' +
+          '<span class="order-seq">' + (flow.selected.indexOf(i) >= 0 ? (flow.selected.indexOf(i) + 1) : "·") + '</span>' +
+          '<span>' + escapeHtml(opt) + '</span>' +
+        '</button>'
+      );
+      btn.dataset.index = String(i);
+      btn.onclick = () => {
+        if (flow.answered) return;
+        const pos = flow.selected.indexOf(i);
+        if (pos >= 0) flow.selected.splice(pos, 1);
+        else flow.selected.push(i);
+        render();
+      };
+      box.appendChild(btn);
+    });
+    body.appendChild(box);
+    const hint = el(
+      '<p class="order-hint">按正确顺序点击。再次点击可取消。当前已选 ' + flow.selected.length + '/' + q.options.length + ' 步。</p>'
+    );
+    body.appendChild(hint);
+    const reset = el('<button class="btn btn-soft" type="button" style="margin-top:10px">重置顺序</button>');
+    reset.onclick = () => { flow.selected = []; render(); };
+    body.appendChild(reset);
+    submit.disabled = flow.selected.length !== q.options.length;
+  } else {
+    const box = el('<div class="options"></div>');
+    q.options.forEach((opt, i) => {
+      const btn = el(
+        '<button class="option" type="button">' +
+          '<span class="option-key">' + String.fromCharCode(65 + i) + '</span>' +
+          '<span>' + escapeHtml(opt) + '</span>' +
+        '</button>'
+      );
+      btn.dataset.index = String(i);
+      if (flow.selected === i) btn.classList.add("selected");
+      btn.onclick = () => {
+        if (flow.answered) return;
+        flow.selected = i;
+        box.querySelectorAll(".option").forEach(o => o.classList.remove("selected"));
+        btn.classList.add("selected");
+        submit.disabled = false;
+      };
+      box.appendChild(btn);
+    });
+    body.appendChild(box);
+    submit.disabled = flow.selected === null;
+  }
+
+  submit.onclick = () => submitFlowAnswer(card);
+  card.querySelector("#flowNext").onclick = () => nextFlowQuestion();
+
+  return wrap;
+}
+
+function flowIsCorrect(q, selected) {
+  const type = q.type || "single";
+  if (type === "single" || type === "spot") return selected === q.answer;
+  if (type === "multi") {
+    const a = [...selected].sort((x, y) => x - y);
+    const b = [...q.answer].sort((x, y) => x - y);
+    return a.length === b.length && a.every((value, i) => value === b[i]);
+  }
+  if (type === "order") {
+    return selected.length === q.answer.length && selected.every((value, i) => value === q.answer[i]);
+  }
+  return false;
+}
+
+function submitFlowAnswer(card) {
+  const flow = ui.flow;
+  if (!flow || flow.answered) return;
+  const q = flow.entries[flow.index].question;
+  const correct = flowIsCorrect(q, flow.selected);
+
+  flow.answered = true;
+  flow.results[q.id] = { correct, selected: JSON.parse(JSON.stringify(flow.selected)) };
+
+  state.stats.answered += 1;
+  if (correct) {
+    state.stats.correct += 1;
+    if (!state.correctOnce[q.id]) {
+      state.correctOnce[q.id] = true;
+      state.xp += 10;
+    }
+    delete state.wrong[q.id];
+  } else {
+    state.wrong[q.id] = true;
+  }
+  touchStreak();
+  saveState();
+  renderTopStats();
+
+  card.querySelectorAll(".option").forEach(btn => {
+    const index = Number(btn.dataset.index);
+    btn.disabled = true;
+    if (q.type === "multi") {
+      if (q.answer.includes(index)) btn.classList.add("correct");
+      if (flow.selected.includes(index) && !q.answer.includes(index)) btn.classList.add("wrong");
+    } else {
+      if (index === q.answer) btn.classList.add("correct");
+      if (index === flow.selected && !correct) btn.classList.add("wrong");
+    }
+  });
+
+  card.querySelector("#flowSubmit").classList.add("hide");
+  const next = card.querySelector("#flowNext");
+  next.classList.remove("hide");
+  next.textContent = (flow.index === flow.entries.length - 1) ? "交卷 / 查看结果" : "下一题";
+  next.focus();
+
+  const slot = card.querySelector("#flowFeedback");
+  if (flow.showFeedback) {
+    slot.appendChild(buildFlowFeedback(q, correct));
+  } else {
+    slot.appendChild(el(
+      '<div class="feedback">' +
+        '<div class="feedback-head"><span class="mark" style="background:var(--gold)">i</span>已记录</div>' +
+        '<p>模拟面试中不立即显示对错。交卷后统一复盘。</p>' +
+      '</div>'
+    ));
+  }
+}
+
+function correctAnswerText(q) {
+  if (q.type === "multi") return q.answer.map(i => String.fromCharCode(65 + i)).join("、");
+  if (q.type === "order") return q.answer.map(i => q.options[i]).join(" → ");
+  return String.fromCharCode(65 + q.answer);
+}
+
+function buildFlowFeedback(q, correct) {
+  const fb = el(
+    '<div class="feedback ' + (correct ? "ok" : "bad") + '">' +
+      '<div class="feedback-head"><span class="mark">' + (correct ? "✓" : "!") + '</span>' + (correct ? "答对了" : "还差一点") + '</div>' +
+      '<p>' + escapeHtml(q.explain) + '</p>' +
+      (q.why ? '<p class="small muted">干扰项：' + escapeHtml(q.why) + '</p>' : '') +
+      (correct ? "" : '<p class="small muted">正确答案：' + escapeHtml(correctAnswerText(q)) + '</p>') +
+      '<div class="two-col">' +
+        '<div class="mini-card"><div class="label">项目里对应什么</div><div class="text">' + escapeHtml(q.project) + '</div></div>' +
+        '<div class="mini-card"><div class="label">面试一句话</div><div class="text">' + escapeHtml(q.interview) + '</div></div>' +
+      '</div>' +
+    '</div>'
+  );
+  fb.appendChild(buildRatingRow(q.id));
+  return fb;
+}
+
+function buildRatingRow(qid) {
+  const row = el('<div class="rate-row"><span class="rate-label">这道题你的感觉？</span></div>');
+  const options = [
+    { value: 0, label: "秒懂" },
+    { value: 1, label: "想了一会" },
+    { value: 2, label: "没思路" }
+  ];
+  options.forEach(opt => {
+    const btn = el('<button class="rate-btn ' + (state.ratings[qid] === opt.value ? "chosen" : "") + '" type="button">' + opt.label + '</button>');
+    btn.onclick = () => {
+      applyRating(qid, opt.value);
+      row.querySelectorAll(".rate-btn").forEach(node => node.classList.remove("chosen"));
+      btn.classList.add("chosen");
+      const note = row.querySelector(".rate-note");
+      if (note) note.textContent = "已记录：" + scheduleLabel(qid) + "。0/1/2 会影响复习间隔。";
+    };
+    row.appendChild(btn);
+  });
+  row.appendChild(el('<span class="rate-note">0/1/2 会影响复习间隔：秒懂拉长，没思路回到今天。</span>'));
+  return row;
+}
+
+function nextFlowQuestion() {
+  const flow = ui.flow;
+  if (!flow || !flow.answered) return;
+  if (flow.index < flow.entries.length - 1) {
+    flow.index += 1;
+    flow.answered = false;
+    flow.selected = initialSelection(flow.entries[flow.index].question);
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else {
+    finishFlow();
+  }
+}
+
+function finishFlow() {
+  const flow = ui.flow;
+  if (!flow || flow.finished) return;
+  stopFlowTimer();
+  flow.finished = true;
+
+  const total = flow.entries.length;
+  const correct = flow.entries.filter(item => {
+    const result = flow.results[item.question.id];
+    return result && result.correct;
+  }).length;
+  const pct = Math.round((correct / total) * 100);
+
+  let badge = "";
+  if (flow.mode === "advanced" && flow.levelId) {
+    const previous = state.advCompleted[flow.levelId];
+    const best = previous ? Math.max(previous.best, correct) : correct;
+    state.advCompleted[flow.levelId] = { best, total, date: todayKey() };
+    const level = ADVANCED_LEVELS.find(lv => lv.id === flow.levelId);
+    if (pct >= 80 && level) badge = level.title;
+  }
+  if (flow.mode === "mock") {
+    state.mockHistory = state.mockHistory || [];
+    state.mockHistory.push({ date: todayKey(), pct, correct, total });
+    state.mockHistory = state.mockHistory.slice(-20);
+  }
+
+  flow.badge = badge;
+  flow.correct = correct;
+  flow.pct = pct;
+  saveState();
+  confetti();
+  render();
+}
+
+function renderFlowResult() {
+  const flow = ui.flow;
+  const wrap = el('<div class="result-card card"></div>');
+  const deg = Math.round((flow.pct / 100) * 360);
+  const details = flow.entries.map(item => {
+    const result = flow.results[item.question.id];
+    const ok = result && result.correct;
+    return (
+      '<div class="detail-row">' +
+        '<div class="detail-head"><span>' + escapeHtml(item.question.tag) + ' · ' + escapeHtml(TYPE_LABEL[item.question.type] || "题") + '</span>' +
+        '<span style="color:' + (ok ? "var(--ok)" : "var(--danger)") + '">' + (ok ? "正确" : "错误") + '</span></div>' +
+        '<div>' + escapeHtml(item.question.prompt) + '</div>' +
+        '<div class="detail-explain">' + escapeHtml(item.question.explain) + (item.question.why ? ' ' + escapeHtml(item.question.why) : '') + '</div>' +
+      '</div>'
+    );
+  }).join("");
+
+  wrap.innerHTML =
+    '<div class="q-tag">' + escapeHtml(flow.title) + ' · 完成</div>' +
+    '<div class="score-ring" style="--deg:' + deg + 'deg">' +
+      '<div class="score-inner"><div class="score-num">' + flow.pct + '%</div><div class="score-sub">正确率</div></div>' +
+    '</div>' +
+    (flow.badge ? '<div class="badge-banner"><span class="badge-shape"></span>完成：' + escapeHtml(flow.badge) + '</div>' : '') +
+    '<h2 style="margin-bottom:4px">' + (flow.pct >= 80 ? "这轮稳了" : flow.mode === "mock" ? "看看复盘，再打一轮" : "再看一遍解释") + '</h2>' +
+    '<p class="muted">答对 ' + flow.correct + ' / ' + flow.entries.length + ' 题。' +
+      (flow.mode === "mock" ? "模拟面试建议目标 70% 以上。" : "") + '</p>' +
+    '<div class="quiz-actions" style="justify-content:center">' +
+      '<button class="btn btn-primary" id="flowAgain" type="button">' + (flow.mode === "mock" ? "再模拟一次" : "再练一次") + '</button>' +
+      '<button class="btn btn-soft" id="flowReview" type="button">复习错题</button>' +
+      '<button class="btn btn-ghost" id="flowBack" type="button">回到地图</button>' +
+    '</div>' +
+    '<div class="detail-list">' + details + '</div>';
+
+  wrap.querySelector("#flowAgain").onclick = () => {
+    if (flow.mode === "advanced" && flow.levelId) startAdvanced(flow.levelId);
+    else if (flow.mode === "mock") startMock();
+    else { ui.view = "review"; render(); }
+  };
+  wrap.querySelector("#flowReview").onclick = () => {
+    const ids = Object.keys(state.wrong);
+    if (!ids.length) { toast("没有错题，先保持。"); return; }
+    startDrill(ids, "错题复习");
+  };
+  wrap.querySelector("#flowBack").onclick = () => { ui.view = "dashboard"; render(); };
+  return wrap;
+}
+
+function renderReview() {
+  const wrap = el('<div></div>');
+  const ids = dueQuestionIds();
+  const map = allQuestionsById();
+  const entries = ids.map(id => map[id]).filter(Boolean);
+
+  wrap.appendChild(el(
+    '<div style="margin-bottom:14px">' +
+      '<div class="quiz-title">今日复习</div>' +
+      '<div class="muted small">错题和到期题目会出现在这里。按 0/1/2 自评会动态调整下次复习时间。</div>' +
+    '</div>'
+  ));
+
+  const summary = el(
+    '<section class="grid grid-3" style="margin-bottom:16px">' +
+      '<div class="card"><div class="stat-big">' + entries.length + '</div><div class="stat-label">待复习</div></div>' +
+      '<div class="card"><div class="stat-big">' + Object.keys(state.ratings).length + '</div><div class="stat-label">已自评题目</div></div>' +
+      '<div class="card"><div class="stat-big">' + Object.keys(state.schedule).length + '</div><div class="stat-label">已排期</div></div>' +
+    '</section>'
+  );
+  wrap.appendChild(summary);
+
+  if (!entries.length) {
+    wrap.appendChild(el(
+      '<div class="card empty-state">' +
+        '<h3>今天没有到期复习</h3>' +
+        '<p>去一刷或二刷，答完后用 0/1/2 自评，系统会安排下次复习。</p>' +
+        '<button class="btn btn-primary" id="reviewGo" type="button">去闯关</button>' +
+      '</div>'
+    ));
+    wrap.querySelector("#reviewGo").onclick = () => { ui.view = "quiz"; startLevel(0, false); };
+    return wrap;
+  }
+
+  wrap.appendChild(el(
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">复习队列</h2>' +
+        '<button class="btn btn-primary" id="startReviewAll" type="button">全部复习（' + entries.length + ' 题）</button>' +
+      '</div>' +
+      '<div class="review-list" id="dueList" style="margin-top:12px"></div>' +
+    '</div>'
+  ));
+  const list = wrap.querySelector("#dueList");
+  entries.forEach(({ level, question }) => {
+    const isWrong = !!state.wrong[question.id];
+    const row = el(
+      '<div class="review-row" style="display:flex;justify-content:space-between;gap:10px;align-items:center">' +
+        '<span><strong>' + escapeHtml(question.tag) + '</strong> · ' + escapeHtml(question.prompt) + '</span>' +
+        '<span class="pill ' + (isWrong ? "gold" : "grey") + '">' + (isWrong ? "错题" : scheduleLabel(question.id)) + '</span>' +
+      '</div>'
+    );
+    row.style.cursor = "pointer";
+    row.onclick = () => startDrill([question.id], "单题复习");
+    list.appendChild(row);
+  });
+  wrap.querySelector("#startReviewAll").onclick = () => startDrill(ids, "今日复习");
+  return wrap;
+}
+
+function startDrill(ids, title) {
+  const map = allQuestionsById();
+  const entries = ids.map(id => map[id]).filter(item => item && isObjective(item.question));
+  if (!entries.length) {
+    toast("没有可复习的客观题。");
+    return;
+  }
+  startFlow(entries, {
+    title,
+    subtitle: "错题与到期复习 · 答完按 0/1/2 自评",
+    mode: "drill",
+    showFeedback: true
+  });
+}
+
+function startWeakTag(tag) {
+  const entries = allObjectiveEntries().filter(item => (item.question.tag || "其他") === tag);
+  if (!entries.length) {
+    toast("这个标签下没有可练的客观题。");
+    return;
+  }
+  const ids = entries.slice(0, 6).map(item => item.question.id);
+  startDrill(ids, "弱项训练 · " + tag);
+}
+
+function startMock() {
+  const basic = LEVELS.flatMap(lv => lv.questions.filter(q => q.type !== "open").map(q => ({ level: lv, question: q })));
+  const advanced = ADVANCED_LEVELS
+    .filter(lv => lv.stage === "apply")
+    .flatMap(lv => lv.questions.filter(isObjective).map(q => ({ level: lv, question: q })));
+
+  function pick(list, count) {
+    const copy = [...list];
+    const out = [];
+    while (copy.length && out.length < count) {
+      out.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]);
+    }
+    return out;
+  }
+
+  const selected = [...pick(basic, 4), ...pick(advanced, 4)];
+  if (!selected.length) { toast("题库为空。"); return; }
+  selected.sort(() => Math.random() - 0.5);
+  startFlow(selected, {
+    title: "模拟面试",
+    subtitle: "8 题 · 12 分钟 · 交卷后统一复盘",
+    mode: "mock",
+    showFeedback: false,
+    timerSeconds: 12 * 60
+  });
+}
+
+/* ---------- 三刷口述题 ---------- */
+
+function openQuestion(target) {
+  ui.view = "open";
+  ui.open = {
+    level: target.level,
+    question: target.question,
+    showRef: false,
+    checks: {},
+    text: "",
+    result: null
+  };
+  render();
+}
+
+function renderOpen() {
+  const wrap = el('<div class="quiz-wrap"></div>');
+  const current = ui.open;
+  if (!current) {
+    wrap.appendChild(el('<div class="card empty-state"><h3>没有口述题</h3><p>回到进阶页选择。</p></div>'));
+    return wrap;
+  }
+  const q = current.question;
+  const rubric = q.rubric || [];
+
+  const top = el(
+    '<div class="quiz-top">' +
+      '<div class="quiz-top-left">' +
+        '<button class="btn btn-soft" id="openBack" type="button">返回三刷</button>' +
+        '<div><div class="quiz-title">白板口述</div><div class="muted small">' + escapeHtml(q.tag) + ' · 先讲 60 到 90 秒</div></div>' +
+      '</div>' +
+      '<div class="pill gold">自评制</div>' +
+    '</div>'
+  );
+  top.querySelector("#openBack").onclick = () => { ui.view = "advanced"; render(); };
+  wrap.appendChild(top);
+
+  if (current.result) {
+    const r = current.result;
+    const deg = Math.round((r.checked / r.total) * 360);
+    const card = el(
+      '<section class="open-card">' +
+        '<div class="q-tag">' + escapeHtml(q.tag) + ' · 自评结果</div>' +
+        '<div class="score-ring" style="--deg:' + deg + 'deg;width:120px;height:120px;margin-bottom:12px">' +
+          '<div class="score-inner"><div class="score-num" style="font-size:28px">' + r.checked + '/' + r.total + '</div><div class="score-sub">评分点</div></div>' +
+        '</div>' +
+        '<h2 style="margin:0 0 8px">' + (r.checked === r.total ? "可以进下一题了" : "把没勾到的点补进讲稿") + '</h2>' +
+        '<div class="reference"><div class="label">参考答案</div>' + escapeHtml(q.reference) + '</div>' +
+        '<div class="rubric">' + rubric.map((line, i) => '<div class="rubric-row ' + (current.checks[i] ? "checked" : "") + '"><span class="rubric-box"></span><span>' + escapeHtml(line) + '</span></div>').join("") + '</div>' +
+        '<div class="quiz-actions" style="justify-content:flex-start">' +
+          '<button class="btn btn-primary" id="openAgain" type="button">再讲一次</button>' +
+          '<button class="btn btn-ghost" id="openNext" type="button">下一道口述题</button>' +
+        '</div>' +
+      '</section>'
+    );
+    card.querySelector("#openAgain").onclick = () => openQuestion({ level: current.level, question: q });
+    card.querySelector("#openNext").onclick = () => {
+      const all = openQuestions();
+      const idx = all.findIndex(item => item.question.id === q.id);
+      const next = all[(idx + 1) % all.length];
+      openQuestion(next);
+    };
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  const card = el(
+    '<section class="open-card">' +
+      '<div class="q-tag">' + escapeHtml(q.tag) + ' · 口述题</div>' +
+      '<h2 class="open-prompt">' + escapeHtml(q.prompt) + '</h2>' +
+      '<p class="small muted">先不要看答案。用嘴讲，或者在下面写关键词。讲完再展开参考答案。</p>' +
+      '<textarea class="open-textarea" id="openAnswer" placeholder="写下你的讲稿关键词，或直接口头讲...">' + escapeHtml(current.text || "") + '</textarea>' +
+      '<div class="quiz-actions" style="justify-content:flex-start">' +
+        '<button class="btn btn-primary" id="toggleRef" type="button">' + (current.showRef ? "收起参考答案" : "查看参考答案") + '</button>' +
+        '<button class="btn btn-soft" id="submitOpen" type="button">提交自评</button>' +
+      '</div>' +
+      '<div id="refSlot"></div>' +
+      '<div class="rubric" id="rubricSlot"></div>' +
+    '</section>'
+  );
+  wrap.appendChild(card);
+
+  const textarea = card.querySelector("#openAnswer");
+  textarea.addEventListener("input", e => { current.text = e.target.value; });
+
+  const refSlot = card.querySelector("#refSlot");
+  function renderReference() {
+    refSlot.innerHTML = current.showRef
+      ? '<div class="reference"><div class="label">参考答案</div>' + escapeHtml(q.reference) + '</div>'
+      : "";
+  }
+  renderReference();
+
+  card.querySelector("#toggleRef").onclick = () => {
+    current.showRef = !current.showRef;
+    card.querySelector("#toggleRef").textContent = current.showRef ? "收起参考答案" : "查看参考答案";
+    renderReference();
+  };
+
+  const rubricSlot = card.querySelector("#rubricSlot");
+  rubric.forEach((line, i) => {
+    const row = el(
+      '<div class="rubric-row ' + (current.checks[i] ? "checked" : "") + '">' +
+        '<span class="rubric-box"></span><span>' + escapeHtml(line) + '</span>' +
+      '</div>'
+    );
+    row.onclick = () => {
+      current.checks[i] = !current.checks[i];
+      row.classList.toggle("checked");
+    };
+    rubricSlot.appendChild(row);
+  });
+
+  card.querySelector("#submitOpen").onclick = () => {
+    const checked = rubric.filter((_, i) => current.checks[i]).length;
+    if (checked === 0) {
+      toast("至少勾选一个你讲到的评分点。");
+      return;
+    }
+    const rating = checked === rubric.length ? 0 : checked >= Math.ceil(rubric.length / 2) ? 1 : 2;
+    applyRating(q.id, rating);
+    state.openDone[q.id] = checked;
+    saveState();
+    current.result = { checked, total: rubric.length, rating };
+    render();
+  };
+
+  return wrap;
+}
+
+/* ---------- 闪卡 ---------- */
+
+function renderFlashcards() {
+  const wrap = el('<div class="flash-stage"></div>');
+  const idx = Math.min(ui.flashIndex, GLOSSARY.length - 1);
+  const item = GLOSSARY[idx];
+  const known = !!state.flash[item.term];
+
+  wrap.appendChild(el(
+    '<div class="quiz-top">' +
+      '<div><div class="quiz-title">术语闪卡</div><div class="muted small">先自己想，再翻面。第 ' + (idx + 1) + ' / ' + GLOSSARY.length + ' 张</div></div>' +
+      '<button class="btn btn-soft" id="shuffleFlash" type="button">打乱顺序</button>' +
+    '</div>'
+  ));
+
+  const card = el(
+    '<div class="flash-card ' + (ui.flashFlipped ? "flipped" : "") + '" id="flashCard" tabindex="0" role="button" aria-label="点击翻转卡片">' +
+      '<div class="flash-front">' +
+        '<div class="flash-term">' + escapeHtml(item.term) + '</div>' +
+        '<div class="flash-en">' + escapeHtml(item.en) + '</div>' +
+        '<div class="flash-hint">点击卡片，或按空格翻面</div>' +
+      '</div>' +
+      '<div class="flash-back">' +
+        '<div class="label">一句话</div><p>' + escapeHtml(item.short) + '</p>' +
+        '<div class="label">类比</div><p>' + escapeHtml(item.analogy) + '</p>' +
+        '<div class="label">项目里对应</div><p>' + escapeHtml(item.project) + '</p>' +
+        '<div class="flash-hint">再点一次翻回正面</div>' +
+      '</div>' +
+    '</div>'
+  );
+  card.onclick = () => { ui.flashFlipped = !ui.flashFlipped; render(); };
+  card.onkeydown = (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ui.flashFlipped = !ui.flashFlipped; render(); }
+  };
+  wrap.appendChild(card);
+
+  const controls = el(
+    '<div class="flash-controls">' +
+      '<button class="btn btn-soft" id="prevFlash" type="button">上一张</button>' +
+      '<button class="btn btn-ghost" id="knowFlash" type="button">' + (known ? "取消已掌握" : "标记已掌握") + '</button>' +
+      '<button class="btn btn-primary" id="nextFlash" type="button">下一张</button>' +
+    '</div>' +
+    '<p class="small muted" style="text-align:center;margin-top:12px">已掌握 ' + Object.keys(state.flash).length + ' / ' + GLOSSARY.length + ' 个术语。键盘：空格翻面，左右切换。</p>'
+  );
+  controls.querySelector("#prevFlash").onclick = () => {
+    ui.flashIndex = (idx - 1 + GLOSSARY.length) % GLOSSARY.length;
+    ui.flashFlipped = false;
+    render();
+  };
+  controls.querySelector("#nextFlash").onclick = () => {
+    ui.flashIndex = (idx + 1) % GLOSSARY.length;
+    ui.flashFlipped = false;
+    render();
+  };
+  controls.querySelector("#knowFlash").onclick = () => {
+    if (state.flash[item.term]) delete state.flash[item.term];
+    else state.flash[item.term] = true;
+    saveState();
+    render();
+  };
+  wrap.querySelector("#shuffleFlash").onclick = () => {
+    ui.flashIndex = Math.floor(Math.random() * GLOSSARY.length);
+    ui.flashFlipped = false;
+    render();
+  };
+  wrap.appendChild(controls);
+  return wrap;
+}
+
+/* ---------- 词典 ---------- */
+
+function renderGlossary() {
+  const wrap = el('<div></div>');
+  wrap.appendChild(el(
+    '<div style="margin-bottom:14px">' +
+      '<div class="quiz-title">术语词典</div>' +
+      '<div class="muted small">面试前搜一个词，看“一句话 + 类比 + 项目对应”。</div>' +
+    '</div>'
+  ));
+
+  const search = el('<input class="glossary-search" id="glossarySearch" type="search" placeholder="搜索：RAG、BM25、Agent、locator..." value="' + escapeHtml(ui.glossaryQuery) + '" />');
+  wrap.appendChild(search);
+
+  const list = el('<div class="glossary-list" id="glossaryList"></div>');
+  wrap.appendChild(list);
+
+  function renderList() {
+    const q = ui.glossaryQuery.trim().toLowerCase();
+    const items = GLOSSARY.filter(item => {
+      if (!q) return true;
+      return (item.term + " " + item.en + " " + item.short + " " + item.cat).toLowerCase().includes(q);
+    });
+    list.innerHTML = "";
+    if (!items.length) {
+      list.appendChild(el('<div class="empty-state"><h3>没有找到</h3><p>换一个关键词，或清空搜索。</p></div>'));
+      return;
+    }
+    items.forEach(item => {
+      const node = el(
+        '<div class="glossary-item">' +
+          '<button class="glossary-head" type="button">' +
+            '<span><span class="glossary-term">' + escapeHtml(item.term) + '</span><span class="glossary-en">' + escapeHtml(item.en) + '</span></span>' +
+            '<span class="glossary-cat">' + escapeHtml(item.cat) + '</span>' +
+          '</button>' +
+          '<div class="glossary-body">' +
+            '<p><span class="label">一句话</span><br/>' + escapeHtml(item.short) + '</p>' +
+            '<p><span class="label">类比</span><br/>' + escapeHtml(item.analogy) + '</p>' +
+            '<p><span class="label">项目里对应</span><br/>' + escapeHtml(item.project) + '</p>' +
+          '</div>' +
+        '</div>'
+      );
+      node.querySelector(".glossary-head").onclick = () => node.classList.toggle("open");
+      list.appendChild(node);
+    });
+  }
+
+  search.addEventListener("input", (e) => {
+    ui.glossaryQuery = e.target.value;
+    renderList();
+  });
+  renderList();
+  return wrap;
+}
+
+/* ---------- 计划 ---------- */
+
+function renderPlan() {
+  const wrap = el('<div></div>');
+  const done = PLAN.filter(item => state.plan[item.id]).length;
+  const pct = Math.round((done / PLAN.length) * 100);
+
+  wrap.appendChild(el(
+    '<div class="hero" style="padding:28px 24px;margin-bottom:16px">' +
+      '<div class="hero-kicker">10:00 · 90 分钟主路线</div>' +
+      '<h1 style="font-size:30px">先开始 5 分钟，<br/>不要先做完美计划。</h1>' +
+      '<p>每关 6 到 9 分钟。做完一关就打个勾。20 分钟起身一次，手机放到看不见的地方。</p>' +
+    '</div>'
+  ));
+
+  wrap.appendChild(el(
+    '<section class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">今天的主路线</h2>' +
+        '<span class="muted small">' + done + '/' + PLAN.length + ' · ' + pct + '%</span>' +
+      '</div>' +
+      '<div class="progress-line" style="margin:12px 0 16px"><span style="width:' + pct + '%"></span></div>' +
+      '<div class="plan-list" id="planList"></div>' +
+    '</section>'
+  ));
+
+  const list = wrap.querySelector("#planList");
+  PLAN.forEach(item => {
+    const checked = !!state.plan[item.id];
+    const row = el(
+      '<div class="plan-item ' + (checked ? "done" : "") + '">' +
+        '<button class="plan-check ' + (checked ? "checked" : "") + '" type="button" aria-label="标记完成"></button>' +
+        '<span class="plan-time">' + escapeHtml(item.time) + '</span>' +
+        '<span><span class="plan-title">' + escapeHtml(item.title) + '</span>' +
+        '<span class="plan-desc">' + escapeHtml(item.desc) + '</span></span>' +
+      '</div>'
+    );
+    row.querySelector(".plan-check").onclick = () => {
+      if (state.plan[item.id]) delete state.plan[item.id];
+      else state.plan[item.id] = true;
+      saveState();
+      render();
+    };
+    list.appendChild(row);
+  });
+
+  const timer = el(
+    '<section class="card timer-card" style="margin-bottom:16px">' +
+      '<div><h2 style="margin:0">专注计时器</h2><div class="muted small">10 分钟一到，起身走两分钟。不要连续硬撑。</div></div>' +
+      '<div class="timer-display" data-timer>10:00</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn btn-primary" id="timerStart" type="button">开始</button>' +
+        '<button class="btn btn-soft" id="timerReset" type="button">重置</button>' +
+      '</div>' +
+    '</section>'
+  );
+  timer.querySelector("#timerStart").onclick = () => toggleFocusTimer();
+  timer.querySelector("#timerReset").onclick = () => resetFocusTimer();
+  wrap.appendChild(timer);
+
+  const storageStatus = storageMode === "remote"
+    ? (syncState === "error" ? "SQLite 写入失败，正在使用本地缓存" : "已连接 SQLite，每次答题后自动保存")
+    : "当前是浏览器本地存储；启动本地服务后会切换到 SQLite";
+  const storageCard = el(
+    '<section class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">学习记录</h2>' +
+        '<span class="pill ' + (storageMode === "remote" ? "" : "gold") + '">' + (storageMode === "remote" ? "SQLite" : "本地浏览器") + '</span>' +
+      '</div>' +
+      '<p class="small muted" style="margin:8px 0 6px">' + escapeHtml(storageStatus) + '</p>' +
+      '<p class="small muted" style="margin:0 0 12px">SQLite 文件：quiz_data.sqlite。每次答题、自评、打勾都会自动写入，并保留最近 200 个快照。删除浏览器缓存不会影响 SQLite 记录。</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn btn-primary" id="exportBackup" type="button">导出 JSON 备份</button>' +
+        '<button class="btn btn-soft" id="importBackupBtn" type="button">导入备份</button>' +
+        '<button class="btn btn-ghost" id="reconnectStorage" type="button">重新连接 SQLite</button>' +
+        '<input type="file" id="importBackupFile" accept="application/json,.json" style="display:none" />' +
+      '</div>' +
+    '</section>'
+  );
+  storageCard.querySelector("#exportBackup").onclick = exportBackup;
+  const importFile = storageCard.querySelector("#importBackupFile");
+  storageCard.querySelector("#importBackupBtn").onclick = () => importFile.click();
+  importFile.onchange = () => {
+    if (importFile.files && importFile.files[0]) importBackup(importFile.files[0]);
+    importFile.value = "";
+  };
+  storageCard.querySelector("#reconnectStorage").onclick = () => {
+    toast("正在连接 SQLite...");
+    initRemoteSync(true);
+  };
+  wrap.appendChild(storageCard);
+
+  wrap.appendChild(el(
+    '<section class="card">' +
+      '<h2>如果今天只有 30 分钟</h2>' +
+      '<div class="checklist" style="margin-top:12px">' +
+        '<div class="check-row"><span class="check-box"></span><span class="check-text">做 Level 0（术语觉醒）和 Level 5（证据与防幻觉）：先建立正确词汇和项目取舍。</span></div>' +
+        '<div class="check-row"><span class="check-box"></span><span class="check-text">背 90 秒讲稿的前两句：定位 + 技术形态。</span></div>' +
+        '<div class="check-row"><span class="check-box"></span><span class="check-text">打开 03-面试问答，只看 Q6、Q8、Q19、Q20。</span></div>' +
+      '</div>' +
+    '</section>'
+  ));
+
+  return wrap;
+}
+
+/* ---------- Boss ---------- */
+
+function renderBoss() {
+  const wrap = el('<div></div>');
+  const checked = BOSS_ITEMS.filter(item => state.boss[item.id]).length;
+  const pct = Math.round((checked / BOSS_ITEMS.length) * 100);
+
+  wrap.appendChild(el(
+    '<div class="hero" style="padding:28px 24px;margin-bottom:16px">' +
+      '<div class="hero-kicker">Boss 关 · 90 秒</div>' +
+      '<h1 style="font-size:30px">把项目讲给一个<br/>完全不懂的人听。</h1>' +
+      '<p>不是背术语，而是讲清楚：它是什么、怎么跑、为什么这样设计、你学到了什么。</p>' +
+    '</div>'
+  ));
+
+  const timerCard = el(
+    '<section class="card timer-card" style="margin-bottom:16px">' +
+      '<div><h2 style="margin:0">90 秒计时</h2><div class="muted small">先按开始，再开口。卡住就停下，看一眼关键词，再重来。</div></div>' +
+      '<div class="timer-display" data-boss-timer>01:30</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn btn-primary" id="bossTimerStart" type="button">开始</button>' +
+        '<button class="btn btn-soft" id="bossTimerReset" type="button">重置</button>' +
+      '</div>' +
+    '</section>'
+  );
+  timerCard.querySelector("#bossTimerStart").onclick = () => toggleBossTimer();
+  timerCard.querySelector("#bossTimerReset").onclick = () => resetBossTimer();
+  wrap.appendChild(timerCard);
+
+  const card = el(
+    '<section class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">讲稿自检</h2><span class="muted small">' + checked + '/' + BOSS_ITEMS.length + '</span>' +
+      '</div>' +
+      '<div class="progress-line" style="margin:12px 0 16px"><span style="width:' + pct + '%"></span></div>' +
+      '<div class="checklist" id="bossList"></div>' +
+    '</section>'
+  );
+  const list = card.querySelector("#bossList");
+  BOSS_ITEMS.forEach(item => {
+    const isChecked = !!state.boss[item.id];
+    const row = el(
+      '<div class="check-row ' + (isChecked ? "checked" : "") + '">' +
+        '<span class="check-box"></span>' +
+        '<span class="check-text">' + escapeHtml(item.text) + '</span>' +
+      '</div>'
+    );
+    row.onclick = () => {
+      if (state.boss[item.id]) delete state.boss[item.id];
+      else state.boss[item.id] = true;
+      const nowChecked = BOSS_ITEMS.filter(entry => state.boss[entry.id]).length;
+      saveState();
+      if (nowChecked === BOSS_ITEMS.length) {
+        toast("Boss 自检完成。现在开始录音复述。");
+        confetti();
+      }
+      render();
+    };
+    list.appendChild(row);
+  });
+  wrap.appendChild(card);
+
+  wrap.appendChild(el(
+    '<section class="card">' +
+      '<h2>讲稿骨架</h2>' +
+      '<div class="plan-list" style="margin-top:12px">' +
+        '<div class="plan-item"><span class="plan-time">0-15s</span><span><span class="plan-title">定位</span><span class="plan-desc">教材驱动的 AI 学习助手，把阅读、导学、练习、笔记连成证据闭环。</span></span></div>' +
+        '<div class="plan-item"><span class="plan-time">15-40s</span><span><span class="plan-title">技术形态</span><span class="plan-desc">Next.js + FastAPI + 单 Agent 循环；模型调工具，工具结果回到对话，直到不再调用工具。</span></span></div>' +
+        '<div class="plan-item"><span class="plan-time">40-65s</span><span><span class="plan-title">关键取舍</span><span class="plan-desc">阅读用 locator 全文检索，因为要可定位证据；知识库才用向量 + BM25 + RRF。</span></span></div>' +
+        '<div class="plan-item"><span class="plan-time">65-80s</span><span><span class="plan-title">护栏</span><span class="plan-desc">material_id 服务端注入、quote 校验、未验证内容不写学习状态。</span></span></div>' +
+        '<div class="plan-item"><span class="plan-time">80-90s</span><span><span class="plan-title">收获</span><span class="plan-desc">Agent 产品化的难点是边界、预算、证据和失败恢复，不是调模型。</span></span></div>' +
+      '</div>' +
+    '</section>'
+  ));
+
+  wrap.appendChild(el(
+    '<section class="card" style="margin-top:16px">' +
+      '<h2>四套答题模板</h2>' +
+      '<p class="small muted" style="margin:6px 0 12px">面试不是背答案，而是按结构现场组织。每道题先选模板，再填内容。</p>' +
+      '<div class="plan-list">' +
+        '<div class="plan-item"><span class="plan-time">概念题</span><span><span class="plan-title">定义 → 解决什么 → 项目例子 → 代价</span><span class="plan-desc">例如 RAG、BM25、Agent。最后一定要说代价，否则像背百科。</span></span></div>' +
+        '<div class="plan-item"><span class="plan-time">选型题</span><span><span class="plan-title">场景需求 → 候选方案 → 比较维度 → 选择 → 代价</span><span class="plan-desc">例如 locator vs 向量。先说“要精确出处还是语义召回”，再说方案。</span></span></div>' +
+        '<div class="plan-item"><span class="plan-time">项目题</span><span><span class="plan-title">定位 → 技术形态 → 一次链路 → 关键取舍 → 收获</span><span class="plan-desc">90 秒讲稿就用这个骨架。不要从“用了什么框架”开始。</span></span></div>' +
+        '<div class="plan-item"><span class="plan-time">设计题</span><span><span class="plan-title">工具 → 循环 → 预算 → 护栏 → 观测</span><span class="plan-desc">例如“怎么设计一个教材问答 Agent”。先讲边界，再讲模型。</span></span></div>' +
+      '</div>' +
+    '</section>'
+  ));
+
+  return wrap;
+}
+
+/* ---------- 计时器 ---------- */
+
+function toggleFocusTimer() {
+  if (focusTimer.running) {
+    clearInterval(focusTimer.handle);
+    focusTimer.running = false;
+    updateTimerDisplay();
+    return;
+  }
+  focusTimer.running = true;
+  focusTimer.handle = setInterval(() => {
+    focusTimer.remaining -= 1;
+    if (focusTimer.remaining <= 0) {
+      focusTimer.remaining = 0;
+      clearInterval(focusTimer.handle);
+      focusTimer.running = false;
+      toast("10 分钟到了，站起来走两分钟。");
+      confetti();
+    }
+    updateTimerDisplay();
+  }, 1000);
+  updateTimerDisplay();
+}
+
+function resetFocusTimer() {
+  clearInterval(focusTimer.handle);
+  focusTimer.running = false;
+  focusTimer.remaining = focusTimer.total;
+  updateTimerDisplay();
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+
+function updateTimerDisplay() {
+  const text = formatTime(focusTimer.remaining);
+  document.querySelectorAll("[data-timer]").forEach(node => { node.textContent = text; });
+  const btn = document.getElementById("focusBtn");
+  if (btn) btn.textContent = (focusTimer.running ? "专注中 " : "专注 ") + text;
+}
+
+function toggleBossTimer() {
+  if (bossTimer.running) {
+    clearInterval(bossTimer.handle);
+    bossTimer.running = false;
+    updateBossTimerDisplay();
+    return;
+  }
+  if (bossTimer.remaining <= 0) bossTimer.remaining = bossTimer.total;
+  bossTimer.running = true;
+  bossTimer.handle = setInterval(() => {
+    bossTimer.remaining -= 1;
+    if (bossTimer.remaining <= 0) {
+      bossTimer.remaining = 0;
+      clearInterval(bossTimer.handle);
+      bossTimer.running = false;
+      toast("90 秒到了。停一下，回听自己的录音。");
+      confetti();
+    }
+    updateBossTimerDisplay();
+  }, 1000);
+  updateBossTimerDisplay();
+}
+
+function resetBossTimer() {
+  clearInterval(bossTimer.handle);
+  bossTimer.running = false;
+  bossTimer.remaining = bossTimer.total;
+  updateBossTimerDisplay();
+}
+
+function updateBossTimerDisplay() {
+  const text = formatTime(bossTimer.remaining);
+  document.querySelectorAll("[data-boss-timer]").forEach(node => { node.textContent = text; });
+}
+
+/* ---------- 全局事件 ---------- */
+
+document.getElementById("focusBtn").onclick = () => {
+  if (ui.view !== "plan" && ui.view !== "boss") {
+    ui.view = "plan";
+    render();
+  }
+  toggleFocusTimer();
+};
+
+document.getElementById("resetBtn").onclick = () => {
+  const ok = window.confirm("确定清空本机学习进度吗？XP、通关记录和错题都会删除。");
+  if (!ok) return;
+  state = { ...defaultState, stats: { ...defaultState.stats } };
+  saveState();
+  ui.view = "dashboard";
+  ui.result = null;
+  render();
+  toast("进度已重置。");
+};
+
+document.addEventListener("keydown", (e) => {
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  if (tag === "input" || tag === "textarea") return;
+
+  if (e.key === "Escape") {
+    if (ui.view === "quiz") { ui.view = "dashboard"; render(); }
+    return;
+  }
+
+  if (ui.view === "flow" && ui.flow && !ui.flow.finished) {
+    if (e.key >= "1" && e.key <= "9" && !ui.flow.answered) {
+      const idx = Number(e.key) - 1;
+      const btn = document.querySelector('.option[data-index="' + idx + '"], .order-item[data-index="' + idx + '"]');
+      if (btn) { btn.click(); e.preventDefault(); }
+    } else if (e.key === "Enter") {
+      if (ui.flow.answered) {
+        const next = document.getElementById("flowNext");
+        if (next && !next.classList.contains("hide")) next.click();
+      } else {
+        const submit = document.getElementById("flowSubmit");
+        if (submit && !submit.disabled) submit.click();
+      }
+      e.preventDefault();
+    } else if (e.key === "Escape") {
+      const exit = document.getElementById("exitFlow");
+      if (exit) exit.click();
+      e.preventDefault();
+    }
+    return;
+  }
+
+  if (ui.view === "quiz" && !ui.result) {
+    const entries = currentQuestions();
+    if (!entries.length) return;
+    const q = entries[ui.qIndex].question;
+    if (!ui.answered && e.key >= "1" && e.key <= "4") {
+      const idx = Number(e.key) - 1;
+      if (idx < q.options.length) {
+        ui.selected = idx;
+        document.querySelectorAll(".option").forEach(o => o.classList.remove("selected"));
+        const btn = document.querySelector('.option[data-index="' + idx + '"]');
+        if (btn) btn.classList.add("selected");
+        const submit = document.getElementById("submitBtn");
+        if (submit) submit.disabled = false;
+      }
+      e.preventDefault();
+    } else if (e.key === "Enter") {
+      if (ui.answered) {
+        const next = document.getElementById("nextBtn");
+        if (next && !next.classList.contains("hide")) next.click();
+      } else {
+        const submit = document.getElementById("submitBtn");
+        if (submit && !submit.disabled) submit.click();
+      }
+      e.preventDefault();
+    }
+  } else if (ui.view === "flashcards") {
+    if (e.key === " " || e.key === "Enter") {
+      ui.flashFlipped = !ui.flashFlipped;
+      render();
+      e.preventDefault();
+    } else if (e.key === "ArrowRight") {
+      ui.flashIndex = (ui.flashIndex + 1) % GLOSSARY.length;
+      ui.flashFlipped = false;
+      render();
+      e.preventDefault();
+    } else if (e.key === "ArrowLeft") {
+      ui.flashIndex = (ui.flashIndex - 1 + GLOSSARY.length) % GLOSSARY.length;
+      ui.flashFlipped = false;
+      render();
+      e.preventDefault();
+    }
+  }
+});
+
+/* ---------- 启动 ---------- */
+
+render();
+
+const storageBadge = document.getElementById("storageBadge");
+if (storageBadge) {
+  storageBadge.onclick = () => {
+    if (storageMode === "remote") {
+      toast(syncState === "error" ? "SQLite 同步失败，正在重试..." : "SQLite 已同步，点击可重新检查");
+    } else {
+      toast("正在尝试连接本地 SQLite 服务...");
+    }
+    initRemoteSync(true);
+  };
+}
+
+window.addEventListener("pagehide", () => {
+  if (storageMode === "remote") {
+    clearTimeout(syncTimer);
+    pushRemoteState();
+  }
+});
+
+initRemoteSync();
+</script>
+</body>
+</html>

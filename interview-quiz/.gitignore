@@ -1,0 +1,7 @@
+quiz_data.sqlite
+quiz_data.sqlite-wal
+quiz_data.sqlite-shm
+quiz_server.pid
+server.log
+backups/
+__pycache__/
